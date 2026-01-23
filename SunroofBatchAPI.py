@@ -6,6 +6,23 @@ import os
 API_URL = "https://solar.googleapis.com/v1/buildingInsights:findClosest"
 
 
+import math
+
+
+def haversine_m(lat1, lon1, lat2, lon2):
+    R = 6371000.0  # meters
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+
+    a = (
+        math.sin(dphi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    )
+    return 2 * R * math.asin(math.sqrt(a))
+
+
 def get_building_insights(lat: float, lon: float, session: requests.Session, api_key: str):
     params = {
         "location.latitude": lat,
@@ -76,14 +93,40 @@ def fetch_err(msg: str, max_segments: int) -> dict:
     return row
 
 
-def fetch_with_retries(lat, lon, session, api_key, max_retries=5, max_segments: int = 25):
+def fetch_with_retries(
+    lat,
+    lon,
+    session,
+    api_key,
+    max_retries=5,
+    max_segments: int = 25,
+    max_distance_m: float = 15.0,
+):
     delay = 1.0
     last_err = None
 
     for _ in range(max_retries):
         try:
             payload = get_building_insights(lat, lon, session, api_key)
-            return fetch_ok(payload, max_segments=max_segments)
+
+            center = payload.get("center") or {}
+            c_lat = center.get("latitude")
+            c_lon = center.get("longitude")
+
+            if c_lat is None or c_lon is None:
+                return fetch_err("Missing building center", max_segments=max_segments)
+
+            dist_m = haversine_m(lat, lon, c_lat, c_lon)
+
+            if dist_m > max_distance_m:
+                return fetch_err(
+                    f"Closest building too far ({dist_m:.1f} m)",
+                    max_segments=max_segments,
+                )
+
+            row = fetch_ok(payload, max_segments=max_segments)
+            row["center_distance_m"] = dist_m
+            return row
         except requests.HTTPError as e:
             status = getattr(e.response, "status_code", None)
             url = getattr(e.response, "url", "")
@@ -164,6 +207,7 @@ def run(
             "day",
             "sunshine",
             "segment_count",
+            "center_distance_m",
         ]
         for i in range(1, max_segments + 1):
             fieldnames.append(f"azimuth{i}")
@@ -200,6 +244,8 @@ def run(
                 continue
 
             result = fetch_with_retries(
+                max_distance_m=15.0,
+
                 in_lat,
                 in_lon,
                 session,
@@ -223,4 +269,3 @@ def run(
 
     # Return the final dataset for convenience
     return pd.read_csv(csv_output)
-
