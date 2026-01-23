@@ -1,0 +1,75 @@
+import pandas as pd
+from datetime import datetime
+import SunroofBatchAPI
+
+"""
+This script is reading in the Regrid data and then applying filters to it before calling the Google Sunroof API for the defined row range.
+
+NOTE - the data adds on to the existing file. So that can cause problems if this code changes anything. Sometimes it's best to delete the output file and recreate from scratch.
+"""
+
+csv_path = '/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/BoulderColorado_Full_Paid_WorkingCopy.csv'
+csv_output = '/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Boulder_Python_SunroofAPI_Output_ALL.csv'
+# num_rows = 500
+# start_row = 500
+
+
+
+df = pd.read_csv(csv_path)
+
+df = df.reset_index(names='original_index')
+
+
+#Filters applied to data
+df = df[df["zoning_description"] == 'Residential Single Family']
+
+df = df[df["saleprice"]>=300000]
+
+df['OwnerOccupied'] = (
+    df['mailadd'].astype(str).str[:6] == df['address'].astype(str).str[:6]
+)
+df = df[df["OwnerOccupied"] == True]
+
+
+#Creating data, but not currently using as filters
+df['calculated_build_year'] = (
+    df[['yearbuilt', 'year_built_effective_date']]
+    .apply(pd.to_numeric, errors='coerce')
+    .max(axis=1)
+)
+
+current_year = datetime.now().year
+
+df['calculated_roof_age'] = current_year - df['calculated_build_year']
+
+df['PotentialRoofAge'] = df['calculated_roof_age'] % 30
+
+
+#Create an index for the dataframe after filters
+# df = df.reset_index(drop=True)
+# df['filtered_index'] = df.index
+
+df.to_csv('/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Primary_Regrid_Filter_OutputMEDIUM.csv', index=False)
+
+print(len(df))
+
+# subset = df.iloc[start_row:start_row + num_rows]
+
+# SunroofBatchAPI.run(subset, csv_output)
+
+chunk_size = 500
+start_row = 0
+
+while True:
+    subset = df.iloc[start_row : start_row + chunk_size]
+
+    if subset.empty:
+        break
+
+    SunroofBatchAPI.run(
+        subset,
+        csv_output,
+        resume=True
+    )
+
+    start_row += chunk_size
