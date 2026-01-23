@@ -9,7 +9,7 @@ NOTE - the data adds on to the existing file. So that can cause problems if this
 """
 
 csv_path = '/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/BoulderColorado_Full_Paid_WorkingCopy.csv'
-csv_output = '/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Boulder_Python_SunroofAPI_Output_ALL.csv'
+csv_output = '/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Boulder_Python_SunroofAPI_Output_500.csv'
 # num_rows = 500
 # start_row = 500
 
@@ -49,7 +49,7 @@ df['PotentialRoofAge'] = df['calculated_roof_age'] % 30
 # df = df.reset_index(drop=True)
 # df['filtered_index'] = df.index
 
-df.to_csv('/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Primary_Regrid_Filter_OutputMEDIUM.csv', index=False)
+df.to_csv('/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Primary_Regrid_Filter_Output.csv', index=False)
 
 print(len(df))
 
@@ -57,11 +57,16 @@ print(len(df))
 
 # SunroofBatchAPI.run(subset, csv_output)
 
+max_calls = 500
+call_counter = 0
 chunk_size = 500
 start_row = 0
 
-while True:
-    subset = df.iloc[start_row : start_row + chunk_size]
+while call_counter < max_calls:
+    remaining = max_calls - call_counter
+    current_chunk = min(chunk_size, remaining)
+
+    subset = df.iloc[start_row : start_row + current_chunk]
 
     if subset.empty:
         break
@@ -72,4 +77,5 @@ while True:
         resume=True
     )
 
-    start_row += chunk_size
+    start_row += current_chunk
+    call_counter += len(subset)
