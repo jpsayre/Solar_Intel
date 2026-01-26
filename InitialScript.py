@@ -57,9 +57,9 @@ print(len(df))
 
 # SunroofBatchAPI.run(subset, csv_output)
 
-max_calls = 10
+max_calls = 500
 call_counter = 0
-chunk_size = 10
+chunk_size = 50
 start_row = 0
 
 while call_counter < max_calls:
