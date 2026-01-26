@@ -245,12 +245,12 @@ def run(
                 continue
 
             result = fetch_with_retries(
-                max_distance_m=max_distance_m,
                 in_lat,
                 in_lon,
                 session,
                 api_key,
-                max_segments=max_segments
+                max_segments=max_segments,
+                max_distance_m=max_distance_m
             )
 
             out_row = {**in_ids, "input_lat": in_lat, "input_lon": in_lon, **result}
