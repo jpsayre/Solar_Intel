@@ -100,7 +100,7 @@ def fetch_with_retries(
     api_key,
     max_retries=5,
     max_segments: int = 25,
-    max_distance_m: float = 15.0,
+    max_distance_m: float = 10.0,
 ):
     delay = 1.0
     last_err = None
@@ -152,7 +152,7 @@ def run(
     checkpoint_every: int = 100,
     resume: bool = True,
     max_segments: int = 25,
-    max_distance_m = 15.0,
+    max_distance_m = 10.0,
     input_id_cols: list[str] = None,
 ):
     """Run API calls sequentially and persist results incrementally.
