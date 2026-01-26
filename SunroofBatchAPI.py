@@ -152,6 +152,7 @@ def run(
     checkpoint_every: int = 100,
     resume: bool = True,
     max_segments: int = 25,
+    max_distance_m = 15.0,
     input_id_cols: list[str] = None,
 ):
     """Run API calls sequentially and persist results incrementally.
@@ -244,13 +245,12 @@ def run(
                 continue
 
             result = fetch_with_retries(
-                max_distance_m=15.0,
-
+                max_distance_m=max_distance_m,
                 in_lat,
                 in_lon,
                 session,
                 api_key,
-                max_segments=max_segments,
+                max_segments=max_segments
             )
 
             out_row = {**in_ids, "input_lat": in_lat, "input_lon": in_lon, **result}
