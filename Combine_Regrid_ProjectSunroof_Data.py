@@ -11,7 +11,7 @@ This script is merging the Regrid data with the filtered Project Sunroof data.
 # --- Load ---
 # A = pd.read_csv("/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Boulder_HighlyQualifiedFilter.csv")
 A = pd.read_csv('/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Primary_Regrid_Filter_Output.csv')
-B = pd.read_csv("/Users/jeffs/Downloads/Filtered_API_Output.csv")
+B = pd.read_csv("/Users/jeffs/Downloads/Filtered_API_Output_500_score.csv")
 
 # Inner join (A on left; only matched rows kept)
 merged = A.merge(

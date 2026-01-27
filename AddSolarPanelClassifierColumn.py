@@ -8,7 +8,7 @@ After runnning the solar panel yes/no classifier in n8n, this script takes the c
 
 # Load datasets
 A = pd.read_csv("/Users/jeffs/Downloads/Regrid_joined_with_API.csv")  # must have columns: lat, lon
-B = pd.read_csv("/Users/jeffs/Downloads/Locations_For_Solar_Classifier - Data.csv")  # must have 
+B = pd.read_csv("/Users/jeffs/Downloads/solar_classification_result.csv")  # must have 
 
 # Join B → A (left join keeps all rows from A)
 A_joined = A.merge(
