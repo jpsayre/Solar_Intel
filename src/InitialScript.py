@@ -8,11 +8,10 @@ This script is reading in the Regrid data and then applying filters to it before
 NOTE - the data adds on to the existing file. So that can cause problems if this code changes anything. Sometimes it's best to delete the output file and recreate from scratch.
 """
 
-csv_path = '/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/BoulderColorado_Full_Paid_WorkingCopy.csv'
-csv_output = '/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Boulder_Python_SunroofAPI_Output_10.csv'
-# num_rows = 500
-# start_row = 500
+location = 'Boulder_CO'
 
+csv_path = '~/Projects/data/raw/BoulderColorado_Full_Paid_WorkingCopy.csv'
+csv_output = '~/Projects/data/working/'+location+'_Python_SunroofAPI_Output.csv'
 
 
 df = pd.read_csv(csv_path)
@@ -45,17 +44,11 @@ df['calculated_roof_age'] = current_year - df['calculated_build_year']
 df['PotentialRoofAge'] = df['calculated_roof_age'] % 30
 
 
-#Create an index for the dataframe after filters
-# df = df.reset_index(drop=True)
-# df['filtered_index'] = df.index
-
-df.to_csv('/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Primary_Regrid_Filter_Output.csv', index=False)
+df.to_csv('~/Projects/data/working/'+location+'Primary_Regrid_Filter_Output.csv', index=False)
 
 print(len(df))
 
-# subset = df.iloc[start_row:start_row + num_rows]
 
-# SunroofBatchAPI.run(subset, csv_output)
 
 max_calls = 500
 call_counter = 0
