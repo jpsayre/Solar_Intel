@@ -10,8 +10,8 @@ NOTE - the data adds on to the existing file. So that can cause problems if this
 
 location = 'Boulder_CO'
 
-csv_path = '~/Projects/data/raw/BoulderColorado_Full_Paid_WorkingCopy.csv'
-csv_output = '~/Projects/data/working/'+location+'_Python_SunroofAPI_Output.csv'
+csv_path = '~/Projects/SolarProject/data/raw/BoulderColorado_Full_Paid_WorkingCopy.csv'
+csv_output = '~/Projects/SolarProject/data/working/'+location+'_Python_SunroofAPI_Output.csv'
 
 
 df = pd.read_csv(csv_path)
@@ -44,7 +44,7 @@ df['calculated_roof_age'] = current_year - df['calculated_build_year']
 df['PotentialRoofAge'] = df['calculated_roof_age'] % 30
 
 
-df.to_csv('~/Projects/data/working/'+location+'Primary_Regrid_Filter_Output.csv', index=False)
+df.to_csv('~/Projects/SolarProject/data/working/'+location+'Primary_Regrid_Filter_Output.csv', index=False)
 
 print(len(df))
 
