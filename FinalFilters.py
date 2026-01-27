@@ -66,16 +66,21 @@ filtered_columns = [
     "extwalldscrprim", "extwallsec", "extwalldscrsec", "intwall", "intwalldscr",
     "roof_cover", "roof_coverdscr", "mainfloorsf", "nbrbedroom", "nbrroomsnobath",
     "nbrthreeqtrbaths", "nbrfullbaths", "nbrhalfbaths", "landunitvalue", "OwnerOccupied", "calculated_build_year", "segment_count",
-    "calculated_roof_age", "PotentialRoofAge", "latitude", "longitude", "year", "month", "day", "sunshine", "solar_panels"
+    "calculated_roof_age", "latitude", "longitude", "sunshine", "solar_panels", "solar_score"
 ]
+
+#removed for now
+# "year", "month", "day", "PotentialRoofAge"
+
 final = pd.read_csv("/Users/jeffs/Downloads/Semi_Final_Data_w_Solar_Classifier.csv")
 
 final = final[filtered_columns]
 
 final = final.rename(columns={
-    "year": "google_ProjectSunroof_analysis_year",
-    "month": "google_ProjectSunroof_analysis_month",
-    "day": "google_ProjectSunroof_analysis_day",
+    "segment_count": "roof_segments_count"
+    # "year": "google_ProjectSunroof_analysis_year",
+    # "month": "google_ProjectSunroof_analysis_month",
+    # "day": "google_ProjectSunroof_analysis_day",
 })
 
 final.to_csv("/Users/jeffs/Downloads/"+location+"_Final_Data.csv", index=False)
