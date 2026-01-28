@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 
 # Load CSV
-csv_input = '/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Boulder_Python_SunroofAPI_Output_10.csv'
+csv_input = '/Users/jeffs/Projects/SolarProject/data/working/Boulder_Python_SunroofAPI_Output_10.csv'
 
 df = pd.read_csv(csv_input)
 print(df.shape)
@@ -119,4 +119,4 @@ filtered_df['solar_score'] = pd.to_numeric(filtered_df['solar_score'], errors="c
 
 
 # Save result
-filtered_df.to_csv("/Users/jeffs/Downloads/Filtered_API_Output_500_score.csv", index=False)
+filtered_df.to_csv("/Users/jeffs/Projects/SolarProject/data/working/Filtered_API_Output_500_score.csv", index=False)

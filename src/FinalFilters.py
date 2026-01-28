@@ -72,7 +72,7 @@ filtered_columns = [
 #removed for now
 # "year", "month", "day", "PotentialRoofAge"
 
-final = pd.read_csv("/Users/jeffs/Downloads/Semi_Final_Data_w_Solar_Classifier.csv")
+final = pd.read_csv("/Users/jeffs/Projects/SolarProject/data/working/Semi_Final_Data_w_Solar_Classifier.csv")
 
 final = final[filtered_columns]
 
@@ -83,4 +83,4 @@ final = final.rename(columns={
     # "day": "google_ProjectSunroof_analysis_day",
 })
 
-final.to_csv("/Users/jeffs/Downloads/"+location+"_Final_Data.csv", index=False)
+final.to_csv("/Users/jeffs/Projects/SolarProject/data/final/"+location+"_Final_Data.csv", index=False)
