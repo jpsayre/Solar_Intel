@@ -38,7 +38,7 @@ JOIN_KEY_CSV = "original_index"
 
 DISPLAY_COLUMNS: List[Dict[str, str]] = [
     {"col": "address", "label": "Address"},
-    {"col": "owner_formatted", "label": "Owner"},
+    {"col": "owner_formatted", "label": "Owner Name"},
     {"col": "area_building", "label": "Square Footage"},
     {"col": "num_bedrooms", "label": "Bedrooms"},
     {"col": "saleprice", "label": "Sale Price"},
@@ -148,13 +148,22 @@ def build_listing_html(
     for item in display_columns:
         col = item["col"]
         label = item.get("label", col)
-        if col in row and not pd.isna(row[col]):
-            kv_rows.append(f"""
-            <div class=\"kv\">
-              <div class=\"k\">{label}</div>
-              <div class=\"v\">{safe_text(format_value(col, row[col]))}</div>
-            </div>
-            """)
+
+        # Override owner display
+        if col == "owner_formatted":
+            value = "Available in full report"
+        elif col in row and not pd.isna(row[col]):
+            value = format_value(col, row[col])
+        else:
+            continue
+
+        kv_rows.append(f"""
+        <div class="kv">
+        <div class="k">{label}</div>
+        <div class="v">{safe_text(value)}</div>
+        </div>
+        """)
+
 
         # Build headline HTML safely (avoid nested f-strings)
     headline_html = f"<h2 class=\"headline\">{headline}</h2>" if headline else ""
