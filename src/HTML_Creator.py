@@ -388,10 +388,11 @@ def main() -> None:
     <header>
       <h1>Solar Intelligence Report</h1>
         <h2>Sample for the County of """ + str(county) + ', ' + str(state) + """</h2>
-        <h3>We analyze every home in the county to find those that meet our criteria:</h3>
+        <h3>We analyze every home in the county to find those that meet our criteria*:</h3>
         <ul>
             <li>Single family home*</li>
             <li>Owner occupied*</li>
+            <li>Minimum sale price of 300k*</li>
             <li>No or minimal shade concerns**</li>
             <li>No existing solar panel installation**</li>
             <li>South facing roof segment a minimum of 30 m<sup>2</sup> (323 ft<sup>2</sup>)**</li>
