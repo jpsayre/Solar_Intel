@@ -56,32 +56,20 @@ all_columns = [
 
 
 filtered_columns = [
-    "original_index", "zoning", "zoning_description", "yearbuilt", "year_built_effective_date", "numstories", "numunits", "numrooms",
-    "num_bath", "num_bath_partial", "num_bedrooms", "structstyle", "saleprice", "saledate",
-    "taxyear", "last_ownership_transfer_date", "owner", "mailadd", "mail_unit", "mail_city", "mail_state2",
-    "mail_zip", "city", "county", "state2", "szip",
-    "szip5", "subdivision", "area_building", "condo_unit", "designcodedscr", "qualitycode", "qualitycodedscr", "constcodedscr", "effectiveyear",
-    "bsmtsf", "bsmttype", "bsmttypedscr", "carstoragesf", "carstoragetype",
-    "carstoragetypedscr", "ac", "acdscr", "heating", "heatingdscr", "extwallprim",
-    "extwalldscrprim", "extwallsec", "extwalldscrsec", "intwall", "intwalldscr",
-    "roof_cover", "roof_coverdscr", "mainfloorsf", "nbrbedroom", "nbrroomsnobath",
-    "nbrthreeqtrbaths", "nbrfullbaths", "nbrhalfbaths", "landunitvalue", "OwnerOccupied", "calculated_build_year", "segment_count",
-    "calculated_roof_age", "latitude", "longitude", "sunshine", "solar_panels", "solar_score"
+    "index", "original_index", "zoning_description", "numstories", "numrooms",
+    "num_bath", "num_bath_partial", "num_bedrooms", "saleprice", "saledate",
+    "owner", "owner_formatted", "mailadd",
+    "city", "county", "state2",
+    "szip5", "subdivision_formatted", "area_building", "effectiveyear",
+    "roof_coverdscr", "calculated_build_year",
+    "latitude", "longitude"
 ]
 
-#removed for now
-# "year", "month", "day", "PotentialRoofAge"
 
 final = pd.read_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Semi_Final_Data_w_Solar_Classifier.csv")
 
-final = final[filtered_columns]
+final["index"] = final["county"].astype(str) + "_" + final["state2"].astype(str) + "_" + final["original_index"].astype(str)
 
-final = final.rename(columns={
-    "segment_count": "roof_segments_count"
-    # "year": "google_ProjectSunroof_analysis_year",
-    # "month": "google_ProjectSunroof_analysis_month",
-    # "day": "google_ProjectSunroof_analysis_day",
-})
 
 def format_owner(name):
     if pd.isna(name):
@@ -96,5 +84,42 @@ def format_owner(name):
     return " ".join(parts)
 
 final["owner_formatted"] = final["owner"].apply(format_owner)
+
+
+removeList = ['Parcel','Addition','Pud','Ot','&','LG','FLG','Filing','Phase','PATIO HOMES','Patio','PH','Sub','-','Rep','(replat)','replat','replat of','ii','iii','1st','2nd','3rd','4th','5th','6th','7th','8th','9th','10th','0','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','A','B','C','D','E','F','G','H','I','J','K']
+
+def format_subdivision(name):
+    if pd.isna(name):
+        return name
+    
+    parts = name.strip().split()
+
+    # limit length
+    parts = parts[:3]
+
+    # remove unwanted tokens
+    parts = [
+        p for p in parts
+        if p.upper() not in {r.upper() for r in removeList}
+    ]
+
+    # normalize casing
+    parts = [p.capitalize() for p in parts]
+
+    # remove trailing "Of"
+    if parts and parts[-1] == 'Of':
+        parts.pop()
+
+    return " ".join(parts)
+
+final["subdivision_formatted"] = final["subdivision"].apply(format_subdivision)
+
+
+
+
+
+
+final = final[filtered_columns]
+
 
 final.to_csv("/Users/jeffs/Projects/SolarProject/data/final/"+location+"_Final_Data.csv", index=False)
