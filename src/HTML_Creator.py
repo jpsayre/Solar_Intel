@@ -34,14 +34,17 @@ JOIN_KEY_CSV = "original_index"
 
 DISPLAY_COLUMNS: List[Dict[str, str]] = [
     {"col": "address", "label": "Address"},
-    {"col": "solar_score", "label": "Solar Score"},
-    {"col": "roof_area_m2", "label": "Roof area (m²)"},
-    {"col": "azimuth_deg", "label": "Azimuth (°)"},
-    {"col": "sunshine_quantile", "label": "Sunshine quantile"},
+    # {"col": "solar_score", "label": "Solar Score"},
+    {"col": "sqft", "label": "Square Footage"},
+    {"col": "saleprice", "label": "Sale Price"},
+    {"col": "saledate", "label": "Sale Date"},
+    {"col": "calculated_build_year", "label": "Build Year"},
+    {"col": "num_bedrooms", "label": "Bedrooms"},
 ]
 
-HEADLINE_COLUMN = "mailadd"   # set to None to disable
-CHIP_COLUMNS: List[str] = ["solar_score", "sqft"]
+HEADLINE_COLUMN = "mailadd"   # primary address line
+CITY_COLUMN = "mail_city"           # set to None to disable
+STATE_COLUMN = "mail_state2"         # set to None to disable
 MAX_ITEMS: Optional[int] = None
 
 # ----------------------------
@@ -80,6 +83,13 @@ def format_value(col: str, x) -> str:
             return f"{n:,.0f} sq ft"
         except Exception:
             return x_str
+        
+    if col.lower() in {"num_bedrooms"}:
+        try:
+            n = float(x)
+            return f"{n:,.0f}"
+        except Exception:
+            return x_str
 
     if col.lower() in {"owneroccupied", "owner_occupied"}:
         # Handles 1/0, True/False, "Y"/"N", etc.
@@ -108,16 +118,26 @@ def build_listing_html(
     row: pd.Series,
     display_columns: List[Dict[str, str]],
     headline_column: Optional[str],
-    chip_columns: List[str],
 ) -> str:
     headline = safe_text(row[headline_column]) if headline_column and headline_column in row else ""
 
-    chips = []
-    for c in chip_columns:
-        if c in row and not pd.isna(row[c]):
-            chips.append(f'<span class="chip">{safe_text(c.replace("_", " ").title())}: {safe_text(format_value(c, row[c]))}</span>')
+    city = safe_text(row[CITY_COLUMN]) if CITY_COLUMN and CITY_COLUMN in row else ""
+    state = safe_text(row[STATE_COLUMN]) if STATE_COLUMN and STATE_COLUMN in row else ""
 
-    chips_html = f'<div class="chips">{"".join(chips)}</div>' if chips else ""
+    subhead = ""
+    if city and state:
+        subhead = f"{city}, {state}"
+    elif city:
+        subhead = city
+    elif state:
+        subhead = state
+
+    # chips = []
+    # for c in chip_columns:
+    #     if c in row and not pd.isna(row[c]):
+    #         chips.append(f'<span class="chip">{safe_text(c.replace("_", " ").title())}: {safe_text(format_value(c, row[c]))}</span>')
+
+    # chips_html = f'<div class="chips">{"".join(chips)}</div>' if chips else ""
 
     kv_rows = []
     for item in display_columns:
@@ -131,16 +151,20 @@ def build_listing_html(
             </div>
             """)
 
-    return f"""
-    <article class=\"card\">
-      <div class=\"imgwrap\">
-        <img src=\"{image_rel_path}\" loading=\"lazy\" />
+        # Build headline HTML safely (avoid nested f-strings)
+    headline_html = f"<h2 class=\"headline\">{headline}</h2>" if headline else ""
+    subhead_html = f"<h2 class=\"headline\">{subhead}</h2>" if subhead else ""
+
+    return """
+    <article class="card">
+      <div class="imgwrap">
+        <img src=""" + '"' + image_rel_path + '"' + """ loading="lazy" />
       </div>
-      <div class=\"content\">
-        {f"<h2>{headline}</h2>" if headline else ""}
-        {chips_html}
-        <div class=\"kvgrid\">
-          {"".join(kv_rows)}
+      <div class="content">
+        """ + headline_html + """
+        """ + subhead_html + """
+        <div class="kvgrid">
+          """ + "".join(kv_rows) + """
         </div>
       </div>
     </article>
@@ -158,7 +182,7 @@ def main() -> None:
 
     cards = []
 
-        # Iterate using full absolute paths (no Path / glob)
+    # Iterate using full absolute paths (no Path / glob)
     for fname in sorted(os.listdir(IMAGES_DIR)):
         img_path = os.path.join(IMAGES_DIR, fname)
 
@@ -182,7 +206,7 @@ def main() -> None:
                 df.loc[key],
                 DISPLAY_COLUMNS,
                 HEADLINE_COLUMN,
-                CHIP_COLUMNS,
+                # CHIP_COLUMNS,
             )
         )
 
@@ -273,11 +297,19 @@ def main() -> None:
         padding: 16px 16px 14px;
       }
 
-      .content h2 {
-        margin: 0 0 10px;
+      .content .headline {
+        margin: 0 0 4px;
         font-size: 18px;
         line-height: 1.25;
+        font-weight: 600;
       }
+
+      .content .headline + .headline {
+        margin-top: 0;
+        margin-bottom: 12px;
+      }
+
+      
 
       .chips {
         display: flex;
@@ -338,13 +370,15 @@ def main() -> None:
       <h1>Solar Intelligence Report</h1>
         <h3>Every home listed here meets the following criteria*:</h3>
         <ul>
-            <li>Single Family Home</li>
-            <li>Owner Occupied</li>
-            <li>No or Minimal Shade Concerns</li>
+            <li>Single family home</li>
+            <li>Owner occupied</li>
+            <li>No or minimal shade concerns</li>
             <li>No existing solar panel installation</li>
-            <li>South facing roof segment a minimum of 30 m2 (323 ft2).</li>
+            <li>South facing roof segment a minimum of 30 m<sup>2</sup> (323 ft<sup>2</sup>).</li>
         </ul>
         <p>*As of date of Google Maps satellite imagery</p>
+        <br>
+        <p>Note: If multiple homes shown in an image, the home towards the center of the image is the relevant home.</p>
     </header>
     <main>
     """ + "".join(cards) + """
