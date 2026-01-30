@@ -60,7 +60,7 @@ filtered_columns = [
     "num_bath", "num_bath_partial", "num_bedrooms", "structstyle", "saleprice", "saledate",
     "taxyear", "last_ownership_transfer_date", "owner", "mailadd", "mail_unit", "mail_city", "mail_state2",
     "mail_zip", "city", "county", "state2", "szip",
-    "szip5", "subdivision", "sqft", "condo_unit", "designcodedscr", "qualitycode", "qualitycodedscr", "constcodedscr", "effectiveyear",
+    "szip5", "subdivision", "area_building", "condo_unit", "designcodedscr", "qualitycode", "qualitycodedscr", "constcodedscr", "effectiveyear",
     "bsmtsf", "bsmttype", "bsmttypedscr", "carstoragesf", "carstoragetype",
     "carstoragetypedscr", "ac", "acdscr", "heating", "heatingdscr", "extwallprim",
     "extwalldscrprim", "extwallsec", "extwalldscrsec", "intwall", "intwalldscr",
@@ -72,7 +72,7 @@ filtered_columns = [
 #removed for now
 # "year", "month", "day", "PotentialRoofAge"
 
-final = pd.read_csv("/Users/jeffs/Projects/SolarProject/data/working/Semi_Final_Data_w_Solar_Classifier.csv")
+final = pd.read_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Semi_Final_Data_w_Solar_Classifier.csv")
 
 final = final[filtered_columns]
 

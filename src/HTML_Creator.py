@@ -35,7 +35,7 @@ JOIN_KEY_CSV = "original_index"
 DISPLAY_COLUMNS: List[Dict[str, str]] = [
     {"col": "address", "label": "Address"},
     # {"col": "solar_score", "label": "Solar Score"},
-    {"col": "sqft", "label": "Square Footage"},
+    {"col": "area_building", "label": "Square Footage"},
     {"col": "saleprice", "label": "Sale Price"},
     {"col": "saledate", "label": "Sale Date"},
     {"col": "calculated_build_year", "label": "Build Year"},

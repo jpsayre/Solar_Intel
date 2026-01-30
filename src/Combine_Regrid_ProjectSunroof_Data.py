@@ -7,11 +7,12 @@ import numpy as np
 This script is merging the Regrid data with the filtered Project Sunroof data.
 
 """
+location = 'Boulder_CO'
 
 # --- Load ---
 # A = pd.read_csv("/Users/jeffs/Library/Mobile Documents/com~apple~CloudDocs/Boulder_HighlyQualifiedFilter.csv")
-A = pd.read_csv('/Users/jeffs/Projects/SolarProject/data/working/Primary_Regrid_Filter_Output.csv')
-B = pd.read_csv("/Users/jeffs/Projects/SolarProject/data/working/Filtered_API_Output_500_score.csv")
+A = pd.read_csv('/Users/jeffs/Projects/SolarProject/data/working/'+location+'_Primary_Regrid_Filter_Output.csv')
+B = pd.read_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Filtered_API_Output.csv")
 
 # Inner join (A on left; only matched rows kept)
 merged = A.merge(
@@ -22,7 +23,7 @@ merged = A.merge(
 )
 
 # --- Save ---
-merged.to_csv("/Users/jeffs/Projects/SolarProject/data/working/Regrid_joined_with_API.csv", index=False)
+merged.to_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Regrid_joined_with_API.csv", index=False)
 
 
 #This saves the file with indexs and lat long to be used by the n8n solar panel classifier workflow
@@ -30,4 +31,4 @@ n8n_Lat_Long = merged[["original_index","lat","lon"]]
 
 n8n_Lat_Long["solar_panels"] = ''
 
-n8n_Lat_Long.to_csv("/Users/jeffs/Projects/SolarProject/data/working/n8n_Lat_Long.csv", index=False)
+n8n_Lat_Long.to_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_n8n_Lat_Long.csv", index=False)

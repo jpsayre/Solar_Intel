@@ -44,7 +44,7 @@ df['calculated_roof_age'] = current_year - df['calculated_build_year']
 df['PotentialRoofAge'] = df['calculated_roof_age'] % 30
 
 
-df.to_csv('/Users/jeffs/Projects/SolarProject/data/working/'+location+'Primary_Regrid_Filter_Output.csv', index=False)
+df.to_csv('/Users/jeffs/Projects/SolarProject/data/working/'+location+'_Primary_Regrid_Filter_Output.csv', index=False)
 
 print(len(df))
 
