@@ -26,7 +26,11 @@ import pandas as pd
 # ----------------------------
 # USER SETTINGS (edit these)
 # ----------------------------
-CSV_PATH = "/Users/jeffs/Projects/SolarProject/data/final/Boulder_CO_Final_Data.csv"
+
+county = "Boulder"
+state = "CO"
+
+CSV_PATH = "/Users/jeffs/Projects/SolarProject/data/final/"+county+"_"+state+"_Final_Data.csv"
 IMAGES_DIR = "/Users/jeffs/Projects/SolarProject/data/images"
 OUTPUT_HTML = "/Users/jeffs/Projects/SolarProject/data/final/listings.html"
 
@@ -34,12 +38,13 @@ JOIN_KEY_CSV = "original_index"
 
 DISPLAY_COLUMNS: List[Dict[str, str]] = [
     {"col": "address", "label": "Address"},
-    # {"col": "solar_score", "label": "Solar Score"},
+    {"col": "owner_formatted", "label": "Owner"},
     {"col": "area_building", "label": "Square Footage"},
+    {"col": "num_bedrooms", "label": "Bedrooms"},
     {"col": "saleprice", "label": "Sale Price"},
     {"col": "saledate", "label": "Sale Date"},
     {"col": "calculated_build_year", "label": "Build Year"},
-    {"col": "num_bedrooms", "label": "Bedrooms"},
+    
 ]
 
 HEADLINE_COLUMN = "mailadd"   # primary address line
@@ -77,10 +82,10 @@ def format_value(col: str, x) -> str:
         except Exception:
             return x_str
 
-    if col.lower() in {"sqft", "square_footage"}:
+    if col.lower() in {"area_building", "square_footage"}:
         try:
             n = float(x)
-            return f"{n:,.0f} sq ft"
+            return f"{n:,.0f}"
         except Exception:
             return x_str
         
@@ -180,6 +185,8 @@ def main() -> None:
     df[JOIN_KEY_CSV] = df[JOIN_KEY_CSV].astype(str)
     df = df.set_index(JOIN_KEY_CSV)
 
+    total_properties = len(df)
+
     cards = []
 
     # Iterate using full absolute paths (no Path / glob)
@@ -189,8 +196,8 @@ def main() -> None:
         if not os.path.isfile(img_path):
             continue
 
-        print("[DEBUG] Found image file:", img_path)
-        print("        Exists on disk?", os.path.exists(img_path))
+        # print("[DEBUG] Found image file:", img_path)
+        # print("        Exists on disk?", os.path.exists(img_path))
 
         key, _ = os.path.splitext(fname)
         if key not in df.index:
@@ -198,7 +205,7 @@ def main() -> None:
 
         # Use absolute path directly in HTML
         src = f"file://{img_path}"
-        print("[DEBUG] Image src written to HTML:", src)
+        # print("[DEBUG] Image src written to HTML:", src)
 
         cards.append(
             build_listing_html(
@@ -223,7 +230,7 @@ def main() -> None:
     <title>Listings</title>
     <style>
       :root {
-        --bg: #f6f7fb;
+        --bg: #f7f7f7;
         --card: #ffffff;
         --text: #1b2430;
         --muted: #5b6b7c;
@@ -249,7 +256,7 @@ def main() -> None:
 
       header h1 {
         margin: 0 0 6px;
-        font-size: 26px;
+        font-size: 42px;
         letter-spacing: 0.2px;
       }
 
@@ -309,7 +316,10 @@ def main() -> None:
         margin-bottom: 12px;
       }
 
-      
+      .count-highlight {
+        color: #16a34a;       /* green */
+        font-weight: 700;
+}
 
       .chips {
         display: flex;
@@ -368,17 +378,29 @@ def main() -> None:
   <body>
     <header>
       <h1>Solar Intelligence Report</h1>
-        <h3>Every home listed here meets the following criteria*:</h3>
+        <h2>Sample for the County of """ + str(county) + ', ' + str(state) + """</h2>
+        <h3>We analyze every home in the county to find those that meet our criteria:</h3>
         <ul>
-            <li>Single family home</li>
-            <li>Owner occupied</li>
-            <li>No or minimal shade concerns</li>
-            <li>No existing solar panel installation</li>
-            <li>South facing roof segment a minimum of 30 m<sup>2</sup> (323 ft<sup>2</sup>).</li>
+            <li>Single family home*</li>
+            <li>Owner occupied*</li>
+            <li>No or minimal shade concerns**</li>
+            <li>No existing solar panel installation**</li>
+            <li>South facing roof segment a minimum of 30 m<sup>2</sup> (323 ft<sup>2</sup>)**</li>
         </ul>
-        <p>*As of date of Google Maps satellite imagery</p>
+
+        <h3>Stop wasting time and energy on less than ideal homes! With our solar intelligence report, you'll have the information you need to operate your business more effectively.</h3>
+                
+        <h2>
+        Total properties in full report:
+        <span class="count-highlight">""" + str(total_properties) + """</span>
+        </h2>
+
+        <p>*According to public records, actual conditions may vary.</p>
+        <p>**Per Google satellite imagery, actual conditions may vary.</p>
         <br>
-        <p>Note: If multiple homes shown in an image, the home towards the center of the image is the relevant home.</p>
+        <p>Note 1: If multiple homes are shown in an image, the home towards the center of the image is the relevant home.</p>
+        <p>Note 2: Inclusion on report does not indicate homeowner interest in a solar system or contact consent.</p>
+        <p>Note 3: Owner name comes from public records. Owner may be a legal entity. Names may have errors.</p>
     </header>
     <main>
     """ + "".join(cards) + """

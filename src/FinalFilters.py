@@ -83,4 +83,18 @@ final = final.rename(columns={
     # "day": "google_ProjectSunroof_analysis_day",
 })
 
+def format_owner(name):
+    if pd.isna(name):
+        return name
+
+    parts = name.strip().split()
+    parts = [p.capitalize() for p in parts]
+
+    if len(parts) >= 2:
+        parts[0] = parts[0] + ","
+
+    return " ".join(parts)
+
+final["owner_formatted"] = final["owner"].apply(format_owner)
+
 final.to_csv("/Users/jeffs/Projects/SolarProject/data/final/"+location+"_Final_Data.csv", index=False)
