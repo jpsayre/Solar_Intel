@@ -43,7 +43,7 @@ DISPLAY_COLUMNS: List[Dict[str, str]] = [
     {"col": "num_bedrooms", "label": "Bedrooms"},
     {"col": "saleprice", "label": "Sale Price"},
     {"col": "saledate", "label": "Sale Date"},
-    {"col": "calculated_build_year", "label": "Build Year"},
+    {"col": "calculated_build_year", "label": "Effective Build Year"},
     
 ]
 
@@ -169,8 +169,11 @@ def build_listing_html(
     headline_html = f"<h2 class=\"headline\">{headline}</h2>" if headline else ""
     subhead_html = f"<h2 class=\"headline\">{subhead}</h2>" if subhead else ""
 
+    city_attr = safe_text(row[CITY_COLUMN]) if CITY_COLUMN and CITY_COLUMN in row else ""
+
+
     return """
-    <article class="card">
+    <article class=\"card\" data-city=\"""" + city_attr + """\">
       <div class="imgwrap">
         <img src=""" + '"' + image_rel_path + '"' + """ loading="lazy" />
       </div>
@@ -195,6 +198,22 @@ def main() -> None:
     df = df.set_index(JOIN_KEY_CSV)
 
     total_properties = len(df)
+
+    # Build city filter options (from mail_city)
+    cities = []
+    if CITY_COLUMN in df.columns:
+        cities = (
+            df[CITY_COLUMN]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .replace({"": pd.NA})
+            .dropna()
+            .unique()
+            .tolist()
+        )
+        cities = sorted(set(cities), key=lambda s: s.lower())
+
 
     cards = []
 
@@ -382,8 +401,71 @@ def main() -> None:
         .imgwrap { border-right: 0; border-bottom: 1px solid var(--border); min-height: 220px; }
         .kv { grid-template-columns: 1fr; }
       }
+                
+    .filters {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    }
+
+    .filters label {
+    color: var(--muted);
+    font-size: 14px;
+    }
+
+    .filters select {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(27, 36, 48, 0.06);
+    outline: none;
+    }
+
+    .results {
+    color: var(--muted);
+    font-size: 14px;
+    }
+
     </style>
   </head>
+                
+    <script>
+    (function () {
+        const select = document.getElementById('cityFilter');
+        const cards = Array.from(document.querySelectorAll('article.card'));
+        const results = document.getElementById('resultsCount');
+
+        function normalize(s) {
+        return (s || '').toString().trim().toLowerCase();
+        }
+
+        function applyFilter() {
+        const v = select.value;
+        const isAll = v === '__ALL__';
+        const target = normalize(v);
+
+        let shown = 0;
+        for (const card of cards) {
+            const city = normalize(card.getAttribute('data-city'));
+            const ok = isAll || city === target;
+            card.style.display = ok ? '' : 'none';
+            if (ok) shown++;
+        }
+
+        if (results) results.textContent = `${shown.toLocaleString()} shown`;
+        }
+
+        if (select) select.addEventListener('change', applyFilter);
+        applyFilter();
+    })();
+    </script>
+
+
   <body>
     <header>
       <h1>Solar Intelligence Report</h1>
@@ -411,6 +493,16 @@ def main() -> None:
         <p>Note 1: If multiple homes are shown in an image, the home towards the center of the image is the relevant home.</p>
         <p>Note 2: Inclusion on report does not indicate homeowner interest in a solar system or contact consent.</p>
         <p>Note 3: Owner name comes from public records. Owner may be a legal entity. Names may have errors.</p>
+
+        <div class="filters">
+        <label for="cityFilter">Filter by city:</label>
+        <select id="cityFilter">
+            <option value="__ALL__">All cities</option>
+            """ + "\n".join([f"<option value=\"{html.escape(c)}\">{html.escape(c)}</option>" for c in cities]) + """
+        </select>
+        <div id="resultsCount" class="results"></div>
+        </div>
+
     </header>
     <main>
     """ + "".join(cards) + """
