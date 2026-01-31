@@ -1,6 +1,8 @@
 #Step 4
+
 import pandas as pd
 import numpy as np
+import re
 
 #Filter columns to have a usable dataset
 location = "Boulder_CO"
@@ -57,7 +59,7 @@ all_columns = [
 
 
 filtered_columns = [
-    "index", "saleprice", "saledate",
+    "index","primary_roof_orientation", "saleprice", "saledate",
     "owner","owner_1","owner_2", "mailadd",
     "city", "county", "state2",
     "szip5", "subdivision_formatted", "area_building",
@@ -71,15 +73,17 @@ filtered_columns = [
 
 final = pd.read_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Semi_Final_Data_w_Solar_Classifier.csv")
 
+cols_to_upper = ["city", "county"]
+
+final[cols_to_upper] = final[cols_to_upper].apply(
+    lambda col: col.astype(str).str.upper()
+)
+
 final["index"] = final["county"].astype(str) + "_" + final["state2"].astype(str) + "_" + final["original_index"].astype(str)
 
 
 
-
 #Naming formatting
-
-import pandas as pd
-import re
 
 # Expand as you see more patterns
 LEGAL_ENTITY_PAT = re.compile(
@@ -232,6 +236,7 @@ final = final.rename(
     columns={
         "mailadd": "address",
         "state2": "state",
+        "owner": "owner_unaltered",
         "szip5": "zip_code",
         "area_building": "building_sqft",
         "numstories": "count_stories",

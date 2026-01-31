@@ -3,7 +3,7 @@
 import pandas as pd
 
 """
-After runnning the solar panel yes/no classifier in n8n, this script takes the classification column and merges it into the main dataset.
+After running the solar panel yes/no classifier in n8n, this script takes the classification column and merges it into the main dataset.
 """
 
 location = 'Boulder_CO'

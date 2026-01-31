@@ -5,7 +5,7 @@ import SunroofBatchAPI
 """
 This script is reading in the Regrid data and then applying filters to it before calling the Google Sunroof API for the defined row range.
 
-NOTE - the data adds on to the existing file. So that can cause problems if this code changes anything. Sometimes it's best to delete the output file and recreate from scratch.
+NOTE - the data adds on to the existing csv_output file. So that can cause problems if this code changes anything. Sometimes it's best to delete the output file and recreate from scratch.
 """
 
 location = 'Boulder_CO'

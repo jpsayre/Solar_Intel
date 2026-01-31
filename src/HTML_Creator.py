@@ -37,8 +37,9 @@ OUTPUT_HTML = "/Users/jeffs/Projects/SolarProject/data/final/listings.html"
 JOIN_KEY_CSV = "original_index"
 
 DISPLAY_COLUMNS: List[Dict[str, str]] = [
-    {"col": "address", "label": "Address"},
+    # {"col": "address", "label": "Address"},
     {"col": "owner_formatted", "label": "Owner Name"},
+    {"col": "primary_roof_orientation", "label": "Primary Roof Orientation"},
     {"col": "area_building", "label": "Square Footage"},
     {"col": "num_bedrooms", "label": "Bedrooms"},
     {"col": "saleprice", "label": "Sale Price"},
@@ -47,9 +48,9 @@ DISPLAY_COLUMNS: List[Dict[str, str]] = [
     
 ]
 
-HEADLINE_COLUMN = "mailadd"   # primary address line
-CITY_COLUMN = "mail_city"           # set to None to disable
-STATE_COLUMN = "mail_state2"         # set to None to disable
+HEADLINE_COLUMN = "address"   # primary address line
+CITY_COLUMN = "city"           # set to None to disable
+STATE_COLUMN = "state"         # set to None to disable
 MAX_ITEMS: Optional[int] = None
 
 # ----------------------------
