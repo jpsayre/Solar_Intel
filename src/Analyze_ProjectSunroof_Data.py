@@ -66,7 +66,7 @@ df["has_match"] = df["matching_segments"].str.len() > 0
 
 # Separate south matches from non-matches
 south_df = df[df["has_match"]].copy()
-south_df["primary_roof_orientation"] = "south"
+south_df["primary_roof_orientation"] = "South"
 print(f"Properties with south-facing segments: {len(south_df)}")
 
 remaining_df = df[~df["has_match"]].copy()
@@ -79,7 +79,7 @@ remaining_df["matching_segments"] = remaining_df.apply(lambda row: find_matching
 remaining_df["has_match"] = remaining_df["matching_segments"].str.len() > 0
 
 west_df = remaining_df[remaining_df["has_match"]].copy()
-west_df["primary_roof_orientation"] = "west"
+west_df["primary_roof_orientation"] = "West"
 print(f"Properties with west-facing segments: {len(west_df)}")
 
 
@@ -134,11 +134,11 @@ filtered_df['solar_score'] = pd.to_numeric(filtered_df['solar_score'], errors="c
 # STEP 7: Summary statistics
 print("\n=== FINAL SUMMARY ===")
 print(f"Total properties in final output: {len(filtered_df)}")
-print(f"South-facing: {len(filtered_df[filtered_df['primary_roof_orientation'] == 'south'])}")
-print(f"West-facing: {len(filtered_df[filtered_df['primary_roof_orientation'] == 'west'])}")
+print(f"South-facing: {len(filtered_df[filtered_df['primary_roof_orientation'] == 'South'])}")
+print(f"West-facing: {len(filtered_df[filtered_df['primary_roof_orientation'] == 'West'])}")
 
 
 # Save result
-output_path = "/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Filtered_API_Output_Orientation.csv"
+output_path = "/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Filtered_API_Output.csv"
 filtered_df.to_csv(output_path, index=False)
 print(f"\nResults saved to: {output_path}")
