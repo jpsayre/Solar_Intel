@@ -59,7 +59,7 @@ all_columns = [
 
 
 filtered_columns = [
-    "index","primary_roof_orientation", "saleprice", "saledate",
+    "index","roof_orientation", "saleprice", "saledate",
     "owner","owner_1","owner_2", "mailadd",
     "city", "county", "state2",
     "szip5", "subdivision_formatted", "area_building",
@@ -237,6 +237,7 @@ final = final.rename(
         "mailadd": "address",
         "state2": "state",
         "owner": "owner_unaltered",
+        "roof_orientation": "qualified_orientations",
         "szip5": "zip_code",
         "area_building": "building_sqft",
         "numstories": "count_stories",

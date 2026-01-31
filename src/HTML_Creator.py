@@ -39,7 +39,7 @@ JOIN_KEY_CSV = "original_index"
 DISPLAY_COLUMNS: List[Dict[str, str]] = [
     # {"col": "address", "label": "Address"},
     {"col": "owner_formatted", "label": "Owner Name"},
-    {"col": "primary_roof_orientation", "label": "Primary Roof Orientation"},
+    {"col": "qualified_orientations", "label": "Qualified Roof Orientations"},
     {"col": "area_building", "label": "Square Footage"},
     {"col": "num_bedrooms", "label": "Bedrooms"},
     {"col": "saleprice", "label": "Sale Price"},
@@ -478,7 +478,7 @@ def main() -> None:
             <li>Minimum sale price of 300k*</li>
             <li>No or minimal shade concerns**</li>
             <li>No existing solar panel installation**</li>
-            <li>South facing roof segment a minimum of 30 m<sup>2</sup> (323 ft<sup>2</sup>)**</li>
+            <li>Roof segment a minimum of 30 m<sup>2</sup> (323 ft<sup>2</sup>) in the orientation specified**</li>
         </ul>
 
         <h3>Stop wasting time and energy on less than ideal homes! With our solar intelligence report, you'll have the information you need to operate your business more effectively.</h3>
