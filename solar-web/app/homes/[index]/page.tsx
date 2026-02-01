@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -9,9 +9,41 @@ import ListingCard from "@/components/ListingCard";
 
 const BUCKET = "images";
 
+const COMMON_TAGS = [
+  { key: "roof_condition", label: "Roof Condition" },
+  { key: "roofing_material", label: "Roofing Material" },
+  { key: "roof_age", label: "Estimated Roof Age" },
+  { key: "energy_bill", label: "Electricity Bill (kWh)" },
+] as const;
+
+const ROOF_CONDITION_OPTIONS = ["Excellent", "Good", "Fair", "Poor"] as const;
+
+type ContactRow = {
+  phone_number: string;
+  email: string;
+  preferred_name: string;
+  consent_to_contact: boolean;
+};
+
+const EMPTY_CONTACT: ContactRow = {
+  phone_number: "",
+  email: "",
+  preferred_name: "",
+  consent_to_contact: false,
+};
+
 type HomeRow = {
   index: string;
   original_index: number;
+  [key: string]: unknown;
+};
+
+type OrgHomeRow = {
+  id: number;
+  org_id: string;
+  home_index: string;
+  custom: Record<string, unknown> | null;
+  updated_at?: string | null;
   [key: string]: unknown;
 };
 
@@ -46,6 +78,23 @@ export default function HomeDetailPage() {
   const [notesErr, setNotesErr] = useState<string | null>(null);
   const [noteBody, setNoteBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgHome, setOrgHome] = useState<OrgHomeRow | null | "none">(null);
+  const [contacts, setContacts] = useState<ContactRow[]>([{ ...EMPTY_CONTACT }]);
+  const [customTags, setCustomTags] = useState<Record<string, string>>({});
+  const [customTagKeys, setCustomTagKeys] = useState<string[]>([]);
+  const [newCustomKey, setNewCustomKey] = useState("");
+  const [newCustomValue, setNewCustomValue] = useState("");
+  const [tagsErr, setTagsErr] = useState<string | null>(null);
+  const [savingTags, setSavingTags] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextAutoSaveRef = useRef(true);
+  const orgHomeRef = useRef(orgHome);
+  orgHomeRef.current = orgHome;
+  const lastSavedContactsRef = useRef<string | null>(null);
+  const lastSavedHomeInfoRef = useRef<string | null>(null);
+  const lastSavedCustomTagsRef = useRef<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -138,6 +187,114 @@ export default function HomeDetailPage() {
     };
   }, [row, params.index, loadNotes]);
 
+  useEffect(() => {
+    let alive = true;
+
+    async function loadOrgHome() {
+      const { data: userData } = await supabaseBrowser.auth.getUser();
+      if (!userData.user || !params.index) return;
+
+      const { data: profile } = await supabaseBrowser
+        .from("profiles")
+        .select("org_id")
+        .eq("user_id", userData.user.id)
+        .single();
+
+      if (!alive || !profile?.org_id) {
+        setOrgId(null);
+        setOrgHome("none");
+        return;
+      }
+
+      setOrgId(profile.org_id as string);
+
+      const { data: orgHomeRow, error } = await supabaseBrowser
+        .from("org_home")
+        .select("id, org_id, home_index, custom, updated_at")
+        .eq("org_id", profile.org_id)
+        .eq("home_index", params.index)
+        .maybeSingle();
+
+      if (!alive) return;
+      if (error) {
+        setTagsErr(error.message);
+        setOrgHome("none");
+        return;
+      }
+
+      setOrgHome(orgHomeRow ? (orgHomeRow as OrgHomeRow) : "none");
+
+      const custom = (orgHomeRow as OrgHomeRow | null)?.custom;
+      if (custom && typeof custom === "object") {
+        const rawContacts = custom.contacts;
+        let parsedContacts: ContactRow[] = [{ ...EMPTY_CONTACT }];
+        if (Array.isArray(rawContacts) && rawContacts.length > 0) {
+          parsedContacts = rawContacts.map((c) => {
+            if (c && typeof c === "object") {
+              return {
+                phone_number: typeof c.phone_number === "string" ? c.phone_number : "",
+                email: typeof c.email === "string" ? c.email : "",
+                preferred_name: typeof c.preferred_name === "string" ? c.preferred_name : "",
+                consent_to_contact: Boolean(c.consent_to_contact),
+              };
+            }
+            return { ...EMPTY_CONTACT };
+          });
+          setContacts(parsedContacts);
+        } else {
+          setContacts(parsedContacts);
+        }
+
+        const entries: Record<string, string> = {};
+        const knownKeys = new Set(COMMON_TAGS.map((t) => t.key));
+        const skipKeys = new Set(["contacts", "phone_number", "email", "contact_info_updated_at", "home_info_updated_at", "custom_tags_updated_at"]);
+        const customKeys: string[] = [];
+        for (const [k, v] of Object.entries(custom)) {
+          if (skipKeys.has(k)) continue;
+          if (typeof k === "string" && (v === null || typeof v === "string" || typeof v === "number")) {
+            entries[k] = String(v);
+            if (!knownKeys.has(k)) customKeys.push(k);
+          }
+        }
+        setCustomTags(entries);
+        setCustomTagKeys(customKeys.sort((a, b) => a.localeCompare(b)));
+
+        lastSavedContactsRef.current = JSON.stringify(
+          parsedContacts.map((c) => ({
+            phone_number: c.phone_number.trim(),
+            email: c.email.trim(),
+            preferred_name: c.preferred_name.trim(),
+            consent_to_contact: c.consent_to_contact,
+          }))
+        );
+        const homeInfo: Record<string, string> = {};
+        for (const t of COMMON_TAGS) {
+          const val = entries[t.key];
+          if (val != null && val.trim() !== "") homeInfo[t.key] = val.trim();
+        }
+        lastSavedHomeInfoRef.current = JSON.stringify(homeInfo);
+        const customOnly: Record<string, string> = {};
+        for (const k of customKeys) {
+          const val = entries[k];
+          if (val != null && val.trim() !== "") customOnly[k] = val.trim();
+        }
+        lastSavedCustomTagsRef.current = JSON.stringify(customOnly);
+      } else {
+        setContacts([{ ...EMPTY_CONTACT }]);
+        setCustomTags({});
+        setCustomTagKeys([]);
+        lastSavedContactsRef.current = null;
+        lastSavedHomeInfoRef.current = null;
+        lastSavedCustomTagsRef.current = null;
+      }
+    }
+
+    loadOrgHome();
+    return () => {
+      alive = false;
+    };
+  }, [params.index]);
+
   async function handleAddNote(e: React.FormEvent) {
     e.preventDefault();
     const body = noteBody.trim();
@@ -159,6 +316,152 @@ export default function HomeDetailPage() {
     setNoteBody("");
     await loadNotes();
   }
+
+  function setContactField(i: number, field: keyof ContactRow, value: string | boolean) {
+    setContacts((prev) => {
+      const next = [...prev];
+      if (i < 0 || i >= next.length) return prev;
+      next[i] = { ...next[i], [field]: value };
+      return next;
+    });
+  }
+
+  function addContact() {
+    setContacts((prev) => [...prev, { ...EMPTY_CONTACT }]);
+  }
+
+  function removeContact(i: number) {
+    setContacts((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)));
+  }
+
+  function setTagValue(key: string, value: string) {
+    setCustomTags((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function addCustomTag() {
+    const key = newCustomKey.trim().toLowerCase().replace(/\s+/g, "_");
+    if (!key || customTagKeys.includes(key) || COMMON_TAGS.some((t) => t.key === key)) return;
+    setCustomTagKeys((prev) => [...prev, key].sort((a, b) => a.localeCompare(b)));
+    setCustomTags((prev) => ({ ...prev, [key]: newCustomValue.trim() }));
+    setNewCustomKey("");
+    setNewCustomValue("");
+  }
+
+  function removeCustomTag(key: string) {
+    setCustomTagKeys((prev) => prev.filter((k) => k !== key));
+    setCustomTags((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  const saveOrgHomeInfo = useCallback(async () => {
+    if (!orgId || !params.index) return;
+    const { data: userData } = await supabaseBrowser.auth.getUser();
+    if (!userData.user) return;
+
+    setSavingTags(true);
+    setTagsErr(null);
+
+    const contactsPayload = contacts.map((c) => ({
+      phone_number: c.phone_number.trim(),
+      email: c.email.trim(),
+      preferred_name: c.preferred_name.trim(),
+      consent_to_contact: c.consent_to_contact,
+    }));
+
+    const homeInfoPayload: Record<string, string> = {};
+    for (const t of COMMON_TAGS) {
+      const v = customTags[t.key];
+      if (v != null && String(v).trim() !== "") homeInfoPayload[t.key] = String(v).trim();
+    }
+
+    const customTagsPayload: Record<string, string> = {};
+    for (const k of customTagKeys) {
+      const v = customTags[k];
+      if (v != null && String(v).trim() !== "") customTagsPayload[k] = String(v).trim();
+    }
+
+    const contactsSerialized = JSON.stringify(contactsPayload);
+    const homeInfoSerialized = JSON.stringify(homeInfoPayload);
+    const customTagsSerialized = JSON.stringify(customTagsPayload);
+
+    const contactInfoChanged = lastSavedContactsRef.current !== contactsSerialized;
+    const homeInfoChanged = lastSavedHomeInfoRef.current !== homeInfoSerialized;
+    const customTagsChanged = lastSavedCustomTagsRef.current !== customTagsSerialized;
+
+    const now = new Date().toISOString();
+    const currentOrgHome = orgHomeRef.current;
+    const existingCustom =
+      currentOrgHome !== null && currentOrgHome !== "none" && typeof currentOrgHome === "object" && currentOrgHome.custom && typeof currentOrgHome.custom === "object"
+        ? { ...(currentOrgHome.custom as Record<string, unknown>) }
+        : {};
+
+    const customPayload: Record<string, unknown> = { ...existingCustom, contacts: contactsPayload };
+    for (const [k, v] of Object.entries(homeInfoPayload)) customPayload[k] = v;
+    for (const [k, v] of Object.entries(customTagsPayload)) customPayload[k] = v;
+
+    if (contactInfoChanged) customPayload.contact_info_updated_at = now;
+    if (homeInfoChanged) customPayload.home_info_updated_at = now;
+    if (customTagsChanged) customPayload.custom_tags_updated_at = now;
+
+    let saveError: string | null = null;
+    if (currentOrgHome !== null && currentOrgHome !== "none" && typeof currentOrgHome === "object") {
+      const { error } = await supabaseBrowser
+        .from("org_home")
+        .update({ custom: customPayload })
+        .eq("id", currentOrgHome.id);
+      if (error) {
+        setTagsErr(error.message);
+        saveError = error.message;
+      }
+    } else {
+      const { error } = await supabaseBrowser.from("org_home").insert({
+        org_id: orgId,
+        home_index: params.index,
+        created_by: userData.user.id,
+        custom: customPayload,
+      });
+      if (error) {
+        setTagsErr(error.message);
+        saveError = error.message;
+      }
+    }
+
+    setSavingTags(false);
+    if (!saveError) {
+      lastSavedContactsRef.current = contactsSerialized;
+      lastSavedHomeInfoRef.current = homeInfoSerialized;
+      lastSavedCustomTagsRef.current = customTagsSerialized;
+      const { data } = await supabaseBrowser
+        .from("org_home")
+        .select("id, org_id, home_index, custom, updated_at")
+        .eq("org_id", orgId)
+        .eq("home_index", params.index)
+        .single();
+      if (data) setOrgHome(data as OrgHomeRow);
+    }
+  }, [contacts, customTags, customTagKeys, orgId, params.index]);
+
+  useEffect(() => {
+    if (!orgId || !params.index) return;
+    if (skipNextAutoSaveRef.current) {
+      skipNextAutoSaveRef.current = false;
+      return;
+    }
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveTimeoutRef.current = null;
+      saveOrgHomeInfo();
+    }, 700);
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
+    };
+  }, [contacts, customTags, customTagKeys, orgId, params.index, saveOrgHomeInfo]);
 
   if (err) {
     return (
@@ -183,6 +486,11 @@ export default function HomeDetailPage() {
 
   const { addressLine1, addressLine2, detailRows } = buildListingCardData(row);
 
+  const custom = orgHome !== null && orgHome !== "none" && typeof orgHome === "object" && orgHome.custom && typeof orgHome.custom === "object" ? (orgHome.custom as Record<string, unknown>) : null;
+  const contactInfoUpdatedText = custom?.contact_info_updated_at && typeof custom.contact_info_updated_at === "string" ? formatNoteTimestamp(custom.contact_info_updated_at) : null;
+  const homeInfoUpdatedText = custom?.home_info_updated_at && typeof custom.home_info_updated_at === "string" ? formatNoteTimestamp(custom.home_info_updated_at) : null;
+  const customTagsUpdatedText = custom?.custom_tags_updated_at && typeof custom.custom_tags_updated_at === "string" ? formatNoteTimestamp(custom.custom_tags_updated_at) : null;
+
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-4xl">
@@ -200,6 +508,210 @@ export default function HomeDetailPage() {
           imageAlt={imgUrl ? `Home ${row.original_index}` : imgErr ? "No image" : "Loading…"}
           rows={detailRows}
         />
+
+        {orgId != null && (
+          <section className="mt-10">
+            <h2 className="mb-2 text-lg font-semibold text-slate-900">My Organization&apos;s Info</h2>
+            <p className="mb-4 text-sm text-slate-500">
+              Contact info and tags are private to your organization.
+            </p>
+
+            <div className="space-y-6">
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <h3 className="text-sm font-medium text-slate-700">Contact Info</h3>
+                  {contactInfoUpdatedText && (
+                    <span className="shrink-0 text-xs text-slate-500">Last updated: {contactInfoUpdatedText}</span>
+                  )}
+                </div>
+                <div className="space-y-4">
+                  {contacts.map((contact, i) => (
+                    <div
+                      key={i}
+                      className="flex flex-wrap items-end gap-3 rounded-lg border border-neutral-200 bg-white p-3"
+                    >
+                      <label className="min-w-[120px] flex-1 flex-col gap-1 sm:min-w-0">
+                        <span className="text-xs font-medium text-slate-500">Phone Number</span>
+                        <input
+                          type="text"
+                          value={contact.phone_number}
+                          onChange={(e) => setContactField(i, "phone_number", e.target.value)}
+                          placeholder="Phone"
+                          className="mt-0.5 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        />
+                      </label>
+                      <label className="min-w-[120px] flex-1 flex-col gap-1 sm:min-w-0">
+                        <span className="text-xs font-medium text-slate-500">Email</span>
+                        <input
+                          type="email"
+                          value={contact.email}
+                          onChange={(e) => setContactField(i, "email", e.target.value)}
+                          placeholder="Email"
+                          className="mt-0.5 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        />
+                      </label>
+                      <label className="min-w-[120px] flex-1 flex-col gap-1 sm:min-w-0">
+                        <span className="text-xs font-medium text-slate-500">Preferred Name</span>
+                        <input
+                          type="text"
+                          value={contact.preferred_name}
+                          onChange={(e) => setContactField(i, "preferred_name", e.target.value)}
+                          placeholder="Name"
+                          className="mt-0.5 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        />
+                      </label>
+                      <label className="flex shrink-0 items-center gap-2 py-2">
+                        <input
+                          type="checkbox"
+                          checked={contact.consent_to_contact}
+                          onChange={(e) => setContactField(i, "consent_to_contact", e.target.checked)}
+                          className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
+                        />
+                        <span className="text-xs font-medium text-slate-600">Consent to Contact</span>
+                      </label>
+                      {contacts.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeContact(i)}
+                          className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={addContact}
+                  className="mt-3 flex items-center gap-1.5 rounded-lg border border-dashed border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:border-amber-400 hover:text-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                >
+                  <span className="text-base leading-none">+</span>
+                  Add Another Contact
+                </button>
+              </div>
+
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <h3 className="text-sm font-medium text-slate-700">Home Info</h3>
+                  {homeInfoUpdatedText && (
+                    <span className="shrink-0 text-xs text-slate-500">Last updated: {homeInfoUpdatedText}</span>
+                  )}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {COMMON_TAGS.map(({ key, label }) => (
+                    <label key={key} className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-slate-500">{label}</span>
+                      {key === "roof_condition" ? (
+                        <select
+                          value={customTags[key] ?? ""}
+                          onChange={(e) => setTagValue(key, e.target.value)}
+                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        >
+                          <option value="">Select…</option>
+                          {ROOF_CONDITION_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          type="text"
+                          value={customTags[key] ?? ""}
+                          onChange={(e) => setTagValue(key, e.target.value)}
+                          placeholder={key === "roofing_material" ? "e.g. Asphalt, Ceramic Tile, etc." : label}
+                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        />
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {customTagKeys.length > 0 && (
+                <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                  <div className="mb-3 flex items-start justify-between gap-2">
+                    <h3 className="text-sm font-medium text-slate-700">Custom Tags</h3>
+                    {customTagsUpdatedText && (
+                      <span className="shrink-0 text-xs text-slate-500">Last updated: {customTagsUpdatedText}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {customTagKeys.map((key) => {
+                      const value = customTags[key] ?? "";
+                      return (
+                        <span
+                          key={key}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-sm text-slate-800"
+                        >
+                          <span>{key.replace(/_/g, " ")}: {value}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeCustomTag(key)}
+                            className="ml-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1"
+                            aria-label={`Remove ${key}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-500">New Tag Name</span>
+                  <input
+                    type="text"
+                    value={newCustomKey}
+                    onChange={(e) => setNewCustomKey(e.target.value)}
+                    placeholder="e.g. competitor_quote"
+                    className="w-40 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-500">Value</span>
+                  <input
+                    type="text"
+                    value={newCustomValue}
+                    onChange={(e) => setNewCustomValue(e.target.value)}
+                    placeholder="Value"
+                    className="w-40 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={addCustomTag}
+                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                >
+                  Add Custom Tag
+                </button>
+              </div>
+
+              {tagsErr && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+                  {tagsErr}
+                </div>
+              )}
+
+              {savingTags && (
+                <p className="text-sm text-slate-500">Saving…</p>
+              )}
+            </div>
+          </section>
+        )}
+
+        {orgId === null && orgHome === "none" && (
+          <div className="mt-10 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
+            <p className="font-medium">My Organization&apos;s Info is only shown for users in an organization.</p>
+            <p className="mt-1 text-amber-800">
+              Your account needs a row in <code className="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs">profiles</code> with your <code className="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs">user_id</code> and an <code className="rounded bg-amber-100 px-1 py-0.5 font-mono text-xs">org_id</code>. Ask your admin to add you to an org, or in Supabase run: <code className="mt-2 block rounded bg-amber-100 p-2 font-mono text-xs">INSERT INTO profiles (user_id, org_id) VALUES (&#39;your-auth-user-uuid&#39;, &#39;your-org-uuid&#39;);</code>
+            </p>
+          </div>
+        )}
 
         <section className="mt-10">
           <h2 className="mb-4 text-lg font-semibold text-slate-900">Comments</h2>
