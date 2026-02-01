@@ -18,6 +18,15 @@ const COMMON_TAGS = [
 
 const ROOF_CONDITION_OPTIONS = ["Excellent", "Good", "Fair", "Poor"] as const;
 
+const ROOFING_MATERIAL_OPTIONS = [
+  "Asphalt Shingles",
+  "Ceramic Tile",
+  "Metal",
+  "Wood Shingles",
+  "Slate/Stone",
+  "Other",
+] as const;
+
 type ActionItem = {
   id: string;
   text: string;
@@ -768,12 +777,25 @@ export default function HomeDetailPage() {
                             </option>
                           ))}
                         </select>
+                      ) : key === "roofing_material" ? (
+                        <select
+                          value={customTags[key] ?? ""}
+                          onChange={(e) => setTagValue(key, e.target.value)}
+                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        >
+                          <option value="">Select…</option>
+                          {ROOFING_MATERIAL_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
                       ) : (
                         <input
                           type="text"
                           value={customTags[key] ?? ""}
                           onChange={(e) => setTagValue(key, e.target.value)}
-                          placeholder={key === "roofing_material" ? "e.g. Asphalt, Ceramic Tile, etc." : label}
+                          placeholder={label}
                           className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                         />
                       )}

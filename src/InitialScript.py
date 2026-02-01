@@ -22,7 +22,7 @@ df = df.reset_index(names='original_index')
 #Filters applied to data
 df = df[df["zoning_description"] == 'Residential Single Family']
 
-df = df[df["saleprice"]>=300000]
+df = df[df["saleprice"]>=200000]
 
 df['OwnerOccupied'] = (
     df['mailadd'].astype(str).str[:6] == df['address'].astype(str).str[:6]

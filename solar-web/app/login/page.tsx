@@ -26,7 +26,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/homes");
+    router.push("/");
     router.refresh();
   }
 
