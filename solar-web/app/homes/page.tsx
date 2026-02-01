@@ -1,11 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
 import ListingCard from "@/components/ListingCard";
+
+const HomeMap = dynamic(() => import("@/components/HomeMap"), { ssr: false });
 
 const BUCKET = "images";
 const PAGE_SIZE = 25;
@@ -352,6 +355,28 @@ export default function HomesPage() {
               Clear all filters
             </button>
           )}
+        </div>
+
+        <div className="mb-8">
+          <HomeMap
+            points={rows
+              .filter(
+                (r) =>
+                  r.latitude != null &&
+                  r.longitude != null &&
+                  Number.isFinite(Number(r.latitude)) &&
+                  Number.isFinite(Number(r.longitude))
+              )
+              .map((r) => {
+                const { addressLine1, addressLine2 } = buildListingCardData(r);
+                return {
+                  lat: Number(r.latitude),
+                  lng: Number(r.longitude),
+                  index: r.index,
+                  address: `${addressLine1}, ${addressLine2}`,
+                };
+              })}
+          />
         </div>
 
         <div className="flex flex-col gap-8">
