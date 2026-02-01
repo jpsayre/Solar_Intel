@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -69,7 +69,7 @@ function uniqueSorted(values: (string | null | undefined)[]): string[] {
   return Array.from(set).sort((a, b) => a.localeCompare(b));
 }
 
-export default function HomesPage() {
+function HomesPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -647,5 +647,22 @@ export default function HomesPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function HomesPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="flex min-h-screen items-center justify-center px-4">
+          <div className="flex flex-col items-center gap-3">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+            <p className="text-slate-600">Loading…</p>
+          </div>
+        </main>
+      }
+    >
+      <HomesPageContent />
+    </Suspense>
   );
 }
