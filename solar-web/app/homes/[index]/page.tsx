@@ -18,6 +18,13 @@ const COMMON_TAGS = [
 
 const ROOF_CONDITION_OPTIONS = ["Excellent", "Good", "Fair", "Poor"] as const;
 
+type ActionItem = {
+  id: string;
+  text: string;
+  completed: boolean;
+  created_at?: string;
+};
+
 type ContactRow = {
   phone_number: string;
   email: string;
@@ -81,6 +88,9 @@ export default function HomeDetailPage() {
 
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgHome, setOrgHome] = useState<OrgHomeRow | null | "none">(null);
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
+  const [newActionItemText, setNewActionItemText] = useState("");
+  const [showCompletedActionItems, setShowCompletedActionItems] = useState(false);
   const [contacts, setContacts] = useState<ContactRow[]>([{ ...EMPTY_CONTACT }]);
   const [customTags, setCustomTags] = useState<Record<string, string>>({});
   const [customTagKeys, setCustomTagKeys] = useState<string[]>([]);
@@ -95,6 +105,7 @@ export default function HomeDetailPage() {
   const lastSavedContactsRef = useRef<string | null>(null);
   const lastSavedHomeInfoRef = useRef<string | null>(null);
   const lastSavedCustomTagsRef = useRef<string | null>(null);
+  const lastSavedActionItemsRef = useRef<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -245,9 +256,27 @@ export default function HomeDetailPage() {
           setContacts(parsedContacts);
         }
 
+        const rawActionItems = custom.action_items;
+        if (Array.isArray(rawActionItems)) {
+          const parsed: ActionItem[] = rawActionItems
+            .filter((a): a is Record<string, unknown> => a != null && typeof a === "object")
+            .map((a) => ({
+              id: typeof a.id === "string" ? a.id : String(Date.now() + Math.random()),
+              text: typeof a.text === "string" ? a.text : "",
+              completed: Boolean(a.completed),
+              created_at: typeof a.created_at === "string" ? a.created_at : undefined,
+            }))
+            .filter((a) => a.text !== "" || a.completed);
+          setActionItems(parsed);
+          lastSavedActionItemsRef.current = JSON.stringify(parsed);
+        } else {
+          setActionItems([]);
+          lastSavedActionItemsRef.current = null;
+        }
+
         const entries: Record<string, string> = {};
         const knownKeys = new Set(COMMON_TAGS.map((t) => t.key));
-        const skipKeys = new Set(["contacts", "phone_number", "email", "contact_info_updated_at", "home_info_updated_at", "custom_tags_updated_at"]);
+        const skipKeys = new Set(["contacts", "action_items", "phone_number", "email", "contact_info_updated_at", "home_info_updated_at", "custom_tags_updated_at", "action_items_updated_at"]);
         const customKeys: string[] = [];
         for (const [k, v] of Object.entries(custom)) {
           if (skipKeys.has(k)) continue;
@@ -281,11 +310,13 @@ export default function HomeDetailPage() {
         lastSavedCustomTagsRef.current = JSON.stringify(customOnly);
       } else {
         setContacts([{ ...EMPTY_CONTACT }]);
+        setActionItems([]);
         setCustomTags({});
         setCustomTagKeys([]);
         lastSavedContactsRef.current = null;
         lastSavedHomeInfoRef.current = null;
         lastSavedCustomTagsRef.current = null;
+        lastSavedActionItemsRef.current = null;
       }
     }
 
@@ -334,6 +365,22 @@ export default function HomeDetailPage() {
     setContacts((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)));
   }
 
+  function addActionItem() {
+    const text = newActionItemText.trim();
+    if (!text) return;
+    const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `item-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    setActionItems((prev) => [...prev, { id, text, completed: false, created_at: new Date().toISOString() }]);
+    setNewActionItemText("");
+  }
+
+  function removeActionItem(id: string) {
+    setActionItems((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  function toggleActionItem(id: string) {
+    setActionItems((prev) => prev.map((a) => (a.id === id ? { ...a, completed: !a.completed } : a)));
+  }
+
   function setTagValue(key: string, value: string) {
     setCustomTags((prev) => ({ ...prev, [key]: value }));
   }
@@ -371,6 +418,13 @@ export default function HomeDetailPage() {
       consent_to_contact: c.consent_to_contact,
     }));
 
+    const actionItemsPayload = actionItems.map((a) => ({
+      id: a.id,
+      text: a.text,
+      completed: a.completed,
+      created_at: a.created_at,
+    }));
+
     const homeInfoPayload: Record<string, string> = {};
     for (const t of COMMON_TAGS) {
       const v = customTags[t.key];
@@ -386,10 +440,12 @@ export default function HomeDetailPage() {
     const contactsSerialized = JSON.stringify(contactsPayload);
     const homeInfoSerialized = JSON.stringify(homeInfoPayload);
     const customTagsSerialized = JSON.stringify(customTagsPayload);
+    const actionItemsSerialized = JSON.stringify(actionItemsPayload);
 
     const contactInfoChanged = lastSavedContactsRef.current !== contactsSerialized;
     const homeInfoChanged = lastSavedHomeInfoRef.current !== homeInfoSerialized;
     const customTagsChanged = lastSavedCustomTagsRef.current !== customTagsSerialized;
+    const actionItemsChanged = lastSavedActionItemsRef.current !== actionItemsSerialized;
 
     const now = new Date().toISOString();
     const currentOrgHome = orgHomeRef.current;
@@ -398,13 +454,14 @@ export default function HomeDetailPage() {
         ? { ...(currentOrgHome.custom as Record<string, unknown>) }
         : {};
 
-    const customPayload: Record<string, unknown> = { ...existingCustom, contacts: contactsPayload };
+    const customPayload: Record<string, unknown> = { ...existingCustom, contacts: contactsPayload, action_items: actionItemsPayload };
     for (const [k, v] of Object.entries(homeInfoPayload)) customPayload[k] = v;
     for (const [k, v] of Object.entries(customTagsPayload)) customPayload[k] = v;
 
     if (contactInfoChanged) customPayload.contact_info_updated_at = now;
     if (homeInfoChanged) customPayload.home_info_updated_at = now;
     if (customTagsChanged) customPayload.custom_tags_updated_at = now;
+    if (actionItemsChanged) customPayload.action_items_updated_at = now;
 
     let saveError: string | null = null;
     if (currentOrgHome !== null && currentOrgHome !== "none" && typeof currentOrgHome === "object") {
@@ -434,6 +491,7 @@ export default function HomeDetailPage() {
       lastSavedContactsRef.current = contactsSerialized;
       lastSavedHomeInfoRef.current = homeInfoSerialized;
       lastSavedCustomTagsRef.current = customTagsSerialized;
+      lastSavedActionItemsRef.current = actionItemsSerialized;
       const { data } = await supabaseBrowser
         .from("org_home")
         .select("id, org_id, home_index, custom, updated_at")
@@ -442,7 +500,7 @@ export default function HomeDetailPage() {
         .single();
       if (data) setOrgHome(data as OrgHomeRow);
     }
-  }, [contacts, customTags, customTagKeys, orgId, params.index]);
+  }, [contacts, actionItems, customTags, customTagKeys, orgId, params.index]);
 
   useEffect(() => {
     if (!orgId || !params.index) return;
@@ -461,7 +519,7 @@ export default function HomeDetailPage() {
         saveTimeoutRef.current = null;
       }
     };
-  }, [contacts, customTags, customTagKeys, orgId, params.index, saveOrgHomeInfo]);
+  }, [contacts, actionItems, customTags, customTagKeys, orgId, params.index, saveOrgHomeInfo]);
 
   if (err) {
     return (
@@ -523,6 +581,95 @@ export default function HomeDetailPage() {
             </p>
 
             <div className="space-y-6">
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                <h3 className="mb-3 text-sm font-medium text-slate-700">Action Items</h3>
+                <ul className="space-y-2">
+                  {actionItems
+                    .filter((a) => !a.completed)
+                    .map((a) => (
+                      <li
+                        key={a.id}
+                        className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-2"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={false}
+                          onChange={() => toggleActionItem(a.id)}
+                          className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
+                          aria-label={`Mark "${a.text}" complete`}
+                        />
+                        <span className="min-w-0 flex-1 text-sm text-slate-800">{a.text}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeActionItem(a.id)}
+                          className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                          aria-label={`Remove "${a.text}"`}
+                        >
+                          ×
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    type="text"
+                    value={newActionItemText}
+                    onChange={(e) => setNewActionItemText(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addActionItem())}
+                    placeholder="Add action item…"
+                    className="min-w-0 flex-1 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={addActionItem}
+                    disabled={!newActionItemText.trim()}
+                    className="shrink-0 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-neutral-50 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+                  >
+                    Add
+                  </button>
+                </div>
+                {actionItems.some((a) => a.completed) && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowCompletedActionItems((prev) => !prev)}
+                      className="text-xs font-medium text-slate-500 hover:text-slate-700"
+                    >
+                      {showCompletedActionItems ? "Hide" : "Show"} {actionItems.filter((a) => a.completed).length} completed
+                    </button>
+                    {showCompletedActionItems && (
+                      <ul className="mt-2 space-y-2">
+                        {actionItems
+                          .filter((a) => a.completed)
+                          .map((a) => (
+                            <li
+                              key={a.id}
+                              className="flex items-center gap-3 rounded-lg border border-neutral-200 bg-white px-3 py-2"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={true}
+                                onChange={() => toggleActionItem(a.id)}
+                                className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
+                                aria-label={`Mark "${a.text}" incomplete`}
+                              />
+                              <span className="min-w-0 flex-1 text-sm text-slate-500 line-through">{a.text}</span>
+                              <button
+                                type="button"
+                                onClick={() => removeActionItem(a.id)}
+                                className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                                aria-label={`Remove "${a.text}"`}
+                              >
+                                ×
+                              </button>
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
                 <div className="mb-3 flex items-start justify-between gap-2">
                   <h3 className="text-sm font-medium text-slate-700">Contact Info</h3>
