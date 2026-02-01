@@ -1,15 +1,25 @@
 "use client";
 
 import L from "leaflet";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { MapContainer, TileLayer, CircleMarker, Tooltip, useMap } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import "leaflet/dist/leaflet.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.css";
+import "react-leaflet-cluster/dist/assets/MarkerCluster.Default.css";
 
 export type MapPoint = {
   lat: number;
   lng: number;
   index: string;
   address: string;
+};
+
+export type MapBounds = {
+  north: number;
+  south: number;
+  east: number;
+  west: number;
 };
 
 const ORANGE = "#f59e0b";
@@ -34,15 +44,87 @@ function FitBounds({ points }: { points: MapPoint[] }) {
   return null;
 }
 
+function SetInitialView({
+  center,
+  zoom,
+}: {
+  center: [number, number];
+  zoom: number;
+}) {
+  const map = useMap();
+  useEffect(() => {
+    map.setView(center, zoom);
+  }, [map, center, zoom]);
+  return null;
+}
+
+function MapBoundsReporter({
+  onBoundsChange,
+  onViewChange,
+}: {
+  onBoundsChange: (bounds: MapBounds | null) => void;
+  onViewChange?: (center: [number, number], zoom: number) => void;
+}) {
+  const map = useMap();
+  const boundsRef = useRef(onBoundsChange);
+  boundsRef.current = onBoundsChange;
+  const viewRef = useRef(onViewChange);
+  viewRef.current = onViewChange;
+
+  useEffect(() => {
+    const report = () => {
+      const b = map.getBounds();
+      if (!b.isValid()) {
+        boundsRef.current(null);
+        return;
+      }
+      boundsRef.current({
+        north: b.getNorth(),
+        south: b.getSouth(),
+        east: b.getEast(),
+        west: b.getWest(),
+      });
+      const c = map.getCenter();
+      const z = map.getZoom();
+      viewRef.current?.([c.lat, c.lng], z);
+    };
+
+    report();
+    map.on("moveend", report);
+    return () => {
+      map.off("moveend", report);
+    };
+  }, [map]);
+
+  return null;
+}
+
 type HomeMapProps = {
   points: MapPoint[];
+  initialCenter?: [number, number] | null;
+  initialZoom?: number | null;
+  onBoundsChange?: (bounds: MapBounds | null) => void;
+  onViewChange?: (center: [number, number], zoom: number) => void;
 };
 
-export default function HomeMap({ points }: HomeMapProps) {
+export default function HomeMap({
+  points,
+  initialCenter,
+  initialZoom,
+  onBoundsChange,
+  onViewChange,
+}: HomeMapProps) {
   const pointsList = useMemo(
     () => points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)),
     [points]
   );
+
+  const hasInitialView =
+    initialCenter != null &&
+    initialZoom != null &&
+    Number.isFinite(initialCenter[0]) &&
+    Number.isFinite(initialCenter[1]) &&
+    Number.isFinite(initialZoom);
 
   if (pointsList.length === 0) {
     return (
@@ -55,8 +137,8 @@ export default function HomeMap({ points }: HomeMapProps) {
   return (
     <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm [&_.leaflet-interactive]:cursor-pointer">
       <MapContainer
-        center={DEFAULT_CENTER}
-        zoom={DEFAULT_ZOOM}
+        center={hasInitialView ? initialCenter! : DEFAULT_CENTER}
+        zoom={hasInitialView ? initialZoom! : DEFAULT_ZOOM}
         className="h-[320px] w-full"
         scrollWheelZoom={true}
         style={{ minHeight: 320 }}
@@ -65,29 +147,38 @@ export default function HomeMap({ points }: HomeMapProps) {
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <FitBounds points={pointsList} />
-        {pointsList.map((p) => (
-          <CircleMarker
-            key={p.index}
-            center={[p.lat, p.lng]}
-            radius={8}
-            pathOptions={{
-              color: ORANGE,
-              fillColor: ORANGE,
-              fillOpacity: 1,
-              weight: 2,
-            }}
-            eventHandlers={{
-              click: () => {
-                window.location.href = `/homes/${encodeURIComponent(p.index)}`;
-              },
-            }}
-          >
-            <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
-              {p.address}
-            </Tooltip>
-          </CircleMarker>
-        ))}
+        {hasInitialView ? (
+          <SetInitialView center={initialCenter!} zoom={initialZoom!} />
+        ) : (
+          <FitBounds points={pointsList} />
+        )}
+        {onBoundsChange ? (
+          <MapBoundsReporter onBoundsChange={onBoundsChange} onViewChange={onViewChange} />
+        ) : null}
+        <MarkerClusterGroup chunkedLoading>
+          {pointsList.map((p) => (
+            <CircleMarker
+              key={p.index}
+              center={[p.lat, p.lng]}
+              radius={8}
+              pathOptions={{
+                color: ORANGE,
+                fillColor: ORANGE,
+                fillOpacity: 1,
+                weight: 2,
+              }}
+              eventHandlers={{
+                click: () => {
+                  window.location.href = `/homes/${encodeURIComponent(p.index)}`;
+                },
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
+                {p.address}
+              </Tooltip>
+            </CircleMarker>
+          ))}
+        </MarkerClusterGroup>
       </MapContainer>
     </div>
   );

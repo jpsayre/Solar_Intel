@@ -496,6 +496,12 @@ export default function HomeDetailPage() {
       <div className="mx-auto max-w-4xl">
         <Link
           href="/homes"
+          onClick={(e) => {
+            if (typeof window !== "undefined" && window.history.length > 1) {
+              e.preventDefault();
+              router.back();
+            }
+          }}
           className="mb-6 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
         >
           ← Back to listings

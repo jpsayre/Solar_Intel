@@ -1,17 +1,50 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
 import ListingCard from "@/components/ListingCard";
+import type { MapBounds } from "@/components/HomeMap";
+
+const HOMES_PATH = "/homes";
+
+function parseFloatParam(value: string | null): number | null {
+  if (value == null || value === "") return null;
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function buildHomesSearchParams(params: {
+  county?: string;
+  city?: string;
+  subdivision?: string;
+  roof?: string[];
+  address?: string;
+  lat?: number | null;
+  lng?: number | null;
+  zoom?: number | null;
+}): URLSearchParams {
+  const sp = new URLSearchParams();
+  if (params.county?.trim()) sp.set("county", params.county.trim());
+  if (params.city?.trim()) sp.set("city", params.city.trim());
+  if (params.subdivision?.trim()) sp.set("subdivision", params.subdivision.trim());
+  if (params.roof?.length) sp.set("roof", params.roof.join(","));
+  if (params.address?.trim()) sp.set("address", params.address.trim());
+  if (params.lat != null && Number.isFinite(params.lat)) sp.set("lat", String(params.lat));
+  if (params.lng != null && Number.isFinite(params.lng)) sp.set("lng", String(params.lng));
+  if (params.zoom != null && Number.isFinite(params.zoom)) sp.set("zoom", String(Math.round(params.zoom)));
+  return sp;
+}
 
 const HomeMap = dynamic(() => import("@/components/HomeMap"), { ssr: false });
 
 const BUCKET = "images";
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 500;
+const NEXT_PAGE_SIZE = 100;
+const BOUNDS_QUERY_LIMIT = 500;
 const FILTER_OPTIONS_LIMIT = 2000;
 
 type HomeRow = {
@@ -38,20 +71,65 @@ function uniqueSorted(values: (string | null | undefined)[]): string[] {
 
 export default function HomesPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [rows, setRows] = useState<HomeRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [filterOptions, setFilterOptions] = useState<FilterOptions | null>(null);
 
-  const [county, setCounty] = useState("");
-  const [city, setCity] = useState("");
-  const [subdivision, setSubdivision] = useState("");
-  const [roofOrientations, setRoofOrientations] = useState<string[]>([]);
-  const [addressSearchInput, setAddressSearchInput] = useState("");
-  const [addressSearchApplied, setAddressSearchApplied] = useState("");
+  const [county, setCounty] = useState(() => searchParams.get("county") ?? "");
+  const [city, setCity] = useState(() => searchParams.get("city") ?? "");
+  const [subdivision, setSubdivision] = useState(() => searchParams.get("subdivision") ?? "");
+  const [roofOrientations, setRoofOrientations] = useState<string[]>(() => {
+    const r = searchParams.get("roof");
+    return r ? r.split(",").map((s) => s.trim()).filter(Boolean) : [];
+  });
+  const [addressSearchInput, setAddressSearchInput] = useState(() => searchParams.get("address") ?? "");
+  const [addressSearchApplied, setAddressSearchApplied] = useState(() => searchParams.get("address") ?? "");
+  const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
+
+  const [mapCenter, setMapCenter] = useState<[number, number] | null>(() => {
+    const lat = parseFloatParam(searchParams.get("lat"));
+    const lng = parseFloatParam(searchParams.get("lng"));
+    return lat != null && lng != null ? [lat, lng] : null;
+  });
+  const [mapZoom, setMapZoom] = useState<number | null>(() => parseFloatParam(searchParams.get("zoom")));
+
+  const initialMapViewRef = useRef<{ center: [number, number]; zoom: number } | null>(null);
+  if (initialMapViewRef.current === null) {
+    const lat = parseFloatParam(searchParams.get("lat"));
+    const lng = parseFloatParam(searchParams.get("lng"));
+    const z = parseFloatParam(searchParams.get("zoom"));
+    if (lat != null && lng != null && z != null) {
+      initialMapViewRef.current = { center: [lat, lng], zoom: z };
+    }
+  }
+
+  const [offset, setOffset] = useState(PAGE_SIZE);
+  const [hasMore, setHasMore] = useState(false);
+  const [boundsRows, setBoundsRows] = useState<HomeRow[]>([]);
+  const [boundsLoading, setBoundsLoading] = useState(false);
 
   const [imgUrls, setImgUrls] = useState<Record<number, string>>({});
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
+
+  useEffect(() => {
+    const next = buildHomesSearchParams({
+      county,
+      city,
+      subdivision,
+      roof: roofOrientations.length ? roofOrientations : undefined,
+      address: addressSearchApplied || undefined,
+      lat: mapCenter?.[0] ?? null,
+      lng: mapCenter?.[1] ?? null,
+      zoom: mapZoom,
+    });
+    const nextStr = next.toString();
+    const currentStr = typeof window !== "undefined" ? window.location.search.slice(1) : "";
+    if (nextStr !== currentStr) {
+      router.replace(nextStr ? `${HOMES_PATH}?${nextStr}` : HOMES_PATH, { scroll: false });
+    }
+  }, [county, city, subdivision, roofOrientations, addressSearchApplied, mapCenter, mapZoom, router]);
 
   useEffect(() => {
     let alive = true;
@@ -131,8 +209,45 @@ export default function HomesPage() {
       return;
     }
 
-    setRows((data ?? []) as HomeRow[]);
+    const list = (data ?? []) as HomeRow[];
+    setRows(list);
+    setOffset(PAGE_SIZE);
+    setHasMore(list.length === PAGE_SIZE);
+    setMapBounds(null);
+    setBoundsRows([]);
   }, [router, county, city, subdivision, roofOrientations, addressSearchApplied]);
+
+  const loadNextPage = useCallback(async () => {
+    if (!rows || rows.length === 0) return;
+    const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
+    if (userErr || !userData.user) return;
+
+    let query = supabaseBrowser
+      .from("homes")
+      .select("*")
+      .order("index", { ascending: true })
+      .range(offset, offset + NEXT_PAGE_SIZE - 1);
+
+    if (county) query = query.eq("county", county);
+    if (city) query = query.eq("city", city);
+    if (subdivision) query = query.eq("subdivision_formatted", subdivision);
+    if (roofOrientations.length > 0) {
+      const orClause = roofOrientations
+        .map((o) => `qualified_orientations.ilike.%${o}%`)
+        .join(",");
+      query = query.or(orClause);
+    }
+    if (addressSearchApplied.trim()) {
+      query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) return;
+    const next = (data ?? []) as HomeRow[];
+    setRows((prev) => (prev ? [...prev, ...next] : next));
+    setOffset((prev) => prev + NEXT_PAGE_SIZE);
+    setHasMore(next.length === NEXT_PAGE_SIZE);
+  }, [rows?.length, offset, county, city, subdivision, roofOrientations, addressSearchApplied]);
 
   useEffect(() => {
     let alive = true;
@@ -142,13 +257,53 @@ export default function HomesPage() {
     };
   }, [loadRows]);
 
+  const loadRowsInBounds = useCallback(
+    async (bounds: MapBounds) => {
+      setBoundsLoading(true);
+      const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
+      if (userErr || !userData.user) {
+        setBoundsLoading(false);
+        return;
+      }
+
+      let query = supabaseBrowser
+        .from("homes")
+        .select("*")
+        .order("index", { ascending: true })
+        .gte("latitude", bounds.south)
+        .lte("latitude", bounds.north)
+        .gte("longitude", bounds.west)
+        .lte("longitude", bounds.east)
+        .limit(BOUNDS_QUERY_LIMIT);
+
+      if (county) query = query.eq("county", county);
+      if (city) query = query.eq("city", city);
+      if (subdivision) query = query.eq("subdivision_formatted", subdivision);
+      if (roofOrientations.length > 0) {
+        const orClause = roofOrientations
+          .map((o) => `qualified_orientations.ilike.%${o}%`)
+          .join(",");
+        query = query.or(orClause);
+      }
+      if (addressSearchApplied.trim()) {
+        query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
+      }
+
+      const { data, error } = await query;
+      setBoundsLoading(false);
+      if (!error && data) setBoundsRows((data ?? []) as HomeRow[]);
+    },
+    [county, city, subdivision, roofOrientations, addressSearchApplied]
+  );
+
   useEffect(() => {
     let alive = true;
+    const list = mapBounds ? boundsRows : (rows ?? []);
 
     async function signImages() {
-      if (!rows || rows.length === 0) return;
+      if (!list.length) return;
 
-      const missing = rows
+      const missing = list
         .map((r) => r.original_index)
         .filter((oi) => imgUrls[oi] === undefined && imgErrors[oi] === undefined);
 
@@ -190,7 +345,74 @@ export default function HomesPage() {
     return () => {
       alive = false;
     };
-  }, [rows, imgUrls, imgErrors]);
+  }, [rows, mapBounds, boundsRows, imgUrls, imgErrors]);
+
+  const handleBoundsChange = useCallback((b: MapBounds | null) => {
+    setMapBounds(b);
+  }, []);
+
+  const handleViewChange = useCallback((center: [number, number], zoom: number) => {
+    setMapCenter(center);
+    setMapZoom(zoom);
+  }, []);
+
+  const boundsDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastBoundsRef = useRef<MapBounds | null>(null);
+  const BOUNDS_EPS = 1e-6;
+  function boundsEqual(a: MapBounds, b: MapBounds): boolean {
+    return (
+      Math.abs(a.north - b.north) < BOUNDS_EPS &&
+      Math.abs(a.south - b.south) < BOUNDS_EPS &&
+      Math.abs(a.east - b.east) < BOUNDS_EPS &&
+      Math.abs(a.west - b.west) < BOUNDS_EPS
+    );
+  }
+  useEffect(() => {
+    if (!mapBounds) {
+      lastBoundsRef.current = null;
+      setBoundsRows([]);
+      return;
+    }
+    if (lastBoundsRef.current && boundsEqual(mapBounds, lastBoundsRef.current)) {
+      return;
+    }
+    lastBoundsRef.current = mapBounds;
+    if (boundsDebounceRef.current) clearTimeout(boundsDebounceRef.current);
+    boundsDebounceRef.current = setTimeout(() => {
+      boundsDebounceRef.current = null;
+      loadRowsInBounds(mapBounds);
+    }, 400);
+    return () => {
+      if (boundsDebounceRef.current) clearTimeout(boundsDebounceRef.current);
+    };
+  }, [mapBounds, loadRowsInBounds]);
+
+  const displayedRows = useMemo(() => {
+    if (mapBounds) return boundsRows;
+    return rows ?? [];
+  }, [mapBounds, boundsRows, rows]);
+
+  const mapPoints = useMemo(() => {
+    const list = mapBounds ? boundsRows : (rows ?? []);
+    if (!list.length) return [];
+    return list
+      .filter(
+        (r) =>
+          r.latitude != null &&
+          r.longitude != null &&
+          Number.isFinite(Number(r.latitude)) &&
+          Number.isFinite(Number(r.longitude))
+      )
+      .map((r) => {
+        const { addressLine1, addressLine2 } = buildListingCardData(r);
+        return {
+          lat: Number(r.latitude),
+          lng: Number(r.longitude),
+          index: r.index,
+          address: `${addressLine1}, ${addressLine2}`,
+        };
+      });
+  }, [rows, mapBounds, boundsRows]);
 
   if (err) {
     return (
@@ -359,28 +581,47 @@ export default function HomesPage() {
 
         <div className="mb-8">
           <HomeMap
-            points={rows
-              .filter(
-                (r) =>
-                  r.latitude != null &&
-                  r.longitude != null &&
-                  Number.isFinite(Number(r.latitude)) &&
-                  Number.isFinite(Number(r.longitude))
-              )
-              .map((r) => {
-                const { addressLine1, addressLine2 } = buildListingCardData(r);
-                return {
-                  lat: Number(r.latitude),
-                  lng: Number(r.longitude),
-                  index: r.index,
-                  address: `${addressLine1}, ${addressLine2}`,
-                };
-              })}
+            points={mapPoints}
+            initialCenter={initialMapViewRef.current?.center ?? null}
+            initialZoom={initialMapViewRef.current?.zoom ?? null}
+            onBoundsChange={handleBoundsChange}
+            onViewChange={handleViewChange}
           />
         </div>
 
+        {mapBounds != null && (
+          <p className="mb-4 text-sm text-slate-600">
+            {boundsLoading ? (
+              "Loading homes in map view…"
+            ) : (
+              <>
+                Showing {displayedRows.length} homes in map view.{" "}
+                <button
+                  type="button"
+                  onClick={() => setMapBounds(null)}
+                  className="font-medium text-amber-600 underline hover:text-amber-700"
+                >
+                  Show all
+                </button>
+              </>
+            )}
+          </p>
+        )}
+
+        {!mapBounds && hasMore && (
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => loadNextPage()}
+              className="rounded-xl border border-neutral-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+            >
+              Next — load 100 more
+            </button>
+          </div>
+        )}
+
         <div className="flex flex-col gap-8">
-          {rows.map((r) => {
+          {displayedRows.map((r) => {
             const url = imgUrls[r.original_index];
             const e = imgErrors[r.original_index];
             const imageUrl = url || "/window.svg";
