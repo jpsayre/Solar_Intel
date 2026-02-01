@@ -466,7 +466,12 @@ function HomesPageContent() {
     <main className="min-h-screen px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-4xl">
         <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Homes</h1>
+          <Link
+            href="/"
+            className="text-3xl font-bold tracking-tight text-slate-900 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded"
+          >
+            Solar Intelligence
+          </Link>
           <button
             onClick={async () => {
               await supabaseBrowser.auth.signOut();
