@@ -1,20 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
 import ListingCard from "@/components/ListingCard";
 
-
 const BUCKET = "images";
 
 type HomeRow = {
-  index: string; // e.g. "BOULDER_CO_1014"
-  original_index: number; // e.g. 1014
-  [key: string]: any;
+  index: string;
+  original_index: number;
+  [key: string]: unknown;
 };
+
+type HomeNote = {
+  id: number;
+  home_index: string;
+  author_id: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+};
+
+function formatNoteTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+}
 
 export default function HomeDetailPage() {
   const router = useRouter();
@@ -24,6 +41,11 @@ export default function HomeDetailPage() {
   const [imgUrl, setImgUrl] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
   const [imgErr, setImgErr] = useState<string | null>(null);
+
+  const [notes, setNotes] = useState<HomeNote[] | null>(null);
+  const [notesErr, setNotesErr] = useState<string | null>(null);
+  const [noteBody, setNoteBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -87,6 +109,57 @@ export default function HomeDetailPage() {
     };
   }, [params.index, router]);
 
+  const loadNotes = useCallback(async () => {
+    const idx = params.index;
+    if (!idx) return;
+    setNotesErr(null);
+    setNotes(null);
+    const { data, error } = await supabaseBrowser
+      .from("home_notes")
+      .select("id, home_index, author_id, body, created_at, updated_at")
+      .eq("home_index", idx)
+      .order("created_at", { ascending: false });
+    if (error) {
+      setNotesErr(error.message);
+      setNotes([]);
+      return;
+    }
+    setNotes((data ?? []) as HomeNote[]);
+  }, [params.index]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!row || !params.index) return;
+    loadNotes().then(() => {
+      if (!alive) return;
+    });
+    return () => {
+      alive = false;
+    };
+  }, [row, params.index, loadNotes]);
+
+  async function handleAddNote(e: React.FormEvent) {
+    e.preventDefault();
+    const body = noteBody.trim();
+    if (!body || !params.index) return;
+    const { data: userData } = await supabaseBrowser.auth.getUser();
+    if (!userData.user) return;
+    setSubmitting(true);
+    setNotesErr(null);
+    const { error } = await supabaseBrowser.from("home_notes").insert({
+      home_index: params.index,
+      author_id: userData.user.id,
+      body,
+    });
+    setSubmitting(false);
+    if (error) {
+      setNotesErr(error.message);
+      return;
+    }
+    setNoteBody("");
+    await loadNotes();
+  }
+
   if (err) {
     return (
       <main className="min-h-screen px-4 py-8 sm:px-6">
@@ -127,6 +200,61 @@ export default function HomeDetailPage() {
           imageAlt={imgUrl ? `Home ${row.original_index}` : imgErr ? "No image" : "Loading…"}
           rows={detailRows}
         />
+
+        <section className="mt-10">
+          <h2 className="mb-4 text-lg font-semibold text-slate-900">Comments</h2>
+          <p className="mb-4 text-sm text-slate-500">
+            Notes are visible only to users in your organization.
+          </p>
+
+          <form onSubmit={handleAddNote} className="mb-6">
+            <label htmlFor="note-body" className="sr-only">
+              Add a comment
+            </label>
+            <textarea
+              id="note-body"
+              value={noteBody}
+              onChange={(e) => setNoteBody(e.target.value)}
+              placeholder="Add a comment…"
+              rows={3}
+              disabled={submitting}
+              className="mb-3 w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400 disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={submitting || !noteBody.trim()}
+              className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 disabled:opacity-60 disabled:hover:bg-amber-500"
+            >
+              {submitting ? "Adding…" : "Add comment"}
+            </button>
+          </form>
+
+          {notesErr && (
+            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+              {notesErr}
+            </div>
+          )}
+
+          {notes === null ? (
+            <p className="text-sm text-slate-500">Loading comments…</p>
+          ) : notes.length === 0 ? (
+            <p className="text-sm text-slate-500">No comments yet. Add one above.</p>
+          ) : (
+            <ul className="flex flex-col gap-4">
+              {notes.map((note) => (
+                <li
+                  key={note.id}
+                  className="rounded-xl border border-neutral-200 bg-neutral-50/80 px-4 py-3"
+                >
+                  <p className="whitespace-pre-wrap text-sm text-slate-900">{note.body}</p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {formatNoteTimestamp(note.created_at)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
       </div>
     </main>
   );

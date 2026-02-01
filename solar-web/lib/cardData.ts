@@ -1,20 +1,21 @@
 export type CardRow = { label: string; value: string };
 
+/** Matches Supabase public.homes table (+ optional extras). */
 type HomeRow = {
   index: string;
   original_index: number;
   owner_1?: string | null;
   owner_2?: string | null;
-  address_line_1?: string | null;
-  address_1?: string | null;
   address?: string | null;
   city?: string | null;
   state?: string | null;
-  zip?: string | null;
-  zip_code?: string | null;
-  postal_code?: string | null;
-  city_state?: string | null;
-  address_line_2?: string | null;
+  zip_code?: number | string | null;
+  subdivision_formatted?: string | null;
+  qualified_orientations?: string | null;
+  saleprice?: number | string | null;
+  saledate?: string | null;
+  calculated_build_year?: number | string | null;
+  building_sqft?: number | string | null;
   [key: string]: unknown;
 };
 
@@ -61,21 +62,18 @@ export function buildListingCardData(row: HomeRow): {
         : String(row.owner_1)
       : "Available in full report";
 
-  const zip = getValue(row, "zip", "zip_code", "postal_code");
+  const zipRaw = row.zip_code != null ? String(Math.floor(Number(row.zip_code))) : "";
+  const zip = zipRaw !== "" && !Number.isNaN(Number(zipRaw)) ? zipRaw : "—";
   const addressLine1 =
-    (row.address_line_1 ?? row.address_1 ?? row.address) != null
-      ? String(row.address_line_1 ?? row.address_1 ?? row.address).toUpperCase()
+    row.address != null && String(row.address).trim() !== ""
+      ? String(row.address).toUpperCase()
       : row.index;
   const addressLine2 =
     row.city != null && row.state != null
       ? zip !== "—"
         ? `${String(row.city).toUpperCase()}, ${String(row.state).toUpperCase()} ${zip}`
         : `${String(row.city).toUpperCase()}, ${String(row.state).toUpperCase()}`
-      : (row.city_state ?? row.address_line_2) != null
-        ? zip !== "—"
-          ? `${String(row.city_state ?? row.address_line_2).toUpperCase()} ${zip}`
-          : String(row.city_state ?? row.address_line_2).toUpperCase()
-        : `ID: ${row.original_index}`;
+      : `ID: ${row.original_index}`;
 
   const detailRows: CardRow[] = [
     { label: "Owner name", value: ownerName },
