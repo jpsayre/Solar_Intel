@@ -284,7 +284,7 @@ export default function HomeDetailPage() {
         }
 
         const entries: Record<string, string> = {};
-        const knownKeys = new Set(COMMON_TAGS.map((t) => t.key));
+        const knownKeys = new Set<string>(COMMON_TAGS.map((t) => t.key));
         const skipKeys = new Set(["contacts", "action_items", "phone_number", "email", "contact_info_updated_at", "home_info_updated_at", "custom_tags_updated_at", "action_items_updated_at"]);
         const customKeys: string[] = [];
         for (const [k, v] of Object.entries(custom)) {
