@@ -15,11 +15,11 @@ type ListingCardProps = {
 
 function PillRow({ label, value }: DetailRow) {
   return (
-    <div className="flex items-center justify-between gap-6 rounded-2xl border border-neutral-200 bg-white px-5 py-4">
-      <div className="text-xs font-semibold tracking-widest text-neutral-500">
+    <div className="flex items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3">
+      <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">
         {label.toUpperCase()}
       </div>
-      <div className="text-sm font-medium text-neutral-900">{value}</div>
+      <div className="text-sm font-semibold text-neutral-900">{value}</div>
     </div>
   );
 }
@@ -32,37 +32,32 @@ export default function ListingCard({
   rows,
 }: ListingCardProps) {
   return (
-    <section className="rounded-3xl border border-neutral-200 bg-white shadow-sm">
-      <div className="grid grid-cols-1 gap-6 p-6 md:grid-cols-[420px_1fr]">
-        {/* Left: Image */}
-        <div className="relative overflow-hidden rounded-2xl bg-neutral-100">
-          {/* Keep a consistent aspect ratio like the prototype */}
-          <div className="relative aspect-[4/3] w-full">
-            <Image
-              src={imageUrl}
-              alt={imageAlt}
-              fill
-              sizes="(max-width: 768px) 100vw, 420px"
-              className="object-cover"
-              priority={false}
-            />
-          </div>
+    <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,42%)_1fr]">
+        {/* Left: Image — full image visible, no crop; column stretches to match content height */}
+        <div className="relative aspect-[4/3] w-full overflow-hidden bg-neutral-100 md:aspect-auto md:h-full md:min-h-0 md:rounded-l-2xl">
+          <Image
+            src={imageUrl}
+            alt={imageAlt}
+            fill
+            sizes="(max-width: 768px) 100vw, 42vw"
+            className="object-contain"
+            priority={false}
+          />
         </div>
 
-        {/* Right: Content */}
-        <div className="flex flex-col">
-          {/* Address header */}
+        {/* Right: Content — card height follows this so nothing clips */}
+        <div className="flex flex-col justify-center p-5">
           <div className="mb-4">
-            <div className="text-2xl font-extrabold tracking-tight text-neutral-900">
+            <div className="text-xl font-bold tracking-tight text-neutral-800">
               {addressLine1}
             </div>
-            <div className="text-lg font-extrabold tracking-tight text-neutral-900">
+            <div className="mt-0.5 text-base font-bold tracking-tight text-neutral-800">
               {addressLine2}
             </div>
           </div>
 
-          {/* Rows */}
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             {rows.map((r, idx) => (
               <PillRow key={`${r.label}-${idx}`} label={r.label} value={r.value} />
             ))}

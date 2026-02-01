@@ -4,14 +4,16 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { buildListingCardData } from "@/lib/cardData";
 import ListingCard from "@/components/ListingCard";
 
 const BUCKET = "images";
 const PAGE_SIZE = 25;
 
 type HomeRow = {
-  index: string; // e.g. "BOULDER_CO_1014"
-  original_index: number; // e.g. 1014
+  index: string;
+  original_index: number;
+  [key: string]: unknown;
 };
 
 export default function HomesPage() {
@@ -42,10 +44,10 @@ export default function HomesPage() {
         return;
       }
 
-      // 2) Fetch rows (only needed columns)
+      // 2) Fetch full rows for card data (address, owner, etc.)
       const { data, error } = await supabaseBrowser
         .from("homes")
-        .select("index, original_index")
+        .select("*")
         .order("index", { ascending: true })
         .limit(PAGE_SIZE);
 
@@ -117,77 +119,68 @@ export default function HomesPage() {
     };
   }, [rows, imgUrls, imgErrors]);
 
-  if (err) return <pre style={{ padding: 24 }}>{err}</pre>;
-  if (rows === null) return <p style={{ padding: 24 }}>Loading…</p>;
+  if (err) {
+    return (
+      <main className="min-h-screen px-4 py-8 sm:px-6">
+        <div className="mx-auto max-w-3xl rounded-2xl border border-red-200 bg-red-50 px-6 py-4 text-red-800">
+          <p className="font-medium">Something went wrong</p>
+          <p className="mt-1 text-sm opacity-90">{err}</p>
+        </div>
+      </main>
+    );
+  }
+  if (rows === null) {
+    return (
+      <main className="flex min-h-screen items-center justify-center px-4">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+          <p className="text-slate-600">Loading listings…</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
-    <main style={{ padding: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>Homes</h1>
-        <button
-          onClick={async () => {
-            await supabaseBrowser.auth.signOut();
-            router.push("/login");
-          }}
-          style={{ padding: "8px 12px" }}
-        >
-          Logout
-        </button>
-      </div>
+    <main className="min-h-screen px-4 py-8 sm:px-6">
+      <div className="mx-auto max-w-4xl">
+        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Homes</h1>
+          <button
+            onClick={async () => {
+              await supabaseBrowser.auth.signOut();
+              router.push("/login");
+            }}
+            className="w-fit rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800"
+          >
+            Log out
+          </button>
+        </header>
 
-      <div style={{ display: "grid", gap: 12 }}>
-        {rows.map((r) => {
-          const url = imgUrls[r.original_index];
-          const e = imgErrors[r.original_index];
+        <div className="flex flex-col gap-8">
+          {rows.map((r) => {
+            const url = imgUrls[r.original_index];
+            const e = imgErrors[r.original_index];
+            const imageUrl = url || "/window.svg";
+            const imageAlt = url ? `Home ${r.original_index}` : e ? "No access / not found" : "Loading…";
+            const { addressLine1, addressLine2, detailRows } = buildListingCardData(r);
 
-          return (
-            <Link
-              key={r.index}
-              href={`/homes/${encodeURIComponent(r.index)}`}
-              style={{
-                display: "flex",
-                gap: 12,
-                alignItems: "center",
-                padding: 12,
-                border: "1px solid #333",
-                borderRadius: 12,
-                textDecoration: "none",
-                color: "inherit",
-              }}
-            >
-              <div
-                style={{
-                  width: 160,
-                  height: 90,
-                  background: "#111",
-                  borderRadius: 10,
-                  overflow: "hidden",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flex: "0 0 auto",
-                }}
+            return (
+              <Link
+                key={r.index}
+                href={`/homes/${encodeURIComponent(r.index)}`}
+                className="block rounded-3xl text-inherit no-underline transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/60"
               >
-                {url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={url}
-                    alt={`Home ${r.original_index}`}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                ) : (
-                  <span style={{ opacity: 0.7, fontSize: 12 }}>{e ? "No access / not found" : "Loading…"}</span>
-                )}
-              </div>
-
-              <div>
-                <div style={{ fontSize: 14, opacity: 0.8 }}>index: {r.index}</div>
-                <div style={{ fontSize: 20, fontWeight: 700 }}>original_index: {r.original_index}</div>
-                <div style={{ fontSize: 12, opacity: 0.7 }}>Click for details</div>
-              </div>
-            </Link>
-          );
-        })}
+                <ListingCard
+                  addressLine1={addressLine1}
+                  addressLine2={addressLine2}
+                  imageUrl={imageUrl}
+                  imageAlt={imageAlt}
+                  rows={detailRows}
+                />
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </main>
   );
