@@ -150,7 +150,7 @@ export function buildFollowingCardRows(
   return [
     { label: "Owner name", value: ownerName },
     { label: "Contact info", value: contactValue, selectable: true },
-    { label: "Open action items", value: actionItemsValue, listStyle: true },
+    { label: "Open action items", value: actionItemsValue, listStyle: actionItemsValue !== "No open action items" },
     { label: "Most recent comment", value: latestCommentValue },
   ];
 }
