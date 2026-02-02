@@ -14,9 +14,18 @@ const COMMON_TAGS = [
   { key: "roofing_material", label: "Roofing Material" },
   { key: "roof_age", label: "Estimated Roof Age" },
   { key: "energy_bill", label: "Electricity Bill (kWh)" },
+  { key: "interest_in_solar", label: "Interest in Solar" },
+  { key: "interest_in_battery", label: "Interest in Battery" },
+  { key: "ev_ownership", label: "EV Ownership" },
 ] as const;
 
 const ROOF_CONDITION_OPTIONS = ["Excellent", "Good", "Fair", "Poor"] as const;
+
+const INTEREST_OPTIONS = ["Unknown", "Cold", "Cool", "Warm", "Hot"] as const;
+
+const ROOF_AGE_OPTIONS = ["0-10", "10-20", "20+"] as const;
+
+const EV_OWNERSHIP_OPTIONS = ["Unknown", "Doesn't Want", "Interested", "Owns an EV", "Owns 2+ EVs"] as const;
 
 const ROOFING_MATERIAL_OPTIONS = [
   "Asphalt Shingles",
@@ -815,6 +824,45 @@ export default function HomeDetailPage() {
                         >
                           <option value="">Select…</option>
                           {ROOFING_MATERIAL_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : key === "interest_in_solar" || key === "interest_in_battery" ? (
+                        <select
+                          value={customTags[key] ?? ""}
+                          onChange={(e) => setTagValue(key, e.target.value)}
+                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        >
+                          <option value="">Select…</option>
+                          {INTEREST_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : key === "roof_age" ? (
+                        <select
+                          value={customTags[key] ?? ""}
+                          onChange={(e) => setTagValue(key, e.target.value)}
+                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        >
+                          <option value="">Select…</option>
+                          {ROOF_AGE_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
+                      ) : key === "ev_ownership" ? (
+                        <select
+                          value={customTags[key] ?? ""}
+                          onChange={(e) => setTagValue(key, e.target.value)}
+                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        >
+                          <option value="">Select…</option>
+                          {EV_OWNERSHIP_OPTIONS.map((opt) => (
                             <option key={opt} value={opt}>
                               {opt}
                             </option>
