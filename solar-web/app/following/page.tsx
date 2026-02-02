@@ -252,7 +252,7 @@ export default function FollowingPage() {
                   const tags: string[] = custom && typeof custom === "object" && Array.isArray(custom.tags)
                     ? (custom.tags as unknown[]).filter((t): t is string => typeof t === "string").map((t) => t.trim().toLowerCase())
                     : [];
-                  if (!tags.includes(tagLower)) return false;
+                  if (!tags.some((tag) => tag.startsWith(tagLower))) return false;
                 }
                 if (!searchLower) return true;
                 const { addressLine1, addressLine2 } = buildListingCardData(r);

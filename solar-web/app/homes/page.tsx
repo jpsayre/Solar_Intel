@@ -115,6 +115,9 @@ function HomesPageContent() {
 
   const [followedHomeIndices, setFollowedHomeIndices] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { custom: Record<string, unknown> | null }>>({});
+  const [tagFilter, setTagFilter] = useState("");
 
   useEffect(() => {
     let alive = true;
@@ -127,10 +130,40 @@ function HomesPageContent() {
         .select("home_index")
         .eq("user_id", userData.user.id);
       if (alive && data) setFollowedHomeIndices(new Set((data as { home_index: string }[]).map((r) => r.home_index)));
+      const { data: profile } = await supabaseBrowser
+        .from("profiles")
+        .select("org_id")
+        .eq("user_id", userData.user.id)
+        .maybeSingle();
+      if (alive && profile?.org_id) setOrgId(profile.org_id as string);
     }
     loadFollows();
     return () => { alive = false; };
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    const list = mapBounds ? boundsRows : (rows ?? []);
+    if (list.length === 0 || !orgId) {
+      setOrgHomeByIndex({});
+      return;
+    }
+    const indices = list.map((r) => r.index);
+    supabaseBrowser
+      .from("org_home")
+      .select("home_index, custom")
+      .eq("org_id", orgId)
+      .in("home_index", indices)
+      .then(({ data }) => {
+        if (!alive) return;
+        const byIndex: Record<string, { custom: Record<string, unknown> | null }> = {};
+        for (const row of (data ?? []) as { home_index: string; custom: Record<string, unknown> | null }[]) {
+          byIndex[row.home_index] = { custom: row.custom ?? null };
+        }
+        setOrgHomeByIndex(byIndex);
+      });
+    return () => { alive = false; };
+  }, [orgId, mapBounds, boundsRows, rows]);
 
   const toggleFollow = useCallback(
     async (homeIndex: string, e: React.MouseEvent) => {
@@ -424,9 +457,19 @@ function HomesPageContent() {
   }, [mapBounds, loadRowsInBounds]);
 
   const displayedRows = useMemo(() => {
-    if (mapBounds) return boundsRows;
-    return rows ?? [];
-  }, [mapBounds, boundsRows, rows]);
+    let list = mapBounds ? boundsRows : (rows ?? []);
+    if (tagFilter.trim()) {
+      const tagLower = tagFilter.trim().toLowerCase();
+      list = list.filter((r) => {
+        const custom = orgHomeByIndex[r.index]?.custom;
+        const tags: string[] = custom && typeof custom === "object" && Array.isArray(custom.tags)
+          ? (custom.tags as unknown[]).filter((t): t is string => typeof t === "string").map((t) => t.trim().toLowerCase())
+          : [];
+        return tags.some((tag) => tag.startsWith(tagLower));
+      });
+    }
+    return list;
+  }, [mapBounds, boundsRows, rows, tagFilter, orgHomeByIndex]);
 
   const mapPoints = useMemo(() => {
     const list = mapBounds ? boundsRows : (rows ?? []);
@@ -482,6 +525,7 @@ function HomesPageContent() {
     setRoofOrientations([]);
     setAddressSearchInput("");
     setAddressSearchApplied("");
+    setTagFilter("");
   };
 
   const toggleRoofOrientation = (orientation: string) => {
@@ -496,18 +540,16 @@ function HomesPageContent() {
     subdivision ||
     roofOrientations.length > 0 ||
     addressSearchInput.trim() ||
-    addressSearchApplied;
+    addressSearchApplied ||
+    tagFilter.trim();
 
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-4xl">
         <header className="mb-6">
-          <Link
-            href="/about"
-            className="text-3xl font-bold tracking-tight text-slate-900 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded"
-          >
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             Qualified Roofs Explorer
-          </Link>
+          </h1>
         </header>
 
         <div className="mb-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
@@ -599,6 +641,16 @@ function HomesPageContent() {
                 </button>
               </div>
             </div>
+            <div className="flex flex-col gap-1 sm:w-48">
+              <span className="text-xs font-medium text-slate-500">Filter by tag</span>
+              <input
+                type="text"
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                placeholder="e.g. hot-lead"
+                className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+              />
+            </div>
           </div>
           {hasActiveFilters && (
             <button
@@ -659,6 +711,15 @@ function HomesPageContent() {
             const imageUrl = url || "/window.svg";
             const imageAlt = url ? `Home ${r.original_index}` : e ? "No access / not found" : "Loading…";
             const { addressLine1, addressLine2, detailRows } = buildListingCardData(r);
+            const orgCustom = orgHomeByIndex[r.index]?.custom;
+            const tagsArray =
+              orgCustom && typeof orgCustom === "object" && Array.isArray(orgCustom.tags)
+                ? (orgCustom.tags as unknown[]).filter((t): t is string => typeof t === "string" && t.trim() !== "").map((t) => t.trim())
+                : [];
+            const cardRows =
+              tagsArray.length > 0
+                ? [...detailRows, { label: "Tags", value: tagsArray.join(", ") }]
+                : detailRows;
 
             return (
               <Link
@@ -671,7 +732,7 @@ function HomesPageContent() {
                   addressLine2={addressLine2}
                   imageUrl={imageUrl}
                   imageAlt={imageAlt}
-                  rows={detailRows}
+                  rows={cardRows}
                   followState={{
                     isFollowed: followedHomeIndices.has(r.index),
                     onToggle: (e) => toggleFollow(r.index, e),
