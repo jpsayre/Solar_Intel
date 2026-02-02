@@ -135,7 +135,7 @@ export default function HomeMap({
   }
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm [&_.leaflet-interactive]:cursor-pointer">
+    <div className="relative z-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm [&_.leaflet-interactive]:cursor-pointer">
       <MapContainer
         center={hasInitialView ? initialCenter! : DEFAULT_CENTER}
         zoom={hasInitialView ? initialZoom! : DEFAULT_ZOOM}
