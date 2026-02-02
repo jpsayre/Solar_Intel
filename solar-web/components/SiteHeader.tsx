@@ -91,7 +91,7 @@ export default function SiteHeader() {
                   onClick={() => setMenuOpen(false)}
                   className={`block px-4 py-3 text-sm font-medium ${pathname === "/" || pathname.startsWith("/homes") ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
                 >
-                  Homes
+                  Explorer
                 </Link>
                 <Link
                   href="/following"
