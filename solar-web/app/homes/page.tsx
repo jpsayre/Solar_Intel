@@ -676,6 +676,7 @@ function HomesPageContent() {
                     isFollowed: followedHomeIndices.has(r.index),
                     onToggle: (e) => toggleFollow(r.index, e),
                   }}
+                  unoptimized
                 />
               </Link>
             );

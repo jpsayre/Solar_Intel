@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
-import { buildListingCardData, buildFollowingCardRows } from "@/lib/cardData";
+import { buildListingCardData } from "@/lib/cardData";
 import ListingCard from "@/components/ListingCard";
 
 const BUCKET = "images";
@@ -15,20 +15,7 @@ type HomeRow = {
   [key: string]: unknown;
 };
 
-type OrgHomeRow = {
-  home_index: string;
-  custom: Record<string, unknown> | null;
-  [key: string]: unknown;
-};
-
-type HomeNoteRow = {
-  home_index: string;
-  body: string;
-  created_at: string;
-  [key: string]: unknown;
-};
-
-export default function FollowingPage() {
+export default function FollowsPage() {
   const router = useRouter();
   const [rows, setRows] = useState<HomeRow[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -37,8 +24,6 @@ export default function FollowingPage() {
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
   const [followedSet, setFollowedSet] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
-  const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { custom: Record<string, unknown> | null }>>({});
-  const [latestNoteByIndex, setLatestNoteByIndex] = useState<Record<string, { body: string }>>({});
 
   const loadFollows = useCallback(async () => {
     setLoading(true);
@@ -67,8 +52,6 @@ export default function FollowingPage() {
 
     if (indices.length === 0) {
       setRows([]);
-      setOrgHomeByIndex({});
-      setLatestNoteByIndex({});
       setLoading(false);
       return;
     }
@@ -86,43 +69,6 @@ export default function FollowingPage() {
     }
 
     setRows((homesData ?? []) as HomeRow[]);
-
-    const { data: profile } = await supabaseBrowser
-      .from("profiles")
-      .select("org_id")
-      .eq("user_id", userData.user.id)
-      .maybeSingle();
-
-    const orgId = profile?.org_id as string | undefined;
-    const orgByIndex: Record<string, { custom: Record<string, unknown> | null }> = {};
-    if (orgId && indices.length > 0) {
-      const { data: orgHomeData } = await supabaseBrowser
-        .from("org_home")
-        .select("home_index, custom")
-        .eq("org_id", orgId)
-        .in("home_index", indices);
-      for (const row of (orgHomeData ?? []) as OrgHomeRow[]) {
-        orgByIndex[row.home_index] = { custom: row.custom ?? null };
-      }
-    }
-    setOrgHomeByIndex(orgByIndex);
-
-    const latestByIndex: Record<string, { body: string }> = {};
-    if (indices.length > 0) {
-      const { data: notesData } = await supabaseBrowser
-        .from("home_notes")
-        .select("home_index, body, created_at")
-        .in("home_index", indices)
-        .order("created_at", { ascending: false });
-      const notes = (notesData ?? []) as HomeNoteRow[];
-      for (const n of notes) {
-        if (latestByIndex[n.home_index] === undefined) {
-          latestByIndex[n.home_index] = { body: n.body };
-        }
-      }
-    }
-    setLatestNoteByIndex(latestByIndex);
-
     setLoading(false);
   }, [router]);
 
@@ -198,7 +144,7 @@ export default function FollowingPage() {
       <div className="mx-auto max-w-4xl">
         <header className="mb-6">
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">Following</h1>
-          <p className="mt-1 text-sm text-slate-600">Homes you follow. Click a card to edit.</p>
+          <p className="mt-1 text-sm text-slate-600">Homes you follow. Click a card to open the home.</p>
         </header>
 
         {!rows?.length ? (
@@ -219,17 +165,12 @@ export default function FollowingPage() {
               const e = imgErrors[r.original_index];
               const imageUrl = url || "/window.svg";
               const imageAlt = url ? `Home ${r.original_index}` : e ? "No access / not found" : "Loading…";
-              const { addressLine1, addressLine2 } = buildListingCardData(r);
-              const orgCustom = orgHomeByIndex[r.index]?.custom;
-              const latestNote = latestNoteByIndex[r.index];
-              const detailRows = buildFollowingCardRows(r, orgCustom, latestNote);
+              const { addressLine1, addressLine2, detailRows } = buildListingCardData(r);
               return (
                 <Link
                   key={r.index}
-                  href={`/homes/${encodeURIComponent(r.index)}?from=following`}
-                  className="block rounded-2xl text-inherit no-underline"
-                  draggable={false}
-                  onDragStart={(e) => e.preventDefault()}
+                  href={`/homes/${encodeURIComponent(r.index)}`}
+                  className="block rounded-3xl text-inherit no-underline transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/60"
                 >
                   <ListingCard
                     addressLine1={addressLine1}
@@ -237,7 +178,6 @@ export default function FollowingPage() {
                     imageUrl={imageUrl}
                     imageAlt={imageAlt}
                     rows={detailRows}
-                    stackedRows
                     followState={{
                       isFollowed: true,
                       onToggle: (ev) => toggleFollow(r.index, ev),
