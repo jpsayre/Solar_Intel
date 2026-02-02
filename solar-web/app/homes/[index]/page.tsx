@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
@@ -84,6 +84,11 @@ function formatNoteTimestamp(iso: string): string {
 export default function HomeDetailPage() {
   const router = useRouter();
   const params = useParams<{ index: string }>();
+  const searchParams = useSearchParams();
+  const from = searchParams.get("from");
+  const fromFollowing = from === "following";
+  const backLabel = fromFollowing ? "Back to following" : "Back to explorer";
+  const backHref = fromFollowing ? "/following" : "/homes";
 
   const [row, setRow] = useState<HomeRow | null>(null);
   const [imgUrl, setImgUrl] = useState<string>("");
@@ -605,16 +610,10 @@ export default function HomeDetailPage() {
     <main className="min-h-screen px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-4xl">
         <Link
-          href="/homes"
-          onClick={(e) => {
-            if (typeof window !== "undefined" && window.history.length > 1) {
-              e.preventDefault();
-              router.back();
-            }
-          }}
+          href={backHref}
           className="mb-6 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
         >
-          ← Back to listings
+          ← {backLabel}
         </Link>
 
         <ListingCard

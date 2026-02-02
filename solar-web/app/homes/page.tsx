@@ -663,7 +663,7 @@ function HomesPageContent() {
             return (
               <Link
                 key={r.index}
-                href={`/homes/${encodeURIComponent(r.index)}`}
+                href={`/homes/${encodeURIComponent(r.index)}?from=explorer`}
                 className="block rounded-3xl text-inherit no-underline transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-slate-200/60"
               >
                 <ListingCard

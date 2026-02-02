@@ -3,6 +3,8 @@ import Image from "next/image";
 type DetailRow = {
   label: string;
   value: string;
+  selectable?: boolean;
+  listStyle?: boolean;
 };
 
 type ListingCardProps = {
@@ -16,19 +18,67 @@ type ListingCardProps = {
     isFollowed: boolean;
     onToggle: (e: React.MouseEvent) => void;
   };
+  /** When true, row label is above value (taller). When false, label and value are side-by-side (compact). Default false. */
+  stackedRows?: boolean;
   /** Preload and don't lazy-load (use for above-the-fold hero images). */
   priority?: boolean;
   /** Skip Vercel image optimization; load directly from URL (saves transformations, good for single-image pages). */
   unoptimized?: boolean;
 };
 
-function PillRow({ label, value }: DetailRow) {
+function PillRow({
+  label,
+  value,
+  selectable,
+  listStyle,
+  stacked,
+}: DetailRow & { stacked?: boolean }) {
+  const valueContent = listStyle ? (
+    <ul className="list-disc list-outside pl-5 text-sm font-semibold text-neutral-900 min-w-0 space-y-1">
+      {value
+        .split("\n")
+        .filter((line) => line.trim() !== "")
+        .map((line, i) => (
+          <li key={i}>{line.trim()}</li>
+        ))}
+    </ul>
+  ) : (
+    <div
+      className={`text-sm font-semibold text-neutral-900 min-w-0 whitespace-pre-line ${selectable ? "cursor-text select-text" : ""}`}
+      {...(selectable && {
+        onPointerDown: (e: React.PointerEvent) => e.stopPropagation(),
+        onPointerUp: (e: React.PointerEvent) => e.stopPropagation(),
+        onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
+        onMouseUp: (e: React.MouseEvent) => e.stopPropagation(),
+        onClick: (e: React.MouseEvent) => {
+          e.stopPropagation();
+          e.preventDefault();
+        },
+      })}
+    >
+      {value}
+    </div>
+  );
+
+  if (stacked) {
+    return (
+      <div className="flex flex-col gap-1.5 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3">
+        <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+          {label.toUpperCase()}
+        </div>
+        {valueContent}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3">
-      <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">
+    <div className="flex items-start justify-between gap-4 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3">
+      <div className="text-xs font-medium uppercase tracking-wider text-neutral-500 shrink-0">
         {label.toUpperCase()}
       </div>
-      <div className="text-sm font-semibold text-neutral-900">{value}</div>
+      <div className="text-sm font-semibold text-neutral-900 min-w-0 text-right">
+        {valueContent}
+      </div>
     </div>
   );
 }
@@ -40,6 +90,7 @@ export default function ListingCard({
   imageAlt = "",
   rows,
   followState,
+  stackedRows = false,
   priority = false,
   unoptimized = false,
 }: ListingCardProps) {
@@ -99,7 +150,14 @@ export default function ListingCard({
 
           <div className="flex flex-col gap-3">
             {rows.map((r, idx) => (
-              <PillRow key={`${r.label}-${idx}`} label={r.label} value={r.value} />
+              <PillRow
+                key={`${r.label}-${idx}`}
+                label={r.label}
+                value={r.value}
+                selectable={r.selectable}
+                listStyle={r.listStyle}
+                stacked={stackedRows}
+              />
             ))}
           </div>
         </div>

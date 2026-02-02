@@ -1,4 +1,4 @@
-export type CardRow = { label: string; value: string };
+export type CardRow = { label: string; value: string; selectable?: boolean; listStyle?: boolean };
 
 /** Matches Supabase public.homes table (+ optional extras). */
 type HomeRow = {
@@ -85,4 +85,72 @@ export function buildListingCardData(row: HomeRow): {
   ];
 
   return { addressLine1, addressLine2, detailRows };
+}
+
+/** Contact shape stored in org_home.custom.contacts */
+type ContactEntry = {
+  phone_number?: string;
+  email?: string;
+  preferred_name?: string;
+  consent_to_contact?: boolean;
+};
+
+/** Action item shape in org_home.custom.action_items */
+type ActionItemEntry = {
+  id?: string;
+  text?: string;
+  completed?: boolean;
+  created_at?: string;
+};
+
+/** Build detail rows for the Following page: owner, contact info, open action items, latest comment. */
+export function buildFollowingCardRows(
+  homeRow: HomeRow,
+  orgCustom: Record<string, unknown> | null | undefined,
+  latestNote: { body: string } | null | undefined
+): CardRow[] {
+  const ownerName =
+    homeRow.owner_1 != null && String(homeRow.owner_1).trim() !== ""
+      ? homeRow.owner_2 != null && String(homeRow.owner_2).trim() !== ""
+        ? `${homeRow.owner_1} & ${homeRow.owner_2}`
+        : String(homeRow.owner_1)
+      : "—";
+
+  let contactValue = "No contact information for home";
+  if (orgCustom && typeof orgCustom === "object" && Array.isArray(orgCustom.contacts)) {
+    const contacts = orgCustom.contacts as ContactEntry[];
+    const parts: string[] = [];
+    for (const c of contacts) {
+      if (!c || typeof c !== "object") continue;
+      const name = typeof c.preferred_name === "string" ? c.preferred_name.trim() : "";
+      const phone = typeof c.phone_number === "string" ? c.phone_number.trim() : "";
+      const email = typeof c.email === "string" ? c.email.trim() : "";
+      if (name || phone || email) {
+        parts.push([name, phone, email].filter(Boolean).join(" • "));
+      }
+    }
+    if (parts.length > 0) contactValue = parts.join("\n");
+  }
+
+  let actionItemsValue = "No open action items";
+  if (orgCustom && typeof orgCustom === "object" && Array.isArray(orgCustom.action_items)) {
+    const items = (orgCustom.action_items as ActionItemEntry[]).filter(
+      (a): a is ActionItemEntry => a != null && typeof a === "object" && !a.completed && String(a.text ?? "").trim() !== ""
+    );
+    if (items.length > 0) {
+      actionItemsValue = items.map((a) => String(a.text).trim()).join("\n");
+    }
+  }
+
+  const latestCommentValue =
+    latestNote && typeof latestNote.body === "string" && latestNote.body.trim() !== ""
+      ? latestNote.body.trim()
+      : "No comments yet";
+
+  return [
+    { label: "Owner name", value: ownerName },
+    { label: "Contact info", value: contactValue, selectable: true },
+    { label: "Open action items", value: actionItemsValue, listStyle: true },
+    { label: "Most recent comment", value: latestCommentValue },
+  ];
 }
