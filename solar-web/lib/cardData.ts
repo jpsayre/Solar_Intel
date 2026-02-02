@@ -147,10 +147,20 @@ export function buildFollowingCardRows(
       ? latestNote.body.trim()
       : "No comments yet";
 
-  return [
+  let tagsValue = "—";
+  if (orgCustom && typeof orgCustom === "object" && Array.isArray(orgCustom.tags)) {
+    const tagStrings = (orgCustom.tags as unknown[]).filter((t): t is string => typeof t === "string" && t.trim() !== "").map((t) => t.trim());
+    if (tagStrings.length > 0) tagsValue = tagStrings.join(", ");
+  }
+
+  const rows: CardRow[] = [
     { label: "Owner name", value: ownerName },
     { label: "Contact info", value: contactValue, selectable: true },
     { label: "Open action items", value: actionItemsValue, listStyle: actionItemsValue !== "No open action items" },
     { label: "Most recent comment", value: latestCommentValue },
   ];
+  if (tagsValue !== "—") {
+    rows.push({ label: "Tags", value: tagsValue });
+  }
+  return rows;
 }

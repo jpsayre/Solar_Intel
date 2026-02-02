@@ -107,9 +107,8 @@ export default function HomeDetailPage() {
   const [showCompletedActionItems, setShowCompletedActionItems] = useState(false);
   const [contacts, setContacts] = useState<ContactRow[]>([{ ...EMPTY_CONTACT }]);
   const [customTags, setCustomTags] = useState<Record<string, string>>({});
-  const [customTagKeys, setCustomTagKeys] = useState<string[]>([]);
-  const [newCustomKey, setNewCustomKey] = useState("");
-  const [newCustomValue, setNewCustomValue] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+  const [newTagEntry, setNewTagEntry] = useState("");
   const [tagsErr, setTagsErr] = useState<string | null>(null);
   const [savingTags, setSavingTags] = useState(false);
   const [isFollowed, setIsFollowed] = useState(false);
@@ -119,7 +118,7 @@ export default function HomeDetailPage() {
   orgHomeRef.current = orgHome;
   const lastSavedContactsRef = useRef<string | null>(null);
   const lastSavedHomeInfoRef = useRef<string | null>(null);
-  const lastSavedCustomTagsRef = useRef<string | null>(null);
+  const lastSavedTagsRef = useRef<string | null>(null);
   const lastSavedActionItemsRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -333,17 +332,19 @@ export default function HomeDetailPage() {
 
         const entries: Record<string, string> = {};
         const knownKeys = new Set<string>(COMMON_TAGS.map((t) => t.key));
-        const skipKeys = new Set(["contacts", "action_items", "phone_number", "email", "contact_info_updated_at", "home_info_updated_at", "custom_tags_updated_at", "action_items_updated_at"]);
-        const customKeys: string[] = [];
+        const skipKeys = new Set(["contacts", "action_items", "tags", "phone_number", "email", "contact_info_updated_at", "home_info_updated_at", "custom_tags_updated_at", "action_items_updated_at"]);
         for (const [k, v] of Object.entries(custom)) {
           if (skipKeys.has(k)) continue;
-          if (typeof k === "string" && (v === null || typeof v === "string" || typeof v === "number")) {
+          if (typeof k === "string" && knownKeys.has(k) && (v === null || typeof v === "string" || typeof v === "number")) {
             entries[k] = String(v);
-            if (!knownKeys.has(k)) customKeys.push(k);
           }
         }
         setCustomTags(entries);
-        setCustomTagKeys(customKeys.sort((a, b) => a.localeCompare(b)));
+
+        const tagsArray: string[] = Array.isArray(custom.tags)
+          ? (custom.tags as unknown[]).filter((t): t is string => typeof t === "string" && t.trim() !== "").map((t) => t.trim())
+          : [];
+        setTags(tagsArray);
 
         lastSavedContactsRef.current = JSON.stringify(
           parsedContacts.map((c) => ({
@@ -359,20 +360,15 @@ export default function HomeDetailPage() {
           if (val != null && val.trim() !== "") homeInfo[t.key] = val.trim();
         }
         lastSavedHomeInfoRef.current = JSON.stringify(homeInfo);
-        const customOnly: Record<string, string> = {};
-        for (const k of customKeys) {
-          const val = entries[k];
-          if (val != null && val.trim() !== "") customOnly[k] = val.trim();
-        }
-        lastSavedCustomTagsRef.current = JSON.stringify(customOnly);
+        lastSavedTagsRef.current = JSON.stringify(tagsArray);
       } else {
         setContacts([{ ...EMPTY_CONTACT }]);
         setActionItems([]);
         setCustomTags({});
-        setCustomTagKeys([]);
+        setTags([]);
         lastSavedContactsRef.current = null;
         lastSavedHomeInfoRef.current = null;
-        lastSavedCustomTagsRef.current = null;
+        lastSavedTagsRef.current = null;
         lastSavedActionItemsRef.current = null;
       }
     }
@@ -442,22 +438,15 @@ export default function HomeDetailPage() {
     setCustomTags((prev) => ({ ...prev, [key]: value }));
   }
 
-  function addCustomTag() {
-    const key = newCustomKey.trim().toLowerCase().replace(/\s+/g, "_");
-    if (!key || customTagKeys.includes(key) || COMMON_TAGS.some((t) => t.key === key)) return;
-    setCustomTagKeys((prev) => [...prev, key].sort((a, b) => a.localeCompare(b)));
-    setCustomTags((prev) => ({ ...prev, [key]: newCustomValue.trim() }));
-    setNewCustomKey("");
-    setNewCustomValue("");
+  function addTag() {
+    const tag = newTagEntry.trim();
+    if (!tag || tags.includes(tag)) return;
+    setTags((prev) => [...prev, tag].sort((a, b) => a.localeCompare(b)));
+    setNewTagEntry("");
   }
 
-  function removeCustomTag(key: string) {
-    setCustomTagKeys((prev) => prev.filter((k) => k !== key));
-    setCustomTags((prev) => {
-      const next = { ...prev };
-      delete next[key];
-      return next;
-    });
+  function removeTag(tag: string) {
+    setTags((prev) => prev.filter((t) => t !== tag));
   }
 
   const saveOrgHomeInfo = useCallback(async () => {
@@ -488,20 +477,14 @@ export default function HomeDetailPage() {
       if (v != null && String(v).trim() !== "") homeInfoPayload[t.key] = String(v).trim();
     }
 
-    const customTagsPayload: Record<string, string> = {};
-    for (const k of customTagKeys) {
-      const v = customTags[k];
-      if (v != null && String(v).trim() !== "") customTagsPayload[k] = String(v).trim();
-    }
-
     const contactsSerialized = JSON.stringify(contactsPayload);
     const homeInfoSerialized = JSON.stringify(homeInfoPayload);
-    const customTagsSerialized = JSON.stringify(customTagsPayload);
+    const tagsSerialized = JSON.stringify(tags);
     const actionItemsSerialized = JSON.stringify(actionItemsPayload);
 
     const contactInfoChanged = lastSavedContactsRef.current !== contactsSerialized;
     const homeInfoChanged = lastSavedHomeInfoRef.current !== homeInfoSerialized;
-    const customTagsChanged = lastSavedCustomTagsRef.current !== customTagsSerialized;
+    const tagsChanged = lastSavedTagsRef.current !== tagsSerialized;
     const actionItemsChanged = lastSavedActionItemsRef.current !== actionItemsSerialized;
 
     const now = new Date().toISOString();
@@ -511,13 +494,12 @@ export default function HomeDetailPage() {
         ? { ...(currentOrgHome.custom as Record<string, unknown>) }
         : {};
 
-    const customPayload: Record<string, unknown> = { ...existingCustom, contacts: contactsPayload, action_items: actionItemsPayload };
+    const customPayload: Record<string, unknown> = { ...existingCustom, contacts: contactsPayload, action_items: actionItemsPayload, tags };
     for (const [k, v] of Object.entries(homeInfoPayload)) customPayload[k] = v;
-    for (const [k, v] of Object.entries(customTagsPayload)) customPayload[k] = v;
 
     if (contactInfoChanged) customPayload.contact_info_updated_at = now;
     if (homeInfoChanged) customPayload.home_info_updated_at = now;
-    if (customTagsChanged) customPayload.custom_tags_updated_at = now;
+    if (tagsChanged) customPayload.custom_tags_updated_at = now;
     if (actionItemsChanged) customPayload.action_items_updated_at = now;
 
     let saveError: string | null = null;
@@ -547,7 +529,7 @@ export default function HomeDetailPage() {
     if (!saveError) {
       lastSavedContactsRef.current = contactsSerialized;
       lastSavedHomeInfoRef.current = homeInfoSerialized;
-      lastSavedCustomTagsRef.current = customTagsSerialized;
+      lastSavedTagsRef.current = tagsSerialized;
       lastSavedActionItemsRef.current = actionItemsSerialized;
       const { data } = await supabaseBrowser
         .from("org_home")
@@ -557,7 +539,7 @@ export default function HomeDetailPage() {
         .single();
       if (data) setOrgHome(data as OrgHomeRow);
     }
-  }, [contacts, actionItems, customTags, customTagKeys, orgId, params.index]);
+  }, [contacts, actionItems, customTags, tags, orgId, params.index]);
 
   useEffect(() => {
     if (!orgId || !params.index) return;
@@ -576,7 +558,7 @@ export default function HomeDetailPage() {
         saveTimeoutRef.current = null;
       }
     };
-  }, [contacts, actionItems, customTags, customTagKeys, orgId, params.index, saveOrgHomeInfo]);
+  }, [contacts, actionItems, customTags, tags, orgId, params.index, saveOrgHomeInfo]);
 
   if (err) {
     return (
@@ -852,66 +834,54 @@ export default function HomeDetailPage() {
                 </div>
               </div>
 
-              {customTagKeys.length > 0 && (
-                <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <h3 className="text-sm font-medium text-slate-700">Custom Tags</h3>
-                    {customTagsUpdatedText && (
-                      <span className="shrink-0 text-xs text-slate-500">Last updated: {customTagsUpdatedText}</span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {customTagKeys.map((key) => {
-                      const value = customTags[key] ?? "";
-                      return (
-                        <span
-                          key={key}
-                          className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-sm text-slate-800"
-                        >
-                          <span>{key.replace(/_/g, " ")}: {value}</span>
-                          <button
-                            type="button"
-                            onClick={() => removeCustomTag(key)}
-                            className="ml-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1"
-                            aria-label={`Remove ${key}`}
-                          >
-                            ×
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
+              <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+                <div className="mb-3 flex items-start justify-between gap-2">
+                  <h3 className="text-sm font-medium text-slate-700">Tags</h3>
+                  {customTagsUpdatedText && (
+                    <span className="shrink-0 text-xs text-slate-500">Last updated: {customTagsUpdatedText}</span>
+                  )}
                 </div>
-              )}
-
-              <div className="flex flex-wrap items-end gap-2">
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-slate-500">New Tag Name</span>
-                  <input
-                    type="text"
-                    value={newCustomKey}
-                    onChange={(e) => setNewCustomKey(e.target.value)}
-                    placeholder="e.g. competitor_quote"
-                    className="w-40 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                  />
-                </label>
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-slate-500">Value</span>
-                  <input
-                    type="text"
-                    value={newCustomValue}
-                    onChange={(e) => setNewCustomValue(e.target.value)}
-                    placeholder="Value"
-                    className="w-40 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                  />
-                </label>
-                <button
-                  type="button"
-                  onClick={addCustomTag}
-                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
-                >
-                  Add Custom Tag
-                </button>
+                {tags.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1.5 text-sm text-slate-800"
+                      >
+                        <span>{tag}</span>
+                        <button
+                          type="button"
+                          onClick={() => removeTag(tag)}
+                          className="ml-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-1"
+                          aria-label={`Remove ${tag}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-medium text-slate-500">Add tag</span>
+                    <input
+                      type="text"
+                      value={newTagEntry}
+                      onChange={(e) => setNewTagEntry(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
+                      placeholder="e.g. hot-lead, callback"
+                      className="w-48 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={addTag}
+                    disabled={!newTagEntry.trim() || tags.includes(newTagEntry.trim())}
+                    className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 disabled:opacity-50 disabled:hover:bg-white"
+                  >
+                    Add tag
+                  </button>
+                </div>
               </div>
 
               {tagsErr && (

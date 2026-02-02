@@ -39,6 +39,8 @@ export default function FollowingPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { custom: Record<string, unknown> | null }>>({});
   const [latestNoteByIndex, setLatestNoteByIndex] = useState<Record<string, { body: string }>>({});
+  const [searchText, setSearchText] = useState("");
+  const [tagFilter, setTagFilter] = useState("");
 
   const loadFollows = useCallback(async () => {
     setLoading(true);
@@ -213,8 +215,66 @@ export default function FollowingPage() {
             </Link>
           </div>
         ) : (
-          <div className="flex flex-col gap-8">
-            {rows.map((r) => {
+          <>
+            <div className="mb-6 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
+              <h2 className="mb-3 text-sm font-medium text-slate-700">Filter cards</h2>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+                <label className="flex flex-1 flex-col gap-1">
+                  <span className="text-xs font-medium text-slate-500">Search (address, owner, comment, tags)</span>
+                  <input
+                    type="text"
+                    value={searchText}
+                    onChange={(e) => setSearchText(e.target.value)}
+                    placeholder="Type to search…"
+                    className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 sm:w-48">
+                  <span className="text-xs font-medium text-slate-500">Filter by tag</span>
+                  <input
+                    type="text"
+                    value={tagFilter}
+                    onChange={(e) => setTagFilter(e.target.value)}
+                    placeholder="e.g. hot-lead"
+                    className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  />
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-8">
+            {(() => {
+              const searchLower = searchText.trim().toLowerCase();
+              const tagLower = tagFilter.trim().toLowerCase();
+              const filtered = rows.filter((r) => {
+                if (tagLower) {
+                  const custom = orgHomeByIndex[r.index]?.custom;
+                  const tags: string[] = custom && typeof custom === "object" && Array.isArray(custom.tags)
+                    ? (custom.tags as unknown[]).filter((t): t is string => typeof t === "string").map((t) => t.trim().toLowerCase())
+                    : [];
+                  if (!tags.includes(tagLower)) return false;
+                }
+                if (!searchLower) return true;
+                const { addressLine1, addressLine2 } = buildListingCardData(r);
+                const orgCustom = orgHomeByIndex[r.index]?.custom;
+                const latestNote = latestNoteByIndex[r.index];
+                const detailRows = buildFollowingCardRows(r, orgCustom, latestNote);
+                const cardText = [
+                  addressLine1,
+                  addressLine2,
+                  ...detailRows.map((row) => row.value),
+                ].join(" ").toLowerCase();
+                return cardText.includes(searchLower);
+              });
+              if (filtered.length === 0) {
+                return (
+                  <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 px-6 py-12 text-center text-slate-600">
+                    <p className="font-medium">No cards match the filter</p>
+                    <p className="mt-1 text-sm">Try different search text or tag.</p>
+                  </div>
+                );
+              }
+              return filtered.map((r) => {
               const url = imgUrls[r.original_index];
               const e = imgErrors[r.original_index];
               const imageUrl = url || "/window.svg";
@@ -246,8 +306,10 @@ export default function FollowingPage() {
                   />
                 </Link>
               );
-            })}
+            });
+            })()}
           </div>
+          </>
         )}
       </div>
     </main>
