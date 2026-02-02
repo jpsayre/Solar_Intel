@@ -16,6 +16,10 @@ type ListingCardProps = {
     isFollowed: boolean;
     onToggle: (e: React.MouseEvent) => void;
   };
+  /** Preload and don't lazy-load (use for above-the-fold hero images). */
+  priority?: boolean;
+  /** Skip Vercel image optimization; load directly from URL (saves transformations, good for single-image pages). */
+  unoptimized?: boolean;
 };
 
 function PillRow({ label, value }: DetailRow) {
@@ -36,19 +40,22 @@ export default function ListingCard({
   imageAlt = "",
   rows,
   followState,
+  priority = false,
+  unoptimized = false,
 }: ListingCardProps) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,42%)_1fr]">
-        {/* Left: Image */}
+        {/* Left: Image — sizes="600px" so Vercel serves one size per image (fewer transformations) */}
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-neutral-100 md:aspect-auto md:h-full md:min-h-0 md:rounded-l-2xl">
           <Image
             src={imageUrl}
             alt={imageAlt}
             fill
-            sizes="(max-width: 768px) 100vw, 42vw"
+            sizes="600px"
             className="object-contain"
-            priority={false}
+            priority={priority}
+            unoptimized={unoptimized}
           />
         </div>
 

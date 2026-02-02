@@ -627,6 +627,8 @@ export default function HomeDetailPage() {
             isFollowed,
             onToggle: toggleFollow,
           }}
+          priority
+          unoptimized
         />
 
         {orgId != null && (
