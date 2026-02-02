@@ -586,7 +586,7 @@ export default function HomeDetailPage() {
           <section className="mt-10">
             <h2 className="mb-2 text-lg font-semibold text-slate-900">My Organization&apos;s Info</h2>
             <p className="mb-4 text-sm text-slate-500">
-              Contact info and tags are private to your organization.
+              Action items, contact info, home info, and tags are private to your organization.
             </p>
 
             <div className="space-y-6">

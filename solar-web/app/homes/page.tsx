@@ -465,22 +465,14 @@ function HomesPageContent() {
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-4xl">
-        <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <Link
-            href="/"
+        <header className="mb-6">
+          {/* <Link
+            href="/about"
             className="text-3xl font-bold tracking-tight text-slate-900 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded"
           >
             Solar Intelligence
-          </Link>
-          <button
-            onClick={async () => {
-              await supabaseBrowser.auth.signOut();
-              router.push("/login");
-            }}
-            className="w-fit rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-slate-800"
-          >
-            Log out
-          </button>
+          </Link> */}
+          Qualified Roofs Explorer Tool
         </header>
 
         <div className="mb-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
