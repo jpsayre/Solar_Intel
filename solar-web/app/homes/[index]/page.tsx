@@ -107,6 +107,7 @@ export default function HomeDetailPage() {
   const [newCustomValue, setNewCustomValue] = useState("");
   const [tagsErr, setTagsErr] = useState<string | null>(null);
   const [savingTags, setSavingTags] = useState(false);
+  const [isFollowed, setIsFollowed] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextAutoSaveRef = useRef(true);
   const orgHomeRef = useRef(orgHome);
@@ -177,6 +178,48 @@ export default function HomeDetailPage() {
       alive = false;
     };
   }, [params.index, router]);
+
+  useEffect(() => {
+    let alive = true;
+    async function loadFollowState() {
+      const idx = params.index;
+      if (!idx) return;
+      const { data: userData } = await supabaseBrowser.auth.getUser();
+      if (!userData.user || !alive) {
+        if (alive) setIsFollowed(false);
+        return;
+      }
+      const { data } = await supabaseBrowser
+        .from("user_follows")
+        .select("home_index")
+        .eq("user_id", userData.user.id)
+        .eq("home_index", idx)
+        .maybeSingle();
+      if (alive) setIsFollowed(!!data);
+    }
+    loadFollowState();
+    return () => {
+      alive = false;
+    };
+  }, [params.index]);
+
+  const toggleFollow = useCallback(
+    async (e: React.MouseEvent) => {
+      e.preventDefault();
+      const idx = params.index;
+      if (!idx) return;
+      const { data: userData } = await supabaseBrowser.auth.getUser();
+      if (!userData.user) return;
+      if (isFollowed) {
+        await supabaseBrowser.from("user_follows").delete().eq("user_id", userData.user.id).eq("home_index", idx);
+        setIsFollowed(false);
+      } else {
+        await supabaseBrowser.from("user_follows").insert({ user_id: userData.user.id, home_index: idx });
+        setIsFollowed(true);
+      }
+    },
+    [params.index, isFollowed]
+  );
 
   const loadNotes = useCallback(async () => {
     const idx = params.index;
@@ -580,6 +623,10 @@ export default function HomeDetailPage() {
           imageUrl={imgUrl || "/window.svg"}
           imageAlt={imgUrl ? `Home ${row.original_index}` : imgErr ? "No image" : "Loading…"}
           rows={detailRows}
+          followState={{
+            isFollowed,
+            onToggle: toggleFollow,
+          }}
         />
 
         {orgId != null && (

@@ -113,6 +113,42 @@ function HomesPageContent() {
   const [imgUrls, setImgUrls] = useState<Record<number, string>>({});
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
 
+  const [followedHomeIndices, setFollowedHomeIndices] = useState<Set<string>>(new Set());
+  const [userId, setUserId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    async function loadFollows() {
+      const { data: userData } = await supabaseBrowser.auth.getUser();
+      if (!alive || !userData.user) return;
+      setUserId(userData.user.id);
+      const { data } = await supabaseBrowser
+        .from("user_follows")
+        .select("home_index")
+        .eq("user_id", userData.user.id);
+      if (alive && data) setFollowedHomeIndices(new Set((data as { home_index: string }[]).map((r) => r.home_index)));
+    }
+    loadFollows();
+    return () => { alive = false; };
+  }, []);
+
+  const toggleFollow = useCallback(
+    async (homeIndex: string, e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!userId) return;
+      const isFollowed = followedHomeIndices.has(homeIndex);
+      if (isFollowed) {
+        await supabaseBrowser.from("user_follows").delete().eq("user_id", userId).eq("home_index", homeIndex);
+        setFollowedHomeIndices((prev) => new Set([...prev].filter((x) => x !== homeIndex)));
+      } else {
+        await supabaseBrowser.from("user_follows").insert({ user_id: userId, home_index: homeIndex });
+        setFollowedHomeIndices((prev) => new Set([...prev, homeIndex]));
+      }
+    },
+    [userId, followedHomeIndices]
+  );
+
   useEffect(() => {
     const next = buildHomesSearchParams({
       county,
@@ -637,6 +673,10 @@ function HomesPageContent() {
                   imageUrl={imageUrl}
                   imageAlt={imageAlt}
                   rows={detailRows}
+                  followState={{
+                    isFollowed: followedHomeIndices.has(r.index),
+                    onToggle: (e) => toggleFollow(r.index, e),
+                  }}
                 />
               </Link>
             );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -11,6 +11,8 @@ export default function SiteHeader() {
   const [user, setUser] = useState<{ id: string } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const menuRef = useRef<HTMLElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -20,6 +22,17 @@ export default function SiteHeader() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    function handleClickOutside(ev: MouseEvent) {
+      const target = ev.target as Node;
+      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    }
+    document.addEventListener("click", handleClickOutside, true);
+    return () => document.removeEventListener("click", handleClickOutside, true);
+  }, [menuOpen]);
 
   async function handleLogout() {
     setMenuOpen(false);
@@ -40,6 +53,7 @@ export default function SiteHeader() {
       </Link>
 
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setMenuOpen((o) => !o)}
         className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
@@ -59,7 +73,8 @@ export default function SiteHeader() {
             onClick={() => setMenuOpen(false)}
           />
           <nav
-            className="fixed right-4 top-16 z-50 w-[calc(100vw-2rem)] max-w-xs rounded-xl border border-slate-200 bg-white py-2 shadow-lg sm:right-6"
+            ref={menuRef}
+            className="fixed right-4 top-16 z-50 w-max min-w-40 rounded-xl border border-slate-200 bg-white py-2 shadow-lg sm:right-6"
             aria-label="Site navigation"
           >
             <Link
@@ -77,6 +92,13 @@ export default function SiteHeader() {
                   className={`block px-4 py-3 text-sm font-medium ${pathname === "/" || pathname.startsWith("/homes") ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
                 >
                   Homes
+                </Link>
+                <Link
+                  href="/following"
+                  onClick={() => setMenuOpen(false)}
+                  className={`block px-4 py-3 text-sm font-medium ${pathname === "/following" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
+                >
+                  Following
                 </Link>
                 <div className="border-t border-slate-100 mt-1 pt-1">
                   <button
