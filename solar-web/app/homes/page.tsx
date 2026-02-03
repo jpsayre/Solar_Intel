@@ -118,6 +118,8 @@ function HomesPageContent() {
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { custom: Record<string, unknown> | null }>>({});
   const [tagFilter, setTagFilter] = useState("");
+  const [excludeTagFilter, setExcludeTagFilter] = useState("");
+  const [excludeDoNotContact, setExcludeDoNotContact] = useState(true);
 
   useEffect(() => {
     let alive = true;
@@ -458,18 +460,22 @@ function HomesPageContent() {
 
   const displayedRows = useMemo(() => {
     let list = mapBounds ? boundsRows : (rows ?? []);
-    if (tagFilter.trim()) {
-      const tagLower = tagFilter.trim().toLowerCase();
+    const tagLower = tagFilter.trim().toLowerCase();
+    const excludeLower = excludeTagFilter.trim().toLowerCase();
+    if (tagLower || excludeLower || excludeDoNotContact) {
       list = list.filter((r) => {
         const custom = orgHomeByIndex[r.index]?.custom;
         const tags: string[] = custom && typeof custom === "object" && Array.isArray(custom.tags)
           ? (custom.tags as unknown[]).filter((t): t is string => typeof t === "string").map((t) => t.trim().toLowerCase())
           : [];
-        return tags.some((tag) => tag.startsWith(tagLower));
+        if (tagLower && !tags.some((tag) => tag.startsWith(tagLower))) return false;
+        if (excludeLower && tags.some((tag) => tag.startsWith(excludeLower))) return false;
+        if (excludeDoNotContact && tags.some((tag) => tag.startsWith("do not contact"))) return false;
+        return true;
       });
     }
     return list;
-  }, [mapBounds, boundsRows, rows, tagFilter, orgHomeByIndex]);
+  }, [mapBounds, boundsRows, rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex]);
 
   const mapPoints = useMemo(() => {
     const list = mapBounds ? boundsRows : (rows ?? []);
@@ -526,6 +532,8 @@ function HomesPageContent() {
     setAddressSearchInput("");
     setAddressSearchApplied("");
     setTagFilter("");
+    setExcludeTagFilter("");
+    setExcludeDoNotContact(true);
   };
 
   const toggleRoofOrientation = (orientation: string) => {
@@ -541,7 +549,9 @@ function HomesPageContent() {
     roofOrientations.length > 0 ||
     addressSearchInput.trim() ||
     addressSearchApplied ||
-    tagFilter.trim();
+    tagFilter.trim() ||
+    excludeTagFilter.trim() ||
+    !excludeDoNotContact;
 
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
@@ -641,15 +651,36 @@ function HomesPageContent() {
                 </button>
               </div>
             </div>
-            <div className="flex flex-col gap-1 sm:w-48">
-              <span className="text-xs font-medium text-slate-500">Filter by tag</span>
-              <input
-                type="text"
-                value={tagFilter}
-                onChange={(e) => setTagFilter(e.target.value)}
-                placeholder="e.g. hot-lead"
-                className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-              />
+            <div className="flex flex-wrap items-end gap-4">
+              <div className="flex flex-col gap-1 sm:w-48">
+                <span className="text-xs font-medium text-slate-500">Filter by tag</span>
+                <input
+                  type="text"
+                  value={tagFilter}
+                  onChange={(e) => setTagFilter(e.target.value)}
+                  placeholder="e.g. hot-lead"
+                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
+              <div className="flex flex-col gap-1 sm:w-48">
+                <span className="text-xs font-medium text-slate-500">Exclude tags</span>
+                <input
+                  type="text"
+                  value={excludeTagFilter}
+                  onChange={(e) => setExcludeTagFilter(e.target.value)}
+                  placeholder="e.g. not interested"
+                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
+              <label className="flex cursor-pointer items-center gap-2 py-2">
+                <input
+                  type="checkbox"
+                  checked={excludeDoNotContact}
+                  onChange={(e) => setExcludeDoNotContact(e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
+                />
+                <span className="text-sm text-slate-600">Exclude do not contact homes</span>
+              </label>
             </div>
           </div>
           {hasActiveFilters && (

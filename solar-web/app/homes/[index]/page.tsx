@@ -790,6 +790,27 @@ export default function HomeDetailPage() {
                   <span className="text-base leading-none">+</span>
                   Add Another Contact
                 </button>
+                <div className="mt-3 flex justify-end">
+                  <label
+                    className={`flex cursor-pointer items-center gap-2 py-2 ${tags.some((t) => t.toLowerCase() === "do not contact") ? "text-red-600" : "text-slate-500"}`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={tags.some((t) => t.toLowerCase() === "do not contact")}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        if (checked) {
+                          const hasTag = tags.some((t) => t.toLowerCase() === "do not contact");
+                          if (!hasTag) setTags((prev) => [...prev, "Do Not Contact"].sort((a, b) => a.localeCompare(b)));
+                        } else {
+                          setTags((prev) => prev.filter((t) => t.toLowerCase() !== "do not contact"));
+                        }
+                      }}
+                      className="h-4 w-4 rounded border-neutral-300 text-red-500 focus:ring-red-400"
+                    />
+                    <span className="text-sm font-medium">Do not contact home</span>
+                  </label>
+                </div>
               </div>
 
               <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">

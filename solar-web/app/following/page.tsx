@@ -41,6 +41,8 @@ export default function FollowingPage() {
   const [latestNoteByIndex, setLatestNoteByIndex] = useState<Record<string, { body: string }>>({});
   const [searchText, setSearchText] = useState("");
   const [tagFilter, setTagFilter] = useState("");
+  const [excludeTagFilter, setExcludeTagFilter] = useState("");
+  const [excludeDoNotContact, setExcludeDoNotContact] = useState(true);
 
   const loadFollows = useCallback(async () => {
     setLoading(true);
@@ -229,16 +231,37 @@ export default function FollowingPage() {
                     className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                   />
                 </label>
-                <label className="flex flex-col gap-1 sm:w-48">
-                  <span className="text-xs font-medium text-slate-500">Filter by tag</span>
-                  <input
-                    type="text"
-                    value={tagFilter}
-                    onChange={(e) => setTagFilter(e.target.value)}
-                    placeholder="e.g. hot-lead"
-                    className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                  />
-                </label>
+                <div className="flex flex-wrap items-end gap-4">
+                  <label className="flex flex-col gap-1 sm:w-48">
+                    <span className="text-xs font-medium text-slate-500">Filter by tag</span>
+                    <input
+                      type="text"
+                      value={tagFilter}
+                      onChange={(e) => setTagFilter(e.target.value)}
+                      placeholder="e.g. hot-lead"
+                      className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1 sm:w-48">
+                    <span className="text-xs font-medium text-slate-500">Exclude tags</span>
+                    <input
+                      type="text"
+                      value={excludeTagFilter}
+                      onChange={(e) => setExcludeTagFilter(e.target.value)}
+                      placeholder="e.g. not interested"
+                      className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    />
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-2 py-2">
+                    <input
+                      type="checkbox"
+                      checked={excludeDoNotContact}
+                      onChange={(e) => setExcludeDoNotContact(e.target.checked)}
+                      className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
+                    />
+                    <span className="text-sm text-slate-600">Exclude do not contact homes</span>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -246,14 +269,19 @@ export default function FollowingPage() {
             {(() => {
               const searchLower = searchText.trim().toLowerCase();
               const tagLower = tagFilter.trim().toLowerCase();
+              const excludeLower = excludeTagFilter.trim().toLowerCase();
               const filtered = rows.filter((r) => {
+                const custom = orgHomeByIndex[r.index]?.custom;
+                const tags: string[] = custom && typeof custom === "object" && Array.isArray(custom.tags)
+                  ? (custom.tags as unknown[]).filter((t): t is string => typeof t === "string").map((t) => t.trim().toLowerCase())
+                  : [];
                 if (tagLower) {
-                  const custom = orgHomeByIndex[r.index]?.custom;
-                  const tags: string[] = custom && typeof custom === "object" && Array.isArray(custom.tags)
-                    ? (custom.tags as unknown[]).filter((t): t is string => typeof t === "string").map((t) => t.trim().toLowerCase())
-                    : [];
                   if (!tags.some((tag) => tag.startsWith(tagLower))) return false;
                 }
+                if (excludeLower) {
+                  if (tags.some((tag) => tag.startsWith(excludeLower))) return false;
+                }
+                if (excludeDoNotContact && tags.some((tag) => tag.startsWith("do not contact"))) return false;
                 if (!searchLower) return true;
                 const { addressLine1, addressLine2 } = buildListingCardData(r);
                 const orgCustom = orgHomeByIndex[r.index]?.custom;
