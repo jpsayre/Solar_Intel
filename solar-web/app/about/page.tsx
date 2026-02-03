@@ -1,14 +1,31 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 
+function getCompassImageUrl() {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return "";
+  return `${base}/storage/v1/object/public/site_images/Compass.png`;
+}
+
 export default function AboutPage() {
+  const compassUrl = getCompassImageUrl();
+
   return (
     <main className="flex min-h-screen flex-col px-4 py-16 sm:px-6">
-      <div className="mx-auto max-w-2xl">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-          Solar Intelligence
-        </h1>
+      <div className="mx-auto w-full max-w-2xl">
+        <div className="flex justify-between items-start gap-4">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+            Solar Intelligence
+          </h1>
+          <Link
+            href="/homes"
+            className="shrink-0 inline-flex items-center justify-center rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+          >
+            Roof Explorer
+          </Link>
+        </div>
 
         <p className="mt-8 text-slate-700">
           We use public records and satellite imagery to find the homes that meet our criteria*:
@@ -28,12 +45,23 @@ export default function AboutPage() {
         </p>
 
         <div className="mt-10">
-          <Link
-            href="/homes"
-            className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
-          >
-            View Homes
-          </Link>
+          {compassUrl ? (
+            <Image
+              src={compassUrl}
+              alt="Compass"
+              width={400}
+              height={400}
+              className="rounded-lg object-contain"
+              unoptimized
+            />
+          ) : (
+            <div className="flex h-[200px] w-[200px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500">
+              Compass
+            </div>
+          )}
+          <p className="mt-3 text-sm text-slate-600">
+            East Facing: 80–140°, South Facing: 140–220°, West Facing: 220–280°
+          </p>
         </div>
       </div>
     </main>
