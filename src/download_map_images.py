@@ -11,14 +11,17 @@ import requests
 import pandas as pd
 from pathlib import Path
 
+location = 'Boulder_CO'
+
 # --- Configuration ---
-CSV_PATH = "data/raw/coordinates.csv"  # Path to CSV with latitude/longitude columns
-OUTPUT_DIR = "data/images"
+CSV_PATH = "data/working/"+location+"_Lat_Long_For_Solar_Classification.csv"  # Path to CSV with latitude/longitude columns
+OUTPUT_DIR = "data/images/unprocessed"
 MAX_API_CALLS = None  # Set to an integer (e.g. 5) to limit calls for testing; None = no limit
 
 # Expected CSV column names (adjust if your CSV uses different names)
-LAT_COLUMN = "latitude"
-LON_COLUMN = "longitude"
+LAT_COLUMN = "lat"
+LON_COLUMN = "lon"
+ID_COLUMN = "original_index"
 
 # API settings
 BASE_URL = "https://maps.googleapis.com/maps/api/staticmap"
@@ -97,8 +100,9 @@ def main() -> None:
 
         lat = row[LAT_COLUMN]
         lon = row[LON_COLUMN]
+        id = int(row[ID_COLUMN])
         url = build_image_url(lat, lon, api_key)
-        filename = f"{i}_{lat:.6f}_{lon:.6f}.png"
+        filename = f"{location}_{id}.png"
         filepath = output_dir / filename
 
         print(f"[{success_count + 1}/{total}] {filename}...", end=" ")

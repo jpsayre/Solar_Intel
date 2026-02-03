@@ -27,8 +27,8 @@ merged.to_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Regr
 
 
 #This saves the file with indexs and lat long to be used by the n8n solar panel classifier workflow
-n8n_Lat_Long = merged[["original_index","lat","lon"]]
+Lat_Long = merged[["original_index","lat","lon"]]
 
-n8n_Lat_Long["solar_panels"] = ''
+Lat_Long["solar_panels"] = ''
 
-n8n_Lat_Long.to_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_n8n_Lat_Long.csv", index=False)
+Lat_Long.to_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Lat_Long_For_Solar_Classification.csv", index=False)

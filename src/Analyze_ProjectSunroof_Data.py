@@ -29,7 +29,8 @@ MIN_AREA = 30
 #Limit of roof segments to analyze (25 should almost always be enough)
 MAX_INDEX = 25
 #Minimum solar potential score of the home as defined by Google
-MIN_SOLAR = 1700
+#I think I should allow the user to set the amount of shade they will accept (this should be a bare minimum)
+MIN_SOLAR = 500
 
 
 def find_matching_segments(row, min_az, max_az):
