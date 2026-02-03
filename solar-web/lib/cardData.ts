@@ -92,7 +92,6 @@ type ContactEntry = {
   phone_number?: string;
   email?: string;
   preferred_name?: string;
-  consent_to_contact?: boolean;
 };
 
 /** Action item shape in org_home.custom.action_items */

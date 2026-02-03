@@ -257,7 +257,7 @@ export default function FollowingPage() {
                       type="checkbox"
                       checked={excludeDoNotContact}
                       onChange={(e) => setExcludeDoNotContact(e.target.checked)}
-                      className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
+                      className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
                     />
                     <span className="text-sm text-slate-600">Exclude do not contact homes</span>
                   </label>

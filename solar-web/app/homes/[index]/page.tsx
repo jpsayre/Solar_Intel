@@ -47,14 +47,12 @@ type ContactRow = {
   phone_number: string;
   email: string;
   preferred_name: string;
-  consent_to_contact: boolean;
 };
 
 const EMPTY_CONTACT: ContactRow = {
   phone_number: "",
   email: "",
   preferred_name: "",
-  consent_to_contact: false,
 };
 
 type HomeRow = {
@@ -311,7 +309,6 @@ export default function HomeDetailPage() {
                 phone_number: typeof c.phone_number === "string" ? c.phone_number : "",
                 email: typeof c.email === "string" ? c.email : "",
                 preferred_name: typeof c.preferred_name === "string" ? c.preferred_name : "",
-                consent_to_contact: Boolean(c.consent_to_contact),
               };
             }
             return { ...EMPTY_CONTACT };
@@ -360,7 +357,6 @@ export default function HomeDetailPage() {
             phone_number: c.phone_number.trim(),
             email: c.email.trim(),
             preferred_name: c.preferred_name.trim(),
-            consent_to_contact: c.consent_to_contact,
           }))
         );
         const homeInfo: Record<string, string> = {};
@@ -424,7 +420,7 @@ export default function HomeDetailPage() {
   }
 
   function removeContact(i: number) {
-    setContacts((prev) => (prev.length <= 1 ? prev : prev.filter((_, idx) => idx !== i)));
+    setContacts((prev) => (prev.length <= 1 ? [{ ...EMPTY_CONTACT }] : prev.filter((_, idx) => idx !== i)));
   }
 
   function addActionItem() {
@@ -470,7 +466,6 @@ export default function HomeDetailPage() {
       phone_number: c.phone_number.trim(),
       email: c.email.trim(),
       preferred_name: c.preferred_name.trim(),
-      consent_to_contact: c.consent_to_contact,
     }));
 
     const actionItemsPayload = actionItems.map((a) => ({
@@ -641,9 +636,9 @@ export default function HomeDetailPage() {
                       >
                         <input
                           type="checkbox"
-                          checked={false}
+                          checked={a.completed}
                           onChange={() => toggleActionItem(a.id)}
-                          className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
+                          className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
                           aria-label={`Mark "${a.text}" complete`}
                         />
                         <span className="min-w-0 flex-1 text-sm text-slate-800">{a.text}</span>
@@ -696,9 +691,9 @@ export default function HomeDetailPage() {
                             >
                               <input
                                 type="checkbox"
-                                checked={true}
+                                checked={a.completed}
                                 onChange={() => toggleActionItem(a.id)}
-                                className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
+                                className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
                                 aria-label={`Mark "${a.text}" incomplete`}
                               />
                               <span className="min-w-0 flex-1 text-sm text-slate-500 line-through">{a.text}</span>
@@ -761,24 +756,14 @@ export default function HomeDetailPage() {
                           className="mt-0.5 w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                         />
                       </label>
-                      <label className="flex shrink-0 items-center gap-2 py-2">
-                        <input
-                          type="checkbox"
-                          checked={contact.consent_to_contact}
-                          onChange={(e) => setContactField(i, "consent_to_contact", e.target.checked)}
-                          className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
-                        />
-                        <span className="text-xs font-medium text-slate-600">Consent to Contact</span>
-                      </label>
-                      {contacts.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeContact(i)}
-                          className="shrink-0 rounded-lg px-2 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
-                        >
-                          Remove
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeContact(i)}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-red-600"
+                        aria-label="Remove contact"
+                      >
+                        ×
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -806,7 +791,7 @@ export default function HomeDetailPage() {
                           setTags((prev) => prev.filter((t) => t.toLowerCase() !== "do not contact"));
                         }
                       }}
-                      className="h-4 w-4 rounded border-neutral-300 text-red-500 focus:ring-red-400"
+                      className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
                     />
                     <span className="text-sm font-medium">Do not contact home</span>
                   </label>

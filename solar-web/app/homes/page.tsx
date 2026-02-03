@@ -82,7 +82,7 @@ function HomesPageContent() {
   const [subdivision, setSubdivision] = useState(() => searchParams.get("subdivision") ?? "");
   const [roofOrientations, setRoofOrientations] = useState<string[]>(() => {
     const r = searchParams.get("roof");
-    return r ? r.split(",").map((s) => s.trim()).filter(Boolean) : [];
+    return r ? r.split(",").map((s) => s.trim()).filter(Boolean) : ["East", "South", "West"];
   });
   const [addressSearchInput, setAddressSearchInput] = useState(() => searchParams.get("address") ?? "");
   const [addressSearchApplied, setAddressSearchApplied] = useState(() => searchParams.get("address") ?? "");
@@ -528,7 +528,7 @@ function HomesPageContent() {
     setCounty("");
     setCity("");
     setSubdivision("");
-    setRoofOrientations([]);
+    setRoofOrientations(["East", "South", "West"]);
     setAddressSearchInput("");
     setAddressSearchApplied("");
     setTagFilter("");
@@ -542,11 +542,16 @@ function HomesPageContent() {
     );
   };
 
+  const roofOrientationDefault = ["East", "South", "West"];
+  const roofIsDefault =
+    roofOrientations.length === roofOrientationDefault.length &&
+    roofOrientationDefault.every((o) => roofOrientations.includes(o));
+
   const hasActiveFilters =
     county ||
     city ||
     subdivision ||
-    roofOrientations.length > 0 ||
+    (roofOrientations.length > 0 && !roofIsDefault) ||
     addressSearchInput.trim() ||
     addressSearchApplied ||
     tagFilter.trim() ||
@@ -623,7 +628,7 @@ function HomesPageContent() {
                         type="checkbox"
                         checked={roofOrientations.includes(orientation)}
                         onChange={() => toggleRoofOrientation(orientation)}
-                        className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
+                        className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
                       />
                       {orientation}
                     </label>
@@ -677,7 +682,7 @@ function HomesPageContent() {
                   type="checkbox"
                   checked={excludeDoNotContact}
                   onChange={(e) => setExcludeDoNotContact(e.target.checked)}
-                  className="h-4 w-4 rounded border-neutral-300 text-amber-500 focus:ring-amber-400"
+                  className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
                 />
                 <span className="text-sm text-slate-600">Exclude do not contact homes</span>
               </label>
