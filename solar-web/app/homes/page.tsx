@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
+import { indexToImagePath } from "@/lib/imagePath";
 import ListingCard from "@/components/ListingCard";
 import type { MapBounds } from "@/components/HomeMap";
 
@@ -374,15 +375,15 @@ function HomesPageContent() {
     async function signImages() {
       if (!list.length) return;
 
-      const missing = list
-        .map((r) => r.original_index)
-        .filter((oi) => imgUrls[oi] === undefined && imgErrors[oi] === undefined);
+      const missingRows = list.filter(
+        (r) => imgUrls[r.original_index] === undefined && imgErrors[r.original_index] === undefined
+      );
 
-      if (missing.length === 0) return;
+      if (missingRows.length === 0) return;
 
       const results = await Promise.all(
-        missing.map(async (oi) => {
-          const path = `${oi}.png`; // mapping you confirmed
+        missingRows.map(async (r) => {
+          const path = indexToImagePath(r.index);
 
           const { data, error } = await supabaseBrowser.storage
             .from(BUCKET)
@@ -390,10 +391,10 @@ function HomesPageContent() {
 
           if (error) {
             console.error("SIGNED URL ERROR (list)", { bucket: BUCKET, path, error });
-            return { oi, url: "", errorMsg: error.message ?? "storage error" };
+            return { oi: r.original_index, url: "", errorMsg: error.message ?? "storage error" };
           }
 
-          return { oi, url: data?.signedUrl ?? "", errorMsg: "" };
+          return { oi: r.original_index, url: data?.signedUrl ?? "", errorMsg: "" };
         })
       );
 

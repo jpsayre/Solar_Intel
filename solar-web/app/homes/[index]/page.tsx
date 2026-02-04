@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
+import { indexToImagePath } from "@/lib/imagePath";
 import ListingCard from "@/components/ListingCard";
 
 const BUCKET = "images";
@@ -165,8 +166,8 @@ export default function HomeDetailPage() {
 
       setRow(data as HomeRow);
 
-      // 3) Create a signed URL for the image
-      const path = `${(data as HomeRow).original_index}.png`;
+      // 3) Create a signed URL for the image (filename matches download_map_images: e.g. Boulder_CO_1014.png)
+      const path = indexToImagePath((data as HomeRow).index);
 
       const signed = await supabaseBrowser.storage
         .from(BUCKET)

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
+import { indexToImagePath } from "@/lib/imagePath";
 import ListingCard from "@/components/ListingCard";
 
 const BUCKET = "images";
@@ -80,18 +81,19 @@ export default function FollowsPage() {
     let alive = true;
     if (!rows?.length) return;
 
-    const missing = rows
-      .map((r) => r.original_index)
-      .filter((oi) => imgUrls[oi] === undefined && imgErrors[oi] === undefined);
-    if (missing.length === 0) return;
+    const missingRows = rows.filter(
+      (r) => imgUrls[r.original_index] === undefined && imgErrors[r.original_index] === undefined
+    );
+    if (missingRows.length === 0) return;
 
     Promise.all(
-      missing.map(async (oi) => {
+      missingRows.map(async (r) => {
+        const path = indexToImagePath(r.index);
         const { data, error } = await supabaseBrowser.storage
           .from(BUCKET)
-          .createSignedUrl(`${oi}.png`, 60 * 30);
-        if (error) return { oi, url: "", err: error.message };
-        return { oi, url: data?.signedUrl ?? "", err: "" };
+          .createSignedUrl(path, 60 * 30);
+        if (error) return { oi: r.original_index, url: "", err: error.message };
+        return { oi: r.original_index, url: data?.signedUrl ?? "", err: "" };
       })
     ).then((results) => {
       if (!alive) return;
