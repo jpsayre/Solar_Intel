@@ -57,6 +57,7 @@ all_columns = [
     "areaSqMeters25", "lat_y", "lon_y", "solar_panels"
 ]
 
+# sunshine	segment_count
 
 filtered_columns = [
     "index","roof_orientation", "saleprice", "saledate",
@@ -72,6 +73,8 @@ filtered_columns = [
 
 
 final = pd.read_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Semi_Final_Data_w_Solar_Classifier.csv")
+
+final = final[final['sunshine'] >= 1600]
 
 cols_to_upper = ["city", "county"]
 
@@ -250,5 +253,6 @@ final = final.rename(
 )
 
 
+print(len(final))
 
 final.to_csv("/Users/jeffs/Projects/SolarProject/data/final/"+location+"_Final_Data.csv", index=False)

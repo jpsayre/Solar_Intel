@@ -1,7 +1,8 @@
 """
 Analyze satellite images with OpenAI Vision API to classify whether the home
-has solar panels on the roof. Reads images from data/images and writes
-results to a CSV (image name + Yes/No classifier).
+has solar panels on the roof. Reads images from data/images/unprocessed,
+moves each to data/images/yes_solar or data/images/no_solar by result, and
+writes results to a CSV (index, image name, classification Yes/No).
 
 Requires: OPEN_AI_API_KEY environment variable.
 Install: pip install openai
@@ -9,15 +10,25 @@ Install: pip install openai
 
 import base64
 import os
+import re
+import shutil
+import time
 from pathlib import Path
 
 import pandas as pd
-from openai import OpenAI
+from openai import APIStatusError, OpenAI
 
 # --- Configuration ---
-IMAGES_DIR = "data/images"
+IMAGES_DIR = "data/images/unprocessed"
+YES_SOLAR_DIR = "data/images/yes_solar"
+NO_SOLAR_DIR = "data/images/no_solar"
 OUTPUT_CSV = "data/working/solar_panel_classifications.csv"
 MAX_IMAGES = None  # Set to an integer (e.g. 5) to limit for testing; None = no limit
+
+# Rate limiting: delay between requests (seconds) to stay under TPM; retries on 429
+REQUEST_DELAY = 1.0  # ~60 req/min; increase if you still hit limits
+MAX_RETRIES = 8  # exponential backoff attempts on rate limit
+RETRY_BASE_SECONDS = 2.0  # first wait 2s, then 4s, 8s, ...
 
 # Supported image extensions (from download_map_images.py output)
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
@@ -30,11 +41,12 @@ PROMPT = (
 
 
 def get_api_key() -> str:
+    # Check OPEN_AI_API_KEY first, then OPENAI_API_KEY (common default)
     key = os.getenv("OPEN_AI_API_KEY")
     if not key:
         raise SystemExit(
-            "OPEN_AI_API_KEY environment variable is not set. "
-            "Set it before running this script."
+            "OpenAI API key not found. Set OPEN_AI_API_KEY"
+            "(and export it in your shell config so this script can see it)."
         )
     return key
 
@@ -73,34 +85,61 @@ def parse_yes_no(response_text: str) -> str:
     return "No"
 
 
+def _parse_retry_after_ms(error_message: str) -> float | None:
+    """If the API says 'try again in Xms', return X as seconds else None."""
+    match = re.search(r"try again in (\d+)ms", error_message or "", re.IGNORECASE)
+    if match:
+        return max(0.5, int(match.group(1)) / 1000.0)
+    return None
+
+
 def analyze_image(client: OpenAI, image_path: Path) -> str:
     b64 = encode_image(image_path)
     mime = get_mime_type(image_path)
     data_uri = f"data:{mime};base64,{b64}"
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": PROMPT},
+    last_error = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
                     {
-                        "type": "image_url",
-                        "image_url": {"url": data_uri},
-                    },
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": PROMPT},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": data_uri},
+                            },
+                        ],
+                    }
                 ],
-            }
-        ],
-        max_tokens=10,
-    )
-    raw = (response.choices[0].message.content or "").strip()
-    return parse_yes_no(raw)
+                max_tokens=10,
+            )
+            raw = (response.choices[0].message.content or "").strip()
+            return parse_yes_no(raw)
+        except APIStatusError as e:
+            last_error = e
+            if e.status_code != 429:
+                raise
+            msg = str(getattr(e, "body", e))
+            wait = _parse_retry_after_ms(msg) or (RETRY_BASE_SECONDS**attempt)
+            wait = min(wait, 60.0)  # cap at 60s
+            if attempt < MAX_RETRIES - 1:
+                print(f" rate limited, retry in {wait:.1f}s...", end=" ", flush=True)
+                time.sleep(wait)
+            else:
+                raise
+    assert last_error is not None
+    raise last_error
 
 
 def main() -> None:
     project_root = Path(__file__).resolve().parent.parent
     images_dir = project_root / IMAGES_DIR
+    yes_dir = project_root / YES_SOLAR_DIR
+    no_dir = project_root / NO_SOLAR_DIR
     output_path = project_root / OUTPUT_CSV
 
     if not images_dir.exists():
@@ -121,6 +160,9 @@ def main() -> None:
     total = len(image_paths)
     print(f"Analyzing {total} images...")
 
+    yes_dir.mkdir(parents=True, exist_ok=True)
+    no_dir.mkdir(parents=True, exist_ok=True)
+
     api_key = get_api_key()
     client = OpenAI(api_key=api_key)
 
@@ -130,11 +172,16 @@ def main() -> None:
         print(f"[{i}/{total}] {name}...", end=" ", flush=True)
         try:
             classifier = analyze_image(client, path)
-            rows.append({"image_name": name, "has_solar_panels": classifier})
+            dest_dir = yes_dir if classifier == "Yes" else no_dir
+            dest = dest_dir / name
+            shutil.move(str(path), str(dest))
+            rows.append({"index": i - 1, "image_name": name, "classification": classifier})
             print(classifier)
+            if i < total and REQUEST_DELAY > 0:
+                time.sleep(REQUEST_DELAY)
         except Exception as e:
             print(f"ERROR: {e}")
-            rows.append({"image_name": name, "has_solar_panels": ""})
+            rows.append({"index": i - 1, "image_name": name, "classification": ""})
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     df = pd.DataFrame(rows)

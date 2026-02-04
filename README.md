@@ -20,6 +20,10 @@ Step 5 (API Call)) analyze_solar_panels.py
 
     This uses the OpenAI API to analyze the downloaded images and categorize them as Yes/No to having solar installations
 
+Step 6) view_solar_classifications.py
+
+    Use this to manually confirm the AI classifications
+
 Step 6 (API Call)) AddSolarPanelClassifierColumn.py
 
     Joins the output of the AI onto the dataset
