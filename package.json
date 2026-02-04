@@ -1,0 +1,10 @@
+{
+  "name": "solar-project",
+  "private": true,
+  "scripts": {
+    "dev": "npm run dev --prefix solar-web",
+    "build": "npm run build --prefix solar-web",
+    "start": "npm run start --prefix solar-web",
+    "lint": "npm run lint --prefix solar-web"
+  }
+}

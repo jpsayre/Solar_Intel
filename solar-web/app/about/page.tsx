@@ -9,8 +9,15 @@ function getCompassImageUrl() {
   return `${base}/storage/v1/object/public/site_images/Compass.png`;
 }
 
+function getMapChartImageUrl() {
+  const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base) return "";
+  return `${base}/storage/v1/object/public/site_images/MapChart_Map.png`;
+}
+
 export default function AboutPage() {
   const compassUrl = getCompassImageUrl();
+  const mapChartUrl = getMapChartImageUrl();
 
   return (
     <main className="flex min-h-screen flex-col px-4 py-16 sm:px-6">
@@ -62,6 +69,24 @@ export default function AboutPage() {
           <p className="mt-3 text-sm text-slate-600">
             East Facing: 80–140°, South Facing: 140–220°, West Facing: 220–280°
           </p>
+        </div>
+
+        <div className="mt-14">
+          <h2 className="text-xl font-semibold text-slate-900">Currently Supported Counties (More Coming Soon!)</h2>
+          {mapChartUrl ? (
+            <Image
+              src={mapChartUrl}
+              alt="Counties"
+              width={800}
+              height={500}
+              className="mt-4 w-full rounded-lg object-contain"
+              unoptimized
+            />
+          ) : (
+            <div className="mt-4 flex h-[300px] w-full items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-500">
+              Map Chart
+            </div>
+          )}
         </div>
       </div>
     </main>
