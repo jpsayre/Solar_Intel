@@ -27,7 +27,7 @@ def get_building_insights(lat: float, lon: float, session: requests.Session, api
     params = {
         "location.latitude": lat,
         "location.longitude": lon,
-        "requiredQuality": "LOW",
+        "requiredQuality": "MEDIUM",
         "key": api_key,
     }
     response = session.get(API_URL, params=params, timeout=30)
@@ -100,7 +100,7 @@ def fetch_with_retries(
     api_key,
     max_retries=5,
     max_segments: int = 25,
-    max_distance_m: float = 10.0,
+    max_distance_m: float = 8.5,
 ):
     delay = 1.0
     last_err = None
