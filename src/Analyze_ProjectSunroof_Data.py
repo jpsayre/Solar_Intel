@@ -31,7 +31,7 @@ MIN_AREA = 35
 MAX_INDEX = 25
 #Minimum solar potential score of the home as defined by Google
 #I think I should allow the user to set the amount of shade they will accept (this should be a bare minimum)
-MIN_SOLAR = 1000
+MIN_SOLAR = 1300
 
 
 def find_matching_segments(row, min_az, max_az):
@@ -136,39 +136,14 @@ print(f"After sunshine filter (>= {MIN_SOLAR}): {len(filtered_df)}")
 
 
 # Calculate solar score
-# Solar score formula:
-# - Multiple segments: weighted average area × normalized sunshine - segment penalty
-# - Single segment: max area × normalized sunshine
-# filtered_df['solar_score'] = np.where(
-#     filtered_df["matching_segment_count"] > 1,
-#     # Multi-segment: (sunshine/1900) × weighted_avg_area - count_penalty
-#     filtered_df['sunshine']/1900 * (
-#         (filtered_df["matching_segment_sum"] - filtered_df["matching_segment_max"]) / 
-#         (filtered_df["matching_segment_count"] - 1) + 
-#         filtered_df["matching_segment_max"]
-#     ) - filtered_df["matching_segment_count"] * 15,
-#     # Single segment: (sunshine/1900) × max_area
-#     filtered_df['sunshine']/1900 * filtered_df["matching_segment_max"]
-# ) 
-
-"""
-Now that I do multiple orientations, I need to rework solar score. The ideal is a big, simple, sunny, south facing roof.
-
-Normalize it all on a 100 scale
-
-[{'segment': 1, 'azimuth1': 155.14464, 'areaSqMeters1': 165.13486}, {'segment': 3, 'azimuth3': 245.03754, 'areaSqMeters3': 96.33909}]
-
-sunshine * (SUM(segment area * ((180 - abs(azimuth-180))/180) - segment count * 10)
-
-sunshine scaler | perfect south is full score (180), the more off the more of a penalty (scales the segment area score) | subtract for roof complexity
-"""
-
-
 filtered_df["solar_score"] = 0.0  # initialize
 
 for idx, segments in filtered_df["matching_segments"].items():
 
-    # print(filtered_df.loc[idx])
+    # print(filtered_df.loc[idx]['segment_count'])
+    segment_count = filtered_df.loc[idx]['segment_count']
+    # print("Seg count: ",segment_count)
+
     score_sum = []
 
     for segment in segments:
@@ -178,105 +153,30 @@ for idx, segments in filtered_df["matching_segments"].items():
         quant_avg = json.loads(segment['quantileStats' + str(current_segment)])['Avg']
 
         print(segment)
-        # print(quant_avg)
-        # print(type(quant_avg))
+        
+        azimuth_score = ((180 - (segment_azimuth - 180)) / 180) - 1
 
-        if segment_area > 40 and abs(segment_azimuth - 180) < 15 and quant_avg > 1500:
-            score_sum.append(999)
-            #code for perfect score
+        #east facing > 0
+        #west facing < 0
 
-        # elif segment_area > 35 and abs(segment_azimuth - 180) < 20 and quant_avg > 1350:
-        #     score_sum.append(888)
-        #     #code for next best
+        #I'm multiplying by .5 because orientation is not as important as the quant's avg sunlight
+        if azimuth_score > 0: #east
+            modified_azimuth_score = (1 - abs(2*azimuth_score**2)) * .5
+            
+        else: #west
+            modified_azimuth_score = (1 - abs(azimuth_score)) * .5
 
-        else:
-            azimuth_score = ((180 - (segment_azimuth - 180)) / 180) - 1
-
-            #east facing > 0
-            #west facing < 0
-
-            if azimuth_score > 0: #east
-                modified_azimuth_score = 1 - abs(2*azimuth_score**2)
-                
-            else: #west
-                modified_azimuth_score = 1 - abs(azimuth_score)
-
-            print(azimuth_score)
-            print(modified_azimuth_score)
-            print((quant_avg/1900) * modified_azimuth_score * 100)
-            score_sum.append((quant_avg/1900) * modified_azimuth_score * 100) #segment_area
+        # print(azimuth_score)
+        print(modified_azimuth_score)
+        # print((quant_avg/1800) * modified_azimuth_score * 100)
+        score_sum.append((quant_avg/1800) * modified_azimuth_score * 100 - segment_count*.5) #segment_area
 
             # break
 
-    print(score_sum)
-    # if 888 in score_sum:
-    #     total = 90
-    if 999 in score_sum:
-        total = 100
-    else:
-        total = max(score_sum)
+ 
+    total = max(score_sum)
 
-    filtered_df.loc[idx, "solar_score"] = total #- (filtered_df.loc[idx, "segment_count"])
-    #     (filtered_df.loc[idx, "sunshine"] / 2000) * (total - filtered_df.loc[idx, "segment_count"] * 5)
-    # )
-
-
-# for i in filtered_df['matching_segments']:
-
-#     score_sum = []
-
-#     for segment in i:
-#         print(segment)
-#         current_segment = segment['segment']
-#         segment_area = segment['areaSqMeters'+str(current_segment)]
-#         segment_azimuth = segment['azimuth'+str(current_segment)]
-        
-#         if segment_area > 50 and abs(segment_azimuth-180) < 10:
-        
-#             score_sum.append(1000)
-
-#             break
-
-        
-#         azimuth_score = ((180-(segment['azimuth'+str(current_segment)]-180))/180)-1
-#         print('Azimuth Score: ',azimuth_score)
-
-#         if azimuth_score > 0:
-#             #this penalizes east facing roofs) 
-#             modified_azimuth_score = 1 - abs(azimuth_score*1.5)
-
-#         if azimuth_score <= 0:
-#             #this gives full score to any south or west facing roof
-#             modified_azimuth_score = 1 - abs(azimuth_score)
-
-#         print('Modified Score: ', modified_azimuth_score)
-
-        
-#         print(segment_area)
-#         segment_score = modified_azimuth_score * segment_area
-#         print('Segment Score: ',segment_score)
-
-#         score_sum.append(segment_score)
-
-#     print('SCORE SUM:', sum(score_sum))
-#     filtered_df['solar_score'] = (filtered_df['sunshine']/2000) * (sum(score_sum) - filtered_df["segment_count"] * 5)
-
-    # print(i)
-
-# filtered_df['solar_score'] = np.where(
-#     filtered_df["matching_segment_count"] > 1,
-#     # Multi-segment: (sunshine/1900) × weighted_avg_area - count_penalty
-#     filtered_df['sunshine']/1900 * (
-#         (filtered_df["matching_segment_sum"] - filtered_df["matching_segment_max"]) / 
-#         (filtered_df["matching_segment_count"] - 1) + 
-#         filtered_df["matching_segment_max"]
-#     ) - filtered_df["matching_segment_count"] * 15,
-#     # Single segment: (sunshine/1900) × max_area
-#     filtered_df['sunshine']/1900 * filtered_df["matching_segment_max"]
-# ) 
-
-
-
+    filtered_df.loc[idx, "solar_score"] = total
 
 filtered_df['solar_score'] = pd.to_numeric(filtered_df['solar_score'], errors="coerce").round(2)
 
@@ -292,5 +192,6 @@ for orientation, count in orientation_counts.items():
 
 # Save result
 output_path = "/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Filtered_API_Output.csv"
+filtered_df = filtered_df[filtered_df['center_distance_m'] <=8.5]
 filtered_df.to_csv(output_path, index=False)
 print(f"\nResults saved to: {output_path}")
