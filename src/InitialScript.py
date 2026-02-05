@@ -20,9 +20,10 @@ df = df.reset_index(names='original_index')
 
 
 #Filters applied to data
-# df = df[df["zoning_description"] == 'Residential Single Family']
-#Boulder City:
-df = df[df["usedesc"] == "SINGLE FAM.RES.-LAND"]
+df = df[
+    (df["zoning_description"] == "Residential Single Family") |
+    (df["usedesc"] == "SINGLE FAM.RES.-LAND")
+]
 
 
 df = df[df["saleprice"]>=200000]
@@ -32,7 +33,6 @@ df['OwnerOccupied'] = (
 )
 df = df[df["OwnerOccupied"] == True]
 
-df = df[df["city"] == 'boulder']
 
 
 #Creating data, but not currently using as filters
@@ -55,10 +55,10 @@ print(len(df))
 
 
 
-max_calls = 1000
+max_calls = 200
 call_counter = 0
 chunk_size = 50
-start_row = 0
+start_row = 200
 
 while call_counter < max_calls:
     remaining = max_calls - call_counter
@@ -69,7 +69,7 @@ while call_counter < max_calls:
     if subset.empty:
         break
 
-    # SunroofBatchAPI.run(
+    SunroofBatchAPI.run(
         subset,
         csv_output,
         resume=True
