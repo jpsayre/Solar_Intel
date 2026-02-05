@@ -1,3 +1,4 @@
+import json
 import time
 import requests
 import pandas as pd
@@ -42,7 +43,10 @@ def flatten_building_insights(data: dict, max_segments: int = 25) -> dict:
       - latitude/longitude from response center
       - imagery date (year/month/day)
       - sunshine + segment_count
-      - azimuth{i}, areaSqMeters{i} for up to max_segments roof segments (sorted by area desc)
+      - For up to max_segments roof segments (sorted by area desc):
+        azimuth{i}, areaSqMeters{i}, sunshineQuantiles{i} (JSON list, 11 values),
+        quantileStats{i} (JSON dict with Max, Min, Avg),
+        center{i} (JSON dict with lat/lon), boundingBox{i} (JSON dict with sw/ne)
     """
     solar = (data.get("solarPotential") or {})
     center = (data.get("center") or {})
@@ -64,6 +68,10 @@ def flatten_building_insights(data: dict, max_segments: int = 25) -> dict:
     for i in range(1, max_segments + 1):
         combined[f"azimuth{i}"] = None
         combined[f"areaSqMeters{i}"] = None
+        combined[f"sunshineQuantiles{i}"] = None
+        combined[f"quantileStats{i}"] = None
+        combined[f"center{i}"] = None
+        combined[f"boundingBox{i}"] = None
 
     # Sort segments by area (desc) so segment 1 is the biggest
     segments_sorted = sorted(
@@ -76,6 +84,37 @@ def flatten_building_insights(data: dict, max_segments: int = 25) -> dict:
         stats = seg.get("stats", {}) or {}
         combined[f"azimuth{i}"] = seg.get("azimuthDegrees")
         combined[f"areaSqMeters{i}"] = stats.get("areaMeters2")
+
+        # Sunshine quantiles as JSON list (11 values from API)
+        sunshine_quantiles = (stats.get("sunshineQuantiles") or [])[:11]
+        if sunshine_quantiles:
+            combined[f"sunshineQuantiles{i}"] = json.dumps(sunshine_quantiles)
+            # Summary stats: Max, Min, Avg
+            q_vals = [float(v) for v in sunshine_quantiles if v is not None]
+            if q_vals:
+                combined[f"quantileStats{i}"] = json.dumps({
+                    "Max": round(max(q_vals), 2),
+                    "Min": round(min(q_vals), 2),
+                    "Avg": round(sum(q_vals) / len(q_vals), 2),
+                })
+
+        # Segment center as JSON dict {lat, lon}
+        seg_center = seg.get("center") or {}
+        c_lat, c_lon = seg_center.get("latitude"), seg_center.get("longitude")
+        if c_lat is not None and c_lon is not None:
+            combined[f"center{i}"] = json.dumps({"lat": c_lat, "lon": c_lon})
+
+        # Bounding box as JSON dict {sw: {lat, lon}, ne: {lat, lon}}
+        bbox = seg.get("boundingBox") or {}
+        sw = bbox.get("sw") or {}
+        ne = bbox.get("ne") or {}
+        sw_lat, sw_lon = sw.get("latitude"), sw.get("longitude")
+        ne_lat, ne_lon = ne.get("latitude"), ne.get("longitude")
+        if any(x is not None for x in (sw_lat, sw_lon, ne_lat, ne_lon)):
+            combined[f"boundingBox{i}"] = json.dumps({
+                "sw": {"lat": sw_lat, "lon": sw_lon},
+                "ne": {"lat": ne_lat, "lon": ne_lon},
+            })
 
     return combined
 
@@ -152,7 +191,7 @@ def run(
     checkpoint_every: int = 100,
     resume: bool = True,
     max_segments: int = 25,
-    max_distance_m = 10.0,
+    max_distance_m = 8.5,
     input_id_cols: list[str] = None,
 ):
     """Run API calls sequentially and persist results incrementally.
@@ -213,6 +252,10 @@ def run(
         for i in range(1, max_segments + 1):
             fieldnames.append(f"azimuth{i}")
             fieldnames.append(f"areaSqMeters{i}")
+            fieldnames.append(f"sunshineQuantiles{i}")
+            fieldnames.append(f"quantileStats{i}")
+            fieldnames.append(f"center{i}")
+            fieldnames.append(f"boundingBox{i}")
 
     # Build a set of already-processed (input_lat, input_lon) pairs so we can resume.
     processed = set()
@@ -222,8 +265,11 @@ def run(
         input_id_cols = ["original_index"]
     if resume and os.path.exists(csv_output):
         try:
-            processed = set(zip(*(existing[c] for c in input_id_cols), existing["input_lat"], existing["input_lon"]))
-            processed = set(zip(existing["input_lat"], existing["input_lon"]))
+            with open(csv_output, "r", newline="", encoding="utf-8") as rf:
+                reader = csv.DictReader(rf)
+                for row in reader:
+                    in_ids = tuple(row.get(c) for c in input_id_cols)
+                    processed.add((*in_ids, row.get("input_lat"), row.get("input_lon")))
         except Exception:
             processed = set()
 
