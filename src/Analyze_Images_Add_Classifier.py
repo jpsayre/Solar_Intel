@@ -34,7 +34,7 @@ IMAGES_DIR = "data/images/unprocessed"
 YES_SOLAR_DIR = "data/images/yes_solar"
 NO_SOLAR_DIR = "data/images/no_solar"
 MERGE_TARGET_CSV = "data/working/Boulder_CO_Regrid_joined_with_API.csv"
-MAX_IMAGES = 5  # Set to an integer (e.g. 5) to limit for testing; None = no limit
+MAX_IMAGES = 20  # Set to an integer (e.g. 5) to limit for testing; None = no limit
 
 # Classification columns added/updated in the merge target (by original_index)
 CLASSIFICATION_COLUMNS = [
@@ -51,6 +51,9 @@ CLASSIFICATION_COLUMNS = [
 REQUEST_DELAY = 1.0  # ~60 req/min; increase if you still hit limits
 MAX_RETRIES = 8  # exponential backoff attempts on rate limit
 RETRY_BASE_SECONDS = 2.0  # first wait 2s, then 4s, 8s, ...
+
+# Request timeout (seconds) to avoid hanging on slow/unresponsive API
+API_TIMEOUT_SECONDS = 90.0
 
 # Supported image extensions
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
@@ -232,6 +235,7 @@ def analyze_image(client: OpenAI, image_path: Path) -> dict:
                     }
                 ],
                 max_tokens=200,
+                timeout=API_TIMEOUT_SECONDS,
             )
 
             raw = (response.choices[0].message.content or "").strip()
@@ -246,6 +250,15 @@ def analyze_image(client: OpenAI, image_path: Path) -> dict:
             wait = min(wait, 60.0)  # cap at 60s
             if attempt < MAX_RETRIES - 1:
                 print(f" rate limited, retry in {wait:.1f}s...", end=" ", flush=True)
+                time.sleep(wait)
+            else:
+                raise
+
+        except (TimeoutError, ConnectionError, OSError) as e:
+            last_error = e
+            if attempt < MAX_RETRIES - 1:
+                wait = min(RETRY_BASE_SECONDS ** attempt, 60.0)
+                print(f" timeout/connection error, retry in {wait:.1f}s...", end=" ", flush=True)
                 time.sleep(wait)
             else:
                 raise
@@ -318,7 +331,7 @@ def main() -> None:
     no_dir.mkdir(parents=True, exist_ok=True)
 
     api_key = get_api_key()
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key, timeout=API_TIMEOUT_SECONDS)
 
     rows: list[dict] = []
     for i, (original_index, path) in enumerate(work, 1):
