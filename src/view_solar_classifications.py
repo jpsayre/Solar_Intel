@@ -219,7 +219,7 @@ def api_ok():
 
 @app.route("/api/promote", methods=["POST"])
 def api_promote():
-    """Increase solar_score by 10% for this image; return new score and updated list order."""
+    """Increase solar_score by 5% for this image; return new score and updated list order."""
     data = request.get_json() or {}
     image_name = data.get("image_name")
     if not image_name:
@@ -240,7 +240,7 @@ def api_promote():
         old_score = float(row.get("solar_score") or 0)
     except (TypeError, ValueError):
         old_score = 0.0
-    new_score = round(old_score * 1.10, 4)
+    new_score = round(old_score * 1.05, 4)
     df.loc[mask, "solar_score"] = new_score
     df.to_csv(CSV_PATH, index=False)
     return jsonify({"ok": True, "image_name": image_name, "solar_score": new_score})
@@ -248,7 +248,7 @@ def api_promote():
 
 @app.route("/api/demote", methods=["POST"])
 def api_demote():
-    """Decrease solar_score by 10% for this image; return new score."""
+    """Decrease solar_score by 5% for this image; return new score."""
     data = request.get_json() or {}
     image_name = data.get("image_name")
     if not image_name:
@@ -269,7 +269,7 @@ def api_demote():
         old_score = float(row.get("solar_score") or 0)
     except (TypeError, ValueError):
         old_score = 0.0
-    new_score = round(old_score * 0.90, 4)
+    new_score = round(old_score * 0.95, 4)
     df.loc[mask, "solar_score"] = new_score
     df.to_csv(CSV_PATH, index=False)
     return jsonify({"ok": True, "image_name": image_name, "solar_score": new_score})
