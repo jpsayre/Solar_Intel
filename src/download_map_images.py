@@ -68,10 +68,10 @@ def download_image(url: str, filepath: Path, session: requests.Session) -> bool:
         return False
 
 
-def existing_image_names(no_solar_dir: Path, yes_solar_dir: Path) -> set[str]:
-    """Collect image filenames from No_Solar and Yes_Solar (case-insensitive set)."""
+def existing_image_names(unprocessed_dir: Path, no_solar_dir: Path, yes_solar_dir: Path) -> set[str]:
+    """Collect image filenames from unprocessed, no_solar, and yes_solar (case-insensitive set)."""
     existing = set()
-    for folder in (no_solar_dir, yes_solar_dir):
+    for folder in (unprocessed_dir, no_solar_dir, yes_solar_dir):
         if folder.exists():
             for f in folder.iterdir():
                 if f.suffix.lower() == ".png":
@@ -101,8 +101,8 @@ def main() -> None:
                 f"Found: {list(df.columns)}"
             )
 
-    already_present = existing_image_names(no_solar_dir, yes_solar_dir)
-    print(f"Found {len(already_present)} images already in No_Solar/Yes_Solar.")
+    already_present = existing_image_names(output_dir, no_solar_dir, yes_solar_dir)
+    print(f"Found {len(already_present)} images already in unprocessed/no_solar/yes_solar.")
 
     limit = MAX_API_CALLS
     total = len(df) if limit is None else min(len(df), limit)
@@ -125,7 +125,7 @@ def main() -> None:
         filename = f"{location}_{id}.png"
         if filename.lower() in already_present:
             skipped_present += 1
-            print(f"[{processed}/{total}] {filename}... already in No_Solar/Yes_Solar, skip")
+            print(f"[{processed}/{total}] {filename}... already in unprocessed/no_solar/yes_solar, skip")
             continue
 
         url = build_image_url(lat, lon, api_key)
