@@ -19,20 +19,37 @@ df = pd.read_csv(csv_path)
 df = df.reset_index(names='original_index')
 
 
+
 #Filters applied to data
+allowed_designs = [
+    "1 Story - Ranch",
+    "2-3 Story",
+    "Split-level",
+    "Bi-level",
+    "PATIO HOMES",
+    "MODULAR",
+    "A-Frame",
+]
+
 df = df[
-    (df["zoning_description"] == "Residential Single Family") |
-    (df["usedesc"] == "SINGLE FAM.RES.-LAND")
+    (df["usedesc"] == "SINGLE FAM.RES.-LAND") &
+    (df["zoning_description"].str.contains("residential", case=False, na=False)) &
+    (df["designcodedscr"].isin(allowed_designs)) &
+    (df["sales_cd"] == "Q") &
+    (df["mainfloorsf"] >= 800) &
+    (df["saleprice"] >= 250000)
 ]
 
 
-df = df[df["saleprice"]>=200000]
+print("Home Type Filters: ",len(df))
+
 
 df['OwnerOccupied'] = (
     df['mailadd'].astype(str).str[:6] == df['address'].astype(str).str[:6]
 )
 df = df[df["OwnerOccupied"] == True]
 
+print("Owner Occupied Filters: ",len(df))
 
 
 #Creating data, but not currently using as filters
@@ -42,23 +59,23 @@ df['calculated_build_year'] = (
     .max(axis=1)
 )
 
+df = df[df["calculated_build_year"] >= 1960]
+
 current_year = datetime.now().year
 
 df['calculated_roof_age'] = current_year - df['calculated_build_year']
 
-df['PotentialRoofAge'] = df['calculated_roof_age'] % 30
-
 
 df.to_csv('/Users/jeffs/Projects/SolarProject/data/working/'+location+'_Primary_Regrid_Filter_Output.csv', index=False)
 
-print(len(df))
+print("Dataset Total: ",len(df))
 
-
+print(df.head(10))
 
 max_calls = 200
 call_counter = 0
 chunk_size = 50
-start_row = 200
+start_row = 0 #set the start row to right where you left off, not +1 (ie: 200 calls, start at 200)
 
 while call_counter < max_calls:
     remaining = max_calls - call_counter
