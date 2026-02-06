@@ -1,5 +1,6 @@
 #Step 2
 
+import os
 import pandas as pd
 import numpy as np
 
@@ -23,12 +24,21 @@ merged = A.merge(
 )
 
 # --- Save ---
-merged.to_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Regrid_joined_with_API.csv", index=False)
+output_path = "/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Regrid_joined_with_API.csv"
+if os.path.exists(output_path):
+    existing = pd.read_csv(output_path)
+    existing_ids = set(existing["original_index"].astype(str))
+    # Only add rows that are not already in the joined file (preserves downstream-filled columns)
+    new_rows = merged[~merged["original_index"].astype(str).isin(existing_ids)]
+    to_write = pd.concat([existing, new_rows], ignore_index=True)
+else:
+    to_write = merged
+to_write.to_csv(output_path, index=False)
 
 
 #This saves the file with indexs and lat long to be used by the n8n solar panel classifier workflow
-Lat_Long = merged[["original_index","lat","lon"]]
+# Lat_Long = merged[["original_index","lat","lon"]]
 
-Lat_Long["solar_panels"] = ''
+# Lat_Long["solar_panels"] = ''
 
-Lat_Long.to_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Lat_Long_For_Solar_Classification.csv", index=False)
+# Lat_Long.to_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Lat_Long_For_Solar_Classification.csv", index=False)
