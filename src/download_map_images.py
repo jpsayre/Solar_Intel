@@ -16,6 +16,8 @@ location = 'BOULDER_CO'
 # --- Configuration ---
 CSV_PATH = "data/working/"+location+"_Lat_Long_For_Solar_Classification.csv"  # Path to CSV with latitude/longitude columns
 OUTPUT_DIR = "data/images/unprocessed"
+NO_SOLAR_DIR = "data/images/no_solar"
+YES_SOLAR_DIR = "data/images/yes_solar"
 MAX_API_CALLS = None  # Set to an integer (e.g. 5) to limit calls for testing; None = no limit
 
 # Expected CSV column names (adjust if your CSV uses different names)
@@ -66,10 +68,23 @@ def download_image(url: str, filepath: Path, session: requests.Session) -> bool:
         return False
 
 
+def existing_image_names(no_solar_dir: Path, yes_solar_dir: Path) -> set[str]:
+    """Collect image filenames from No_Solar and Yes_Solar (case-insensitive set)."""
+    existing = set()
+    for folder in (no_solar_dir, yes_solar_dir):
+        if folder.exists():
+            for f in folder.iterdir():
+                if f.suffix.lower() == ".png":
+                    existing.add(f.name.lower())
+    return existing
+
+
 def main() -> None:
     project_root = Path(__file__).resolve().parent.parent
     csv_path = project_root / CSV_PATH
     output_dir = project_root / OUTPUT_DIR
+    no_solar_dir = project_root / NO_SOLAR_DIR
+    yes_solar_dir = project_root / YES_SOLAR_DIR
 
     if not csv_path.exists():
         raise SystemExit(f"CSV file not found: {csv_path}")
@@ -79,12 +94,15 @@ def main() -> None:
     api_key = get_api_key()
     df = pd.read_csv(csv_path)
 
-    for col in (LAT_COLUMN, LON_COLUMN):
+    for col in (LAT_COLUMN, LON_COLUMN, ID_COLUMN):
         if col not in df.columns:
             raise SystemExit(
-                f"CSV must contain columns '{LAT_COLUMN}' and '{LON_COLUMN}'. "
+                f"CSV must contain columns '{LAT_COLUMN}', '{LON_COLUMN}', and '{ID_COLUMN}'. "
                 f"Found: {list(df.columns)}"
             )
+
+    already_present = existing_image_names(no_solar_dir, yes_solar_dir)
+    print(f"Found {len(already_present)} images already in No_Solar/Yes_Solar.")
 
     limit = MAX_API_CALLS
     total = len(df) if limit is None else min(len(df), limit)
@@ -92,20 +110,28 @@ def main() -> None:
 
     session = requests.Session()
     success_count = 0
+    skipped_present = 0
+    processed = 0
 
     for i, row in df.iterrows():
         if limit is not None and success_count >= limit:
             print(f"Reached limit of {limit} API calls. Stopping.")
             break
 
+        processed += 1
         lat = row[LAT_COLUMN]
         lon = row[LON_COLUMN]
         id = int(row[ID_COLUMN])
-        url = build_image_url(lat, lon, api_key)
         filename = f"{location}_{id}.png"
+        if filename.lower() in already_present:
+            skipped_present += 1
+            print(f"[{processed}/{total}] {filename}... already in No_Solar/Yes_Solar, skip")
+            continue
+
+        url = build_image_url(lat, lon, api_key)
         filepath = output_dir / filename
 
-        print(f"[{success_count + 1}/{total}] {filename}...", end=" ")
+        print(f"[{processed}/{total}] {filename}...", end=" ")
         if download_image(url, filepath, session):
             success_count += 1
             print("OK")
@@ -114,7 +140,7 @@ def main() -> None:
 
         time.sleep(REQUEST_DELAY_SECONDS)
 
-    print(f"Done. Saved {success_count} images to {output_dir}")
+    print(f"Done. Skipped {skipped_present} (already present). Saved {success_count} images to {output_dir}")
 
 
 if __name__ == "__main__":
