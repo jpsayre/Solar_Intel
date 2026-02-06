@@ -16,17 +16,19 @@ Step 4 (API Call)) download_map_images.py
 
     This goes through the qualified homes and downloads an image of them from Google Maps API
 
-Step 5 (API Call)) analyze_solar_panels.py
+Step 5 (API Call)) Analyze_Images_Add_Classifier.py
+
+    UPDATE: This script now merges results directly on to Boulder_CO_Regrid_joined_with_API.csv
 
     This uses the OpenAI API to analyze the downloaded images and categorize them as Yes/No to having solar installations
 
-Step 6) view_solar_classifications.py
+Step 6) python src/view_solar_classifications.py
 
     Use this to manually confirm the AI classifications
 
-Step 6 (API Call)) AddSolarPanelClassifierColumn.py
+<!-- Step 6 (API Call)) AddSolarPanelClassifierColumn.py
 
-    Joins the output of the AI onto the dataset
+    Joins the output of the AI onto the dataset -->
 
 Step 7) FinalFilters.py
 
