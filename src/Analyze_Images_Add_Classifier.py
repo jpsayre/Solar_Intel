@@ -1,13 +1,16 @@
 """
 Analyze satellite images with OpenAI Vision to classify:
-- Solar panels present (Yes/No) + confidence
+- Solar panels present (Yes/No) + confidence -> saved as solar_panels column
 - Apparent roof condition (Good/Poor/Unknown) + confidence
 - Overall image quality (Good/Blurry/Other) + confidence
 
-Reads images from:  data/images/unprocessed
-Moves each to:      data/images/yes_solar  or  data/images/no_solar
-Merges results into:  data/working/Boulder_CO_Regrid_joined_with_API.csv
-  (matches rows by original_index; only updates rows for images processed this run)
+Reads:  data/working/Boulder_CO_Regrid_joined_with_API.csv for rows without a
+  solar_panels classification (column is added if missing on first run).
+For each such row, looks in data/images/unprocessed for an image whose
+  filename encodes that original_index (e.g. 14_original_index.png or BOULDER_CO_14.png).
+Processes found images, merges results into the CSV by original_index, and
+moves each image to data/images/yes_solar or data/images/no_solar.
+Prints any original_index values that had no matching image at the end.
 
 Requires: OPEN_AI_API_KEY environment variable.
 Install:  pip install openai pandas
@@ -31,12 +34,12 @@ IMAGES_DIR = "data/images/unprocessed"
 YES_SOLAR_DIR = "data/images/yes_solar"
 NO_SOLAR_DIR = "data/images/no_solar"
 MERGE_TARGET_CSV = "data/working/Boulder_CO_Regrid_joined_with_API.csv"
-MAX_IMAGES = None  # Set to an integer (e.g. 5) to limit for testing; None = no limit
+MAX_IMAGES = 5  # Set to an integer (e.g. 5) to limit for testing; None = no limit
 
 # Classification columns added/updated in the merge target (by original_index)
 CLASSIFICATION_COLUMNS = [
     "image_name",
-    "solar",
+    "solar_panels",
     "solar_confidence",
     "roof_condition",
     "roof_confidence",
@@ -63,7 +66,7 @@ Determine:
 Respond with ONLY valid JSON matching this exact schema:
 
 {
-  "solar": "Yes|No",
+  "solar_panels": "Yes|No",
   "solar_confidence": 0.0,
   "roof_condition": "Good|Poor|Unknown",
   "roof_confidence": 0.0,
@@ -94,8 +97,13 @@ def encode_image(path: Path) -> str:
 
 
 def get_original_index_from_image_name(image_path: Path) -> int | None:
-    """Derive original_index from image filename (e.g. BOULDER_CO_42.png -> 42)."""
+    """Derive original_index from image filename (e.g. 42_original_index.png or BOULDER_CO_42.png -> 42)."""
     stem = image_path.stem
+    # Pattern: {original_index}_original_index
+    if stem.endswith("_original_index"):
+        prefix = stem[: -len("_original_index")].strip("_")
+        if prefix.isdigit():
+            return int(prefix)
     parts = stem.split("_")
     if parts:
         try:
@@ -105,6 +113,18 @@ def get_original_index_from_image_name(image_path: Path) -> int | None:
     match = re.search(r"\d+", image_path.name)
     if match:
         return int(match.group(0))
+    return None
+
+
+def find_image_for_original_index(images_dir: Path, original_index: int) -> Path | None:
+    """Find image in images_dir whose filename encodes this original_index (e.g. 14_original_index.png or BOULDER_CO_14.png). Returns path or None."""
+    if not images_dir.exists():
+        return None
+    for p in images_dir.iterdir():
+        if not p.is_file() or p.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        if get_original_index_from_image_name(p) == original_index:
+            return p
     return None
 
 
@@ -134,7 +154,7 @@ def parse_json_response(text: str) -> dict:
     Falls back safely if parsing/validation fails.
     """
     defaults = {
-        "solar": "No",
+        "solar_panels": "No",
         "solar_confidence": 0.0,
         "roof_condition": "Unknown",
         "roof_confidence": 0.0,
@@ -154,11 +174,11 @@ def parse_json_response(text: str) -> dict:
     try:
         data = json.loads(cleaned)
 
-        # Validate categorical fields
-        solar = data.get("solar", defaults["solar"])
+        # Validate categorical fields (API may return "solar" or "solar_panels")
+        solar = data.get("solar_panels", data.get("solar", defaults["solar_panels"]))
         solar = str(solar).strip()
         if solar not in {"Yes", "No"}:
-            solar = defaults["solar"]
+            solar = defaults["solar_panels"]
 
         roof_condition = data.get("roof_condition", defaults["roof_condition"])
         roof_condition = str(roof_condition).strip()
@@ -179,7 +199,7 @@ def parse_json_response(text: str) -> dict:
                 return 0.0
 
         out = {
-            "solar": solar,
+            "solar_panels": solar,
             "solar_confidence": _clamp01(data.get("solar_confidence", 0.0)),
             "roof_condition": roof_condition,
             "roof_confidence": _clamp01(data.get("roof_confidence", 0.0)),
@@ -241,29 +261,59 @@ def main() -> None:
     no_dir = project_root / NO_SOLAR_DIR
     merge_path = project_root / MERGE_TARGET_CSV
 
-    if not images_dir.exists():
-        raise SystemExit(f"Images directory not found: {images_dir}")
     if not merge_path.exists():
         raise SystemExit(
             f"Merge target CSV not found: {merge_path}. "
             "Required for iterative merge by original_index."
         )
-
-    image_paths = sorted(
-        p for p in images_dir.iterdir()
-        if p.is_file() and p.suffix.lower() in IMAGE_EXTENSIONS
+    # Load merge target and ensure original_index + classification columns exist (add solar_panels if needed)
+    df_master = pd.read_csv(merge_path)
+    if "original_index" not in df_master.columns:
+        raise SystemExit(
+            f"Merge target {merge_path} must have column 'original_index'."
+        )
+    df_master["original_index"] = pd.to_numeric(
+        df_master["original_index"], errors="coerce"
     )
+    df_master["original_index"] = df_master["original_index"].astype("Int64")
 
-    if not image_paths:
-        raise SystemExit(f"No images found in {images_dir}")
+    for col in CLASSIFICATION_COLUMNS:
+        if col not in df_master.columns:
+            df_master[col] = pd.NA
+
+    # Rows without a solar_panels classification (NaN or empty string)
+    missing = pd.isna(df_master["solar_panels"]) | (
+        df_master["solar_panels"].astype(str).str.strip() == ""
+    )
+    rows_to_process = (
+        df_master.loc[missing, "original_index"].dropna().astype(int).unique().tolist()
+    )
+    if not rows_to_process:
+        print("No rows missing solar_panels classification. Nothing to do.")
+        return
 
     if MAX_IMAGES is not None:
-        image_paths = image_paths[:MAX_IMAGES]
-        print(f"Limited to {MAX_IMAGES} images for testing.")
+        rows_to_process = rows_to_process[:MAX_IMAGES]
+        print(f"Limited to {MAX_IMAGES} rows for testing.")
 
-    total = len(image_paths)
-    print(f"Analyzing {total} images...")
+    # For each original_index missing classification, find image in data/images/unprocessed
+    work: list[tuple[int, Path]] = []  # (original_index, image_path)
+    unfound_indexes: list[int] = []
+    for idx in rows_to_process:
+        path = find_image_for_original_index(images_dir, idx)
+        if path is None:
+            unfound_indexes.append(idx)
+        else:
+            work.append((idx, path))
 
+    total = len(work)
+    if total == 0:
+        print("No images found in unprocessed for rows missing classification.")
+        if unfound_indexes:
+            print(f"Unfound image indexes: {sorted(unfound_indexes)}")
+        return
+
+    print(f"Analyzing {total} images (rows missing solar_panels)...")
     yes_dir.mkdir(parents=True, exist_ok=True)
     no_dir.mkdir(parents=True, exist_ok=True)
 
@@ -271,20 +321,17 @@ def main() -> None:
     client = OpenAI(api_key=api_key)
 
     rows: list[dict] = []
-    for i, path in enumerate(image_paths, 1):
+    for i, (original_index, path) in enumerate(work, 1):
         name = path.name
         print(f"[{i}/{total}] {name}...", end=" ", flush=True)
 
         try:
             result = analyze_image(client, path)
 
-            dest_dir = yes_dir if result["solar"] == "Yes" else no_dir
+            dest_dir = yes_dir if result["solar_panels"] == "Yes" else no_dir
             dest = dest_dir / name
             shutil.move(str(path), str(dest))
 
-            original_index = get_original_index_from_image_name(path)
-            if original_index is None:
-                original_index = i - 1
             rows.append({
                 "original_index": original_index,
                 "image_name": name,
@@ -292,7 +339,7 @@ def main() -> None:
             })
 
             print(
-                f'{result["solar"]} (c={result["solar_confidence"]:.2f}) | '
+                f'{result["solar_panels"]} (c={result["solar_confidence"]:.2f}) | '
                 f'Roof:{result["roof_condition"]} (c={result["roof_confidence"]:.2f}) | '
                 f'Img:{result["image_quality"]} (c={result["image_quality_confidence"]:.2f})'
             )
@@ -302,13 +349,10 @@ def main() -> None:
 
         except Exception as e:
             print(f"ERROR: {e}")
-            original_index = get_original_index_from_image_name(path)
-            if original_index is None:
-                original_index = i - 1
             rows.append({
                 "original_index": original_index,
                 "image_name": name,
-                "solar": "",
+                "solar_panels": "",
                 "solar_confidence": "",
                 "roof_condition": "",
                 "roof_confidence": "",
@@ -316,44 +360,27 @@ def main() -> None:
                 "image_quality_confidence": "",
             })
 
-    if not rows:
-        print("Done. No rows to merge.")
-        return
+    # Merge results into master and save
+    if rows:
+        df_new = pd.DataFrame(rows)
+        for _, r in df_new.iterrows():
+            idx = int(r["original_index"])
+            mask = df_master["original_index"] == idx
+            if not mask.any():
+                print(f"  Warning: original_index {idx} not found in merge target, skipping.")
+                continue
+            for col in CLASSIFICATION_COLUMNS:
+                if col in r:
+                    df_master.loc[mask, col] = r[col]
 
-    # Load merge target and ensure original_index is comparable (int)
-    df_master = pd.read_csv(merge_path)
-    if "original_index" not in df_master.columns:
-        raise SystemExit(
-            f"Merge target {merge_path} must have column 'original_index'."
+        df_master.to_csv(merge_path, index=False)
+        print(
+            f"Done. Merged {len(rows)} results into {merge_path} "
+            f"(updated rows for original_index: {sorted(df_new['original_index'].tolist())})"
         )
-    # Normalize original_index for matching (int; CSV may have read as float)
-    df_master["original_index"] = pd.to_numeric(
-        df_master["original_index"], errors="coerce"
-    )
-    df_master["original_index"] = df_master["original_index"].astype("Int64")
 
-    # Add classification columns if missing (leave existing values for other rows)
-    for col in CLASSIFICATION_COLUMNS:
-        if col not in df_master.columns:
-            df_master[col] = pd.NA
-
-    # Update only rows whose original_index we processed this run
-    df_new = pd.DataFrame(rows)
-    for _, r in df_new.iterrows():
-        idx = int(r["original_index"])
-        mask = df_master["original_index"] == idx
-        if not mask.any():
-            print(f"  Warning: original_index {idx} not found in merge target, skipping.")
-            continue
-        for col in CLASSIFICATION_COLUMNS:
-            if col in r:
-                df_master.loc[mask, col] = r[col]
-
-    df_master.to_csv(merge_path, index=False)
-    print(
-        f"Done. Merged {len(rows)} results into {merge_path} "
-        f"(updated rows for original_index: {sorted(df_new['original_index'].tolist())})"
-    )
+    if unfound_indexes:
+        print(f"Unfound image indexes: {sorted(unfound_indexes)}")
 
 
 if __name__ == "__main__":
