@@ -12,6 +12,7 @@ import pandas as pd
 from pathlib import Path
 
 location = 'BOULDER_CO'
+location = location.upper()
 
 # --- Configuration ---
 CSV_PATH = "data/working/"+location+"_Lat_Long_For_Solar_Classification.csv"  # Path to CSV with latitude/longitude columns
