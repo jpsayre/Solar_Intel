@@ -26,7 +26,7 @@ SOUTH_MAX_AZ = 220
 WEST_MIN_AZ = 220
 WEST_MAX_AZ = 280
 #Minimum roof segment size in meters squared
-MIN_AREA = 35
+MIN_AREA = 30
 #Limit of roof segments to analyze (25 should almost always be enough)
 MAX_INDEX = 25
 #Minimum solar potential score of the home as defined by Google
@@ -159,19 +159,15 @@ for idx, segments in filtered_df["matching_segments"].items():
         #east facing > 0
         #west facing < 0
 
-        #I'm multiplying by .5 because orientation is not as important as the quant's avg sunlight
         if azimuth_score > 0: #east
-            modified_azimuth_score = (1 - abs(2*azimuth_score**2)) * .5
+            modified_azimuth_score = (1 - abs(azimuth_score*1.2))
             
         else: #west
-            modified_azimuth_score = (1 - abs(azimuth_score)) * .5
-
+            modified_azimuth_score = (1 - abs(azimuth_score*.8))
+            
         # print(azimuth_score)
         print(modified_azimuth_score)
-        # print((quant_avg/1800) * modified_azimuth_score * 100)
-        score_sum.append((quant_avg/1800) * modified_azimuth_score * 100 - segment_count*.5) #segment_area
-
-            # break
+        score_sum.append((quant_avg/1800)*100 + modified_azimuth_score*150 - (segment_count**2)/15)
 
  
     total = max(score_sum)
