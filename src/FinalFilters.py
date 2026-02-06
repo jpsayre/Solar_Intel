@@ -42,7 +42,7 @@ all_columns = [
     "taxarea", "mill_levy", "waterfee", "bldacutalval", "landacutalval",
     "xfactualval", "totalactualval", "xfassessedval", "deednum", "deed_type",
     "sales_cd", "OwnerOccupied", "calculated_build_year",
-    "calculated_roof_age", "PotentialRoofAge", "input_lat", "input_lon", "ok",
+    "calculated_roof_age", "input_lat", "input_lon", "ok",
     "error", "latitude", "longitude", "year", "month", "day", "sunshine",
     "segment_count", "azimuth1", "areaSqMeters1", "azimuth2", "areaSqMeters2",
     "azimuth3", "areaSqMeters3", "azimuth4", "areaSqMeters4", "azimuth5",
@@ -60,7 +60,7 @@ all_columns = [
 # sunshine	segment_count
 
 filtered_columns = [
-    "index","roof_orientation", "saleprice", "saledate",
+    "original_index", "index","roof_orientation", "saleprice", "saledate",
     "owner","owner_1","owner_2", "mailadd",
     "city", "county", "state2",
     "szip5", "subdivision_formatted", "area_building",
@@ -68,13 +68,17 @@ filtered_columns = [
     "latitude", "longitude",
     "numstories", "numrooms",
     "num_bath", "num_bath_partial", "num_bedrooms",
-    "original_index"
+    "solar_panels", "solar_score"
 ]
 
 
-final = pd.read_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Semi_Final_Data_w_Solar_Classifier.csv")
+final = pd.read_csv("/Users/jeffs/Projects/SolarProject/data/working/"+location+"_Regrid_joined_with_API.csv")
 
-final = final[final['sunshine'] >= 1600]
+final = final[final['result_manual_check'] != 'Rejected']
+final = final[final['solar_panels'] == 'No']
+
+
+# final = final[final['sunshine'] >= 1600]
 
 cols_to_upper = ["city", "county"]
 
