@@ -34,7 +34,7 @@ IMAGES_DIR = "data/images/unprocessed"
 YES_SOLAR_DIR = "data/images/yes_solar"
 NO_SOLAR_DIR = "data/images/no_solar"
 MERGE_TARGET_CSV = "data/working/Boulder_CO_Regrid_joined_with_API.csv"
-MAX_IMAGES = 8000  # Set to an integer (e.g. 5) to limit for testing; None = no limit
+MAX_IMAGES = 2000  # Set to an integer (e.g. 5) to limit for testing; None = no limit
 
 # Classification columns added/updated in the merge target (by original_index)
 CLASSIFICATION_COLUMNS = [

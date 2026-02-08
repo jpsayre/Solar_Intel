@@ -19,7 +19,7 @@ CSV_PATH = "data/working/"+location+"_Regrid_joined_with_API.csv"  # Path to CSV
 OUTPUT_DIR = "data/images/unprocessed"
 NO_SOLAR_DIR = "data/images/no_solar"
 YES_SOLAR_DIR = "data/images/yes_solar"
-MAX_API_CALLS = None  # Set to an integer (e.g. 5) to limit calls for testing; None = no limit
+MAX_API_CALLS = 100  # Set to an integer (e.g. 5) to limit calls for testing; None = no limit
 
 location = location.upper()
 
