@@ -238,6 +238,7 @@ final["subdivision_formatted"] = final["subdivision"].apply(format_subdivision)
 
 final = final[filtered_columns]
 
+final['solar_score'] = (final['solar_score']/final['solar_score'].max()) * 100
 
 final = final.rename(
     columns={
@@ -252,7 +253,7 @@ final = final.rename(
         "num_bath": "count_bath",
         "num_bath_partial": "count_bath_partial",
         "num_bedrooms": "count_bedrooms",
-        "roof_coverdscr": "roof_type"
+        "roof_coverdscr": "roof_type",
     }
 )
 
