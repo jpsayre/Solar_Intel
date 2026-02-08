@@ -34,7 +34,7 @@ IMAGES_DIR = "data/images/unprocessed"
 YES_SOLAR_DIR = "data/images/yes_solar"
 NO_SOLAR_DIR = "data/images/no_solar"
 MERGE_TARGET_CSV = "data/working/Boulder_CO_Regrid_joined_with_API.csv"
-MAX_IMAGES = 20  # Set to an integer (e.g. 5) to limit for testing; None = no limit
+MAX_IMAGES = 8000  # Set to an integer (e.g. 5) to limit for testing; None = no limit
 
 # Classification columns added/updated in the merge target (by original_index)
 CLASSIFICATION_COLUMNS = [
@@ -333,6 +333,18 @@ def main() -> None:
     api_key = get_api_key()
     client = OpenAI(api_key=api_key, timeout=API_TIMEOUT_SECONDS)
 
+    def merge_one_and_save(r: dict) -> None:
+        """Merge a single result row into df_master and write CSV immediately (no data loss on quota/crash)."""
+        idx = int(r["original_index"])
+        mask = df_master["original_index"] == idx
+        if not mask.any():
+            print(f"  Warning: original_index {idx} not found in merge target, skipping.")
+            return
+        for col in CLASSIFICATION_COLUMNS:
+            if col in r:
+                df_master.loc[mask, col] = r[col]
+        df_master.to_csv(merge_path, index=False)
+
     rows: list[dict] = []
     for i, (original_index, path) in enumerate(work, 1):
         name = path.name
@@ -345,11 +357,13 @@ def main() -> None:
             dest = dest_dir / name
             shutil.move(str(path), str(dest))
 
-            rows.append({
+            row = {
                 "original_index": original_index,
                 "image_name": name,
                 **result,
-            })
+            }
+            rows.append(row)
+            merge_one_and_save(row)
 
             print(
                 f'{result["solar_panels"]} (c={result["solar_confidence"]:.2f}) | '
@@ -362,7 +376,7 @@ def main() -> None:
 
         except Exception as e:
             print(f"ERROR: {e}")
-            rows.append({
+            row = {
                 "original_index": original_index,
                 "image_name": name,
                 "solar_panels": "",
@@ -371,25 +385,14 @@ def main() -> None:
                 "roof_confidence": "",
                 "image_quality": "",
                 "image_quality_confidence": "",
-            })
+            }
+            rows.append(row)
+            merge_one_and_save(row)
 
-    # Merge results into master and save
     if rows:
-        df_new = pd.DataFrame(rows)
-        for _, r in df_new.iterrows():
-            idx = int(r["original_index"])
-            mask = df_master["original_index"] == idx
-            if not mask.any():
-                print(f"  Warning: original_index {idx} not found in merge target, skipping.")
-                continue
-            for col in CLASSIFICATION_COLUMNS:
-                if col in r:
-                    df_master.loc[mask, col] = r[col]
-
-        df_master.to_csv(merge_path, index=False)
         print(
             f"Done. Merged {len(rows)} results into {merge_path} "
-            f"(updated rows for original_index: {sorted(df_new['original_index'].tolist())})"
+            f"(updated rows for original_index: {sorted(set(r['original_index'] for r in rows))})"
         )
 
     if unfound_indexes:
