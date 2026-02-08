@@ -70,12 +70,16 @@ df.to_csv('/Users/jeffs/Projects/SolarProject/data/working/'+location+'_Primary_
 
 print("Dataset Total: ",len(df))
 
-print(df.head(10))
+# print(df.head(10))
 
-max_calls = 200
+max_calls = 1000
 call_counter = 0
 chunk_size = 50
-start_row = 0 #set the start row to right where you left off, not +1 (ie: 200 calls, start at 200)
+#set the start row to right where you left off, not +1 (ie: 200 calls, start at 200)
+start_row = 19000
+
+print("Last Run Start Row: ", str(start_row))
+print("Call Count: ", str(max_calls))
 
 while call_counter < max_calls:
     remaining = max_calls - call_counter
@@ -86,7 +90,7 @@ while call_counter < max_calls:
     if subset.empty:
         break
 
-    SunroofBatchAPI.run(
+    # SunroofBatchAPI.run(
         subset,
         csv_output,
         resume=True
