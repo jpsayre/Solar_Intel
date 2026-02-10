@@ -6,3 +6,4 @@ test*
 *.html
 *.png
 *OLD.py
+local_app/*
