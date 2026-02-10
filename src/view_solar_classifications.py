@@ -76,28 +76,40 @@ def get_image_list() -> list[dict]:
         elif folder == "yes_solar":
             index_to_info[idx] = (name, folder)
 
-    # Get scores and sort; skip rows already marked Ok so we only show unchecked images
+    # Get scores and sort; skip rows already marked Ok/Switched/Rejected when we have a CSV row
     results = []
     for idx, (name, folder) in index_to_info.items():
         row = df.loc[df["original_index"] == idx]
-        if row.empty:
-            continue
-        row = row.iloc[0]
-        check_val = str(row.get("result_manual_check") or "").strip()
-        if check_val.lower() == "ok":
-            continue
-        try:
-            score = float(row.get("solar_score") or 0)
-        except (TypeError, ValueError):
+        if not row.empty:
+            row = row.iloc[0]
+            check_val = str(row.get("result_manual_check") or "").strip().lower()
+            if check_val == "ok":
+                continue
+            if "switched" in check_val or "rejected" in check_val:
+                continue
+            try:
+                score = float(row.get("solar_score") or 0)
+            except (TypeError, ValueError):
+                score = 0.0
+            try:
+                lat = float(row.get("lat") or row.get("latitude") or 0)
+            except (TypeError, ValueError):
+                lat = None
+            try:
+                lon = float(row.get("lon") or row.get("longitude") or 0)
+            except (TypeError, ValueError):
+                lon = None
+            address = str(row.get("address") or "").strip()
+            city = str(row.get("city") or row.get("scity") or "").strip()
+            state = str(row.get("state2") or row.get("state") or "").strip()
+        else:
+            # No CSV row for this image: include it with defaults (so we show all folder images)
             score = 0.0
-        try:
-            lat = float(row.get("lat") or row.get("latitude") or 0)
-        except (TypeError, ValueError):
             lat = None
-        try:
-            lon = float(row.get("lon") or row.get("longitude") or 0)
-        except (TypeError, ValueError):
             lon = None
+            address = ""
+            city = ""
+            state = ""
         results.append({
             "image_name": name,
             "solar_score": round(score, 4),
@@ -105,6 +117,9 @@ def get_image_list() -> list[dict]:
             "original_index": idx,
             "lat": lat,
             "lon": lon,
+            "address": address,
+            "city": city,
+            "state": state,
         })
     results.sort(key=lambda x: (-x["solar_score"], x["original_index"]))
     return results
@@ -139,10 +154,24 @@ def index():
 @app.route("/api/images")
 def api_images():
     folder = request.args.get("folder")
+    page = max(1, int(request.args.get("page", 1)))
+    per_page = min(2000, max(1, int(request.args.get("per_page", 1000))))
     items = get_image_list()
     if folder in ("yes_solar", "no_solar"):
         items = [x for x in items if x["folder"] == folder]
-    return jsonify({"images": items, "folder": folder or "all"})
+    total_count = len(items)
+    start = (page - 1) * per_page
+    page_items = items[start : start + per_page]
+    for i, item in enumerate(page_items):
+        item["image_index"] = start + i + 1
+        item["total_images"] = total_count
+    return jsonify({
+        "images": page_items,
+        "folder": folder or "all",
+        "total_count": total_count,
+        "page": page,
+        "per_page": per_page,
+    })
 
 
 @app.route("/api/switch", methods=["POST"])
@@ -181,6 +210,52 @@ def api_switch():
         return jsonify({"ok": False, "error": str(e)}), 500
 
     return jsonify({"ok": True, "image_name": image_name, "folder": "no_solar" if from_folder == "yes_solar" else "yes_solar"})
+
+
+@app.route("/api/switch_batch", methods=["POST"])
+def api_switch_batch():
+    """Switch multiple images in one request. Body: { "items": [ { "image_name": "...", "from_folder": "yes_solar" }, ... ] }."""
+    data = request.get_json() or {}
+    items = data.get("items") or []
+    if not items or not isinstance(items, list):
+        return jsonify({"ok": False, "error": "missing or invalid items list"}), 400
+
+    switched = 0
+    failed = []
+    for entry in items:
+        image_name = entry.get("image_name") if isinstance(entry, dict) else None
+        from_folder = entry.get("from_folder") if isinstance(entry, dict) else None
+        if not image_name or from_folder not in ("yes_solar", "no_solar"):
+            failed.append({"image_name": image_name or "?", "error": "missing image_name or from_folder"})
+            continue
+        original_index = get_original_index_from_image_name(image_name)
+        if original_index is None:
+            failed.append({"image_name": image_name, "error": "could not get original_index from image name"})
+            continue
+        if from_folder == "yes_solar":
+            src_dir, dest_dir = YES_SOLAR_DIR, NO_SOLAR_DIR
+            new_solar_panels = "No"
+        else:
+            src_dir, dest_dir = NO_SOLAR_DIR, YES_SOLAR_DIR
+            new_solar_panels = "Yes"
+        src_path = src_dir / image_name
+        if not src_path.is_file():
+            failed.append({"image_name": image_name, "error": "file not found"})
+            continue
+        try:
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            dest_path = dest_dir / image_name
+            update_csv_row(
+                original_index,
+                solar_panels=new_solar_panels,
+                result_manual_check="Switched",
+            )
+            shutil.move(str(src_path), str(dest_path))
+            switched += 1
+        except Exception as e:
+            failed.append({"image_name": image_name, "error": str(e)})
+
+    return jsonify({"ok": True, "switched": switched, "failed": failed})
 
 
 @app.route("/api/reject", methods=["POST"])
