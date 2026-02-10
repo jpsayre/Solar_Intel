@@ -59,10 +59,10 @@ API_TIMEOUT_SECONDS = 90.0
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
 PROMPT = """
-Look at the home in the center of this image.
+Only look at the one home that is must inside the red bounding box. Ignore other homes. Your baseline assumption should be that there are no solar panels on the roof, but if you feel extremely confident that there are solar panels, respond Yes.
 
 Determine:
-- Whether solar panels are installed on the roof
+- Whether solar panels are installed on the roof selected roof only
 - The apparent roof condition from overhead imagery
 - The overall image quality
 
