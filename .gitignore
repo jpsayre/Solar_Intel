@@ -7,3 +7,4 @@ test*
 *.png
 *OLD.py
 local_app/*
+*.sql
