@@ -29,6 +29,8 @@ from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
+    average_precision_score,
+    brier_score_loss,
     confusion_matrix,
     f1_score,
     precision_score,
@@ -172,6 +174,15 @@ def load_data() -> pd.DataFrame:
     """Load parsed_permits_by_year and filter to valid prediction rows."""
     df = pd.read_csv(DATA_PATH)
     df = df[df["year"].between(YEAR_START, YEAR_END)]
+    # Compute solar_next_year if missing (e.g. CSV from older pipeline)
+    if "solar_next_year" not in df.columns and "solar_pv" in df.columns and "year" in df.columns:
+        df = df.sort_values(["strap", "year"])
+        first_solar_year = df[df["solar_pv"] == 1].groupby("strap")["year"].min()
+        df = df.merge(first_solar_year.rename("_fsy"), on="strap", how="left")
+        df["solar_next_year"] = 0
+        df.loc[df["year"] == df["_fsy"] - 1, "solar_next_year"] = 1
+        df.loc[df["year"] >= df["_fsy"], "solar_next_year"] = 2
+        df.drop(columns=["_fsy"], inplace=True)
     return df
 
 
@@ -189,19 +200,56 @@ def get_feature_columns(df: pd.DataFrame) -> list[str]:
     return feature_cols
 
 
-def evaluate_model(model, X_train, y_train, X_test, y_test, name: str) -> dict:
-    """Train model and return metrics on test set."""
+def compute_lift_and_capture(y_true: np.ndarray, y_prob: np.ndarray, baseline_rate: float) -> dict:
+    """Compute top-k lift and capture rate. Returns dict with lift_10pct, lift_5pct, lift_2pct, capture_10pct, capture_5pct."""
+    if y_prob is None or len(y_true) == 0 or baseline_rate <= 0:
+        return {"lift_10pct": 0, "lift_5pct": 0, "lift_2pct": 0, "capture_10pct": 0, "capture_5pct": 0}
+    n = len(y_true)
+    n_pos = int(y_true.sum())
+    if n_pos == 0:
+        return {"lift_10pct": 0, "lift_5pct": 0, "lift_2pct": 0, "capture_10pct": 0, "capture_5pct": 0}
+    order = np.argsort(y_prob)[::-1]
+    result = {}
+    for pct, key in [(0.10, "10pct"), (0.05, "5pct"), (0.02, "2pct")]:
+        k = max(1, int(n * pct))
+        top_k = order[:k]
+        rate_in_top = y_true[top_k].mean()
+        result[f"lift_{key}"] = rate_in_top / baseline_rate if baseline_rate > 0 else 0
+    for pct, key in [(0.10, "10pct"), (0.05, "5pct")]:
+        k = max(1, int(n * pct))
+        top_k = order[:k]
+        captured = y_true[top_k].sum()
+        result[f"capture_{key}"] = captured / n_pos if n_pos > 0 else 0
+    return result
+
+
+def evaluate_model(
+    model, X_train, y_train, X_test, y_test, name: str, baseline_rate: float
+) -> tuple[dict, np.ndarray | None]:
+    """Train model and return metrics on test set. Also returns y_prob for calibration."""
     model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     y_prob = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else None
-    return {
+
+    roc_auc = roc_auc_score(y_test, y_prob) if y_prob is not None and len(np.unique(y_test)) > 1 else 0
+    pr_auc = average_precision_score(y_test, y_prob) if y_prob is not None and len(np.unique(y_test)) > 1 else 0
+    brier = brier_score_loss(y_test, y_prob) if y_prob is not None else 0
+
+    lift_capture = compute_lift_and_capture(y_test, y_prob, baseline_rate) if y_prob is not None else {}
+
+    metrics = {
         "model": name,
         "accuracy": accuracy_score(y_test, y_pred),
         "precision": precision_score(y_test, y_pred, zero_division=0),
         "recall": recall_score(y_test, y_pred, zero_division=0),
         "f1": f1_score(y_test, y_pred, zero_division=0),
-        "roc_auc": roc_auc_score(y_test, y_prob) if y_prob is not None and len(np.unique(y_test)) > 1 else 0,
+        "roc_auc": roc_auc,
+        "pr_auc": pr_auc,
+        "brier_score": brier,
+        "baseline_adoption_rate": baseline_rate,
+        **lift_capture,
     }
+    return metrics, y_prob
 
 
 def run_walk_forward() -> None:
@@ -261,6 +309,7 @@ def run_walk_forward() -> None:
         pass
 
     all_results = []
+    feature_importance_by_year: dict[int, dict[str, float]] = {}  # year -> {feat: importance}
     for predict_year in range(YEAR_START + 1, YEAR_END + 1):
         train_years = list(range(YEAR_START, predict_year))
         log(f"\n{'='*60}")
@@ -303,6 +352,8 @@ def run_walk_forward() -> None:
             feature_names.extend(cat_names)
 
         # Feature selection on training data (LASSO for linear models; MI as fallback)
+        used_feature_names = feature_names
+        idx = np.arange(X_train.shape[1])  # default: all features
         if N_FEATURES_SELECT and X_train.shape[1] > N_FEATURES_SELECT:
             try:
                 selected = select_features_lasso(
@@ -312,6 +363,7 @@ def run_walk_forward() -> None:
                 if len(idx) >= 5:
                     X_train = X_train[:, idx]
                     X_test = X_test[:, idx]
+                    used_feature_names = [feature_names[i] for i in idx]
                     log(f"  Selected {len(idx)} features (LASSO)")
             except Exception as e:
                 try:
@@ -322,27 +374,50 @@ def run_walk_forward() -> None:
                     if len(idx) >= 5:
                         X_train = X_train[:, idx]
                         X_test = X_test[:, idx]
+                        used_feature_names = [feature_names[i] for i in idx]
                         log(f"  Selected {len(idx)} features (Mutual Info, LASSO failed)")
                 except Exception as e2:
                     log(f"  Feature selection failed ({e2}), using all features")
 
         pos_rate_train = y_train.mean()
-        pos_rate_test = y_test.mean()
+        baseline_rate = pos_rate_test = y_test.mean()
         log(f"  Train: {len(y_train)} rows, {pos_rate_train:.2%} positive")
-        log(f"  Test:  {len(y_test)} rows, {pos_rate_test:.2%} positive")
+        log(f"  Test:  {len(y_test)} rows, baseline adoption rate={baseline_rate:.2%}")
 
         fold_results = []
+        lr_y_prob = None
         for name, model in models.items():
-            metrics = evaluate_model(model, X_train, y_train, X_test, y_test, name)
+            metrics, y_prob = evaluate_model(
+                model, X_train, y_train, X_test, y_test, name, baseline_rate
+            )
             metrics["predict_year"] = predict_year
             metrics["train_n"] = len(y_train)
             metrics["test_n"] = len(y_test)
             fold_results.append(metrics)
             all_results.append(metrics)
-            log(f"  {name}: F1={metrics['f1']:.4f}, ROC-AUC={metrics['roc_auc']:.4f}")
+            if name == "Logistic Regression":
+                lr_y_prob = y_prob
+            log(
+                f"  {name}: ROC-AUC={metrics['roc_auc']:.4f}, PR-AUC={metrics['pr_auc']:.4f}, "
+                f"Brier={metrics['brier_score']:.4f}, lift@10%={metrics.get('lift_10pct', 0):.2f}x, "
+                f"capture@10%={metrics.get('capture_10pct', 0):.2%}"
+            )
+
+        # Feature importance from LASSO (for stability tracking) - use final X_train feature set
+        try:
+            lasso = LogisticRegression(
+                penalty="l1", solver="saga", C=0.1, max_iter=2000,
+                random_state=RANDOM_STATE, class_weight="balanced"
+            )
+            lasso.fit(X_train, y_train)
+            if len(used_feature_names) == X_train.shape[1]:
+                feature_importance_by_year[predict_year] = {
+                    f: float(np.abs(c)) for f, c in zip(used_feature_names, lasso.coef_[0])
+                }
+        except Exception:
+            pass
 
         # Confusion matrix for Logistic Regression (first model)
-        lr_metrics = fold_results[0]
         lr_model = list(models.values())[0]
         lr_model.fit(X_train, y_train)
         y_pred = lr_model.predict(X_test)
@@ -356,50 +431,115 @@ def run_walk_forward() -> None:
         plt.savefig(OUTPUT_DIR / f"confusion_predict_{predict_year}.png", dpi=150)
         plt.close()
 
+        # Calibration curve (reliability diagram) for Logistic Regression
+        if lr_y_prob is not None and len(np.unique(y_test)) > 1:
+            n_bins = 10
+            bin_edges = np.linspace(0, 1, n_bins + 1)
+            bin_indices = np.digitize(lr_y_prob, bin_edges) - 1
+            bin_indices = np.clip(bin_indices, 0, n_bins - 1)
+            bin_means_true = np.array([
+                y_test[bin_indices == b].mean() if (bin_indices == b).any() else np.nan
+                for b in range(n_bins)
+            ])
+            bin_means_pred = np.array([
+                lr_y_prob[bin_indices == b].mean() if (bin_indices == b).any() else np.nan
+                for b in range(n_bins)
+            ])
+            valid = ~(np.isnan(bin_means_true) | np.isnan(bin_means_pred))
+            fig, ax = plt.subplots(figsize=(6, 5))
+            ax.plot([0, 1], [0, 1], "k--", label="Perfect")
+            ax.plot(bin_means_pred[valid], bin_means_true[valid], "s-", color="steelblue", label="Model")
+            ax.set_xlabel("Mean predicted probability")
+            ax.set_ylabel("Fraction of positives")
+            ax.set_title(f"Calibration curve (predict {predict_year})")
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig(OUTPUT_DIR / f"calibration_predict_{predict_year}.png", dpi=150)
+            plt.close()
+
     # Summary
     results_df = pd.DataFrame(all_results)
-    summary = results_df.groupby(["model", "predict_year"]).agg({
-        "f1": "first",
-        "roc_auc": "first",
-        "accuracy": "first",
-        "precision": "first",
-        "recall": "first",
-    }).reset_index()
+    metric_cols = [
+        "f1", "roc_auc", "pr_auc", "brier_score", "accuracy", "precision", "recall",
+        "baseline_adoption_rate", "lift_10pct", "lift_5pct", "lift_2pct",
+        "capture_10pct", "capture_5pct",
+    ]
+    agg_dict = {c: "first" for c in metric_cols if c in results_df.columns}
+    summary = results_df.groupby(["model", "predict_year"]).agg(agg_dict).reset_index()
 
     log("\n" + "=" * 60)
-    log("WALK-FORWARD SUMMARY")
+    log("WALK-FORWARD SUMMARY (per year)")
     log("=" * 60)
     log(summary.to_string(index=False))
 
+    # Year-over-year metric stability (std across years)
+    stability_cols = [c for c in ["roc_auc", "pr_auc", "f1", "brier_score", "lift_10pct", "capture_10pct"] if c in results_df.columns]
+    yoy_stability = None
+    if stability_cols:
+        yoy_stability = results_df.groupby("model")[stability_cols].std().round(4)
+        yoy_stability.columns = [f"{c}_std" for c in stability_cols]
+        log("\n--- Year-over-year metric stability (std across years) ---")
+        log(str(yoy_stability))
+
+    # Feature importance stability (correlation across consecutive years)
+    feat_stability = None
+    if len(feature_importance_by_year) >= 2:
+        years = sorted(feature_importance_by_year.keys())
+        corrs = []
+        for i in range(len(years) - 1):
+            y1, y2 = years[i], years[i + 1]
+            imp1 = feature_importance_by_year[y1]
+            imp2 = feature_importance_by_year[y2]
+            common_feats = sorted(set(imp1.keys()) & set(imp2.keys()))
+            if len(common_feats) < 3:
+                continue
+            v1 = np.array([imp1.get(f, 0) for f in common_feats])
+            v2 = np.array([imp2.get(f, 0) for f in common_feats])
+            if v1.std() > 1e-10 and v2.std() > 1e-10:
+                r = np.corrcoef(v1, v2)[0, 1]
+                corrs.append((y1, y2, r))
+        if corrs:
+            feat_stability = np.mean([c[2] for c in corrs])
+            log(f"\n--- Feature importance stability (mean corr year-to-year): {feat_stability:.4f} ---")
+            for y1, y2, r in corrs:
+                log(f"  {y1}->{y2}: {r:.4f}")
+            pd.DataFrame(corrs, columns=["year_from", "year_to", "correlation"]).to_csv(
+                OUTPUT_DIR / "walk_forward_feature_importance_stability.csv", index=False
+            )
+
     # Average metrics by model across years
-    avg_by_model = results_df.groupby("model").agg({
-        "f1": "mean",
-        "roc_auc": "mean",
-        "accuracy": "mean",
-    }).round(4)
+    avg_cols = ["f1", "roc_auc", "pr_auc", "brier_score", "accuracy", "lift_10pct", "capture_10pct"]
+    avg_cols = [c for c in avg_cols if c in results_df.columns]
+    avg_by_model = results_df.groupby("model")[avg_cols].mean().round(4)
     log("\n--- Average by model (across years) ---")
     log(str(avg_by_model))
 
     results_df.to_csv(OUTPUT_DIR / "walk_forward_metrics.csv", index=False)
     summary.to_csv(OUTPUT_DIR / "walk_forward_summary.csv", index=False)
+    if yoy_stability is not None:
+        yoy_stability.to_csv(OUTPUT_DIR / "walk_forward_yoy_stability.csv")
     log(f"\nSaved outputs to {OUTPUT_DIR}")
 
-    # Plot F1 and ROC-AUC over years by model
-    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-    for model_name in results_df["model"].unique():
-        m = results_df[results_df["model"] == model_name]
-        axes[0].plot(m["predict_year"], m["f1"], "-o", label=model_name, markersize=4)
-        axes[1].plot(m["predict_year"], m["roc_auc"], "-o", label=model_name, markersize=4)
-    axes[0].set_xlabel("Prediction Year")
-    axes[0].set_ylabel("F1 Score")
-    axes[0].set_title("F1 by Prediction Year")
-    axes[0].legend()
-    axes[0].grid(True, alpha=0.3)
-    axes[1].set_xlabel("Prediction Year")
-    axes[1].set_ylabel("ROC-AUC")
-    axes[1].set_title("ROC-AUC by Prediction Year")
-    axes[1].legend()
-    axes[1].grid(True, alpha=0.3)
+    # Plot metrics over years by model (2x2 grid)
+    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    axes = axes.flatten()
+    plot_configs = [
+        ("roc_auc", "ROC-AUC"),
+        ("pr_auc", "PR-AUC"),
+        ("lift_10pct", "Top 10% Lift"),
+        ("capture_10pct", "Capture Rate Top 10%"),
+    ]
+    for ax, (col, title) in zip(axes, plot_configs):
+        if col in results_df.columns:
+            for model_name in results_df["model"].unique():
+                m = results_df[results_df["model"] == model_name].sort_values("predict_year")
+                ax.plot(m["predict_year"], m[col], "-o", label=model_name, markersize=4)
+        ax.set_xlabel("Prediction Year")
+        ax.set_ylabel(title)
+        ax.set_title(title + " by Year")
+        ax.legend()
+        ax.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / "walk_forward_metrics_over_time.png", dpi=150)
     plt.close()
