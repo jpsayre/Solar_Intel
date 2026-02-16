@@ -223,6 +223,37 @@ def compute_lift_and_capture(y_true: np.ndarray, y_prob: np.ndarray, baseline_ra
     return result
 
 
+def compute_decile_lift(
+    y_true: np.ndarray, y_prob: np.ndarray, baseline_rate: float
+) -> list[dict]:
+    """Compute lift for each decile (1=top 10% by score, 10=bottom 10%). Returns list of dicts."""
+    if y_prob is None or len(y_true) == 0 or baseline_rate <= 0:
+        return []
+    n = len(y_true)
+    n_pos = int(y_true.sum())
+    order = np.argsort(y_prob)[::-1]
+    deciles = []
+    for d in range(10):
+        start = int(n * d / 10)
+        end = int(n * (d + 1) / 10)
+        if start >= end:
+            continue
+        idx = order[start:end]
+        rate = y_true[idx].mean()
+        lift = rate / baseline_rate if baseline_rate > 0 else 0
+        captured = y_true[idx].sum()
+        capture_pct = captured / n_pos if n_pos > 0 else 0
+        deciles.append({
+            "decile": d + 1,
+            "lift": lift,
+            "adoption_rate": rate,
+            "n": len(idx),
+            "captured": int(captured),
+            "capture_pct": capture_pct,
+        })
+    return deciles
+
+
 def evaluate_model(
     model, X_train, y_train, X_test, y_test, name: str, baseline_rate: float
 ) -> tuple[dict, np.ndarray | None]:
@@ -309,6 +340,7 @@ def run_walk_forward() -> None:
         pass
 
     all_results = []
+    all_decile_results: list[dict] = []
     feature_importance_by_year: dict[int, dict[str, float]] = {}  # year -> {feat: importance}
     for predict_year in range(YEAR_START + 1, YEAR_END + 1):
         train_years = list(range(YEAR_START, predict_year))
@@ -397,6 +429,13 @@ def run_walk_forward() -> None:
             all_results.append(metrics)
             if name == "Logistic Regression":
                 lr_y_prob = y_prob
+            # Decile lift
+            for row in compute_decile_lift(y_test, y_prob, baseline_rate):
+                all_decile_results.append({
+                    "model": name,
+                    "predict_year": predict_year,
+                    **row,
+                })
             log(
                 f"  {name}: ROC-AUC={metrics['roc_auc']:.4f}, PR-AUC={metrics['pr_auc']:.4f}, "
                 f"Brier={metrics['brier_score']:.4f}, lift@10%={metrics.get('lift_10pct', 0):.2f}x, "
@@ -519,7 +558,59 @@ def run_walk_forward() -> None:
     summary.to_csv(OUTPUT_DIR / "walk_forward_summary.csv", index=False)
     if yoy_stability is not None:
         yoy_stability.to_csv(OUTPUT_DIR / "walk_forward_yoy_stability.csv")
+    if all_decile_results:
+        decile_df = pd.DataFrame(all_decile_results)
+        decile_df.to_csv(OUTPUT_DIR / "walk_forward_decile_lift.csv", index=False)
+        log(f"\nSaved decile lift to walk_forward_decile_lift.csv")
+        # Print decile lift table for Logistic Regression, most recent year
+        lr_decile = decile_df[decile_df["model"] == "Logistic Regression"]
+        if len(lr_decile) > 0:
+            latest_year = lr_decile["predict_year"].max()
+            latest = lr_decile[lr_decile["predict_year"] == latest_year].sort_values("decile")
+            log(f"\n--- Decile lift (Logistic Regression, predict {latest_year}) ---")
+            log(latest[["decile", "lift", "adoption_rate", "n", "captured", "capture_pct"]].to_string(index=False))
     log(f"\nSaved outputs to {OUTPUT_DIR}")
+
+    # Decile lift chart (Logistic Regression, average across years)
+    if all_decile_results:
+        decile_df = pd.DataFrame(all_decile_results)
+        lr_decile = decile_df[decile_df["model"] == "Logistic Regression"]
+        if len(lr_decile) > 0:
+            avg_by_decile = lr_decile.groupby("decile").agg({
+                "lift": "mean",
+                "adoption_rate": "mean",
+            }).reset_index()
+            fig, ax = plt.subplots(figsize=(10, 5))
+            ax.bar(avg_by_decile["decile"] - 0.4, avg_by_decile["lift"], width=0.8, color="steelblue", label="Lift")
+            ax.axhline(1, color="gray", linestyle="--", alpha=0.7)
+            ax.set_xlabel("Decile (1=top 10% by predicted score)")
+            ax.set_ylabel("Lift (vs baseline)")
+            ax.set_title("Decile Lift - Logistic Regression (avg across years)")
+            ax.set_xticks(range(1, 11))
+            ax.legend()
+            ax.grid(True, alpha=0.3, axis="y")
+            plt.tight_layout()
+            plt.savefig(OUTPUT_DIR / "walk_forward_decile_lift.png", dpi=150)
+            plt.close()
+            log(f"Saved: {OUTPUT_DIR / 'walk_forward_decile_lift.png'}")
+
+        # Decile lift by year (Logistic Regression) - line chart
+        if len(lr_decile) > 0:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            for year in sorted(lr_decile["predict_year"].unique()):
+                yd = lr_decile[lr_decile["predict_year"] == year].sort_values("decile")
+                ax.plot(yd["decile"], yd["lift"], "-o", label=str(year), markersize=4)
+            ax.axhline(1, color="gray", linestyle="--", alpha=0.7)
+            ax.set_xlabel("Decile (1=top 10% by predicted score)")
+            ax.set_ylabel("Lift (vs baseline)")
+            ax.set_title("Decile Lift by Year - Logistic Regression")
+            ax.set_xticks(range(1, 11))
+            ax.legend(ncol=2, fontsize=8)
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig(OUTPUT_DIR / "walk_forward_decile_lift_by_year.png", dpi=150)
+            plt.close()
+            log(f"Saved: {OUTPUT_DIR / 'walk_forward_decile_lift_by_year.png'}")
 
     # Plot metrics over years by model (2x2 grid)
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
