@@ -46,6 +46,8 @@ LOG_TRANSFORM_COLS = ["saleprice", "saleprice_int", "sqft", "area_building", "re
 
 # Feature selection: top N features to keep per fold (None = use all)
 N_FEATURES_SELECT = 25
+# Max rows for feature selection (subsample if larger - SAGA is slow on big data)
+FEATURE_SELECTION_MAX_ROWS = 30_000
 
 # Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -136,17 +138,37 @@ def fit_preprocessor(X: pd.DataFrame, numeric: list[str], categorical: list[str]
 
 
 def run_feature_selection_once(
-    X: np.ndarray, y: np.ndarray, feature_names: list[str], n_features: int = 25
+    X: np.ndarray, y: np.ndarray, feature_names: list[str], n_features: int = 25, log=None
 ) -> tuple[list[str], dict[str, float]]:
     """
     Run Lasso, Ridge, Elastic Net; average importance; return top n_features ranked by avg.
+    Subsamples to FEATURE_SELECTION_MAX_ROWS if larger (SAGA is slow on big data).
     Returns (selected_names, importance_by_feature).
     """
     if X.shape[1] <= n_features:
         imp = {f: 1.0 for f in feature_names}
         return feature_names, imp
 
+    # Subsample for speed when dataset is large
+    n = X.shape[0]
+    if n > FEATURE_SELECTION_MAX_ROWS:
+        rng = np.random.default_rng(RANDOM_STATE)
+        idx = rng.choice(n, FEATURE_SELECTION_MAX_ROWS, replace=False)
+        # Stratify: ensure we keep enough positives
+        pos_idx = np.where(y == 1)[0]
+        neg_idx = np.where(y == 0)[0]
+        n_pos = min(len(pos_idx), max(500, FEATURE_SELECTION_MAX_ROWS // 10))
+        n_neg = FEATURE_SELECTION_MAX_ROWS - n_pos
+        idx_pos = rng.choice(pos_idx, min(n_pos, len(pos_idx)), replace=False)
+        idx_neg = rng.choice(neg_idx, min(n_neg, len(neg_idx)), replace=False)
+        idx = np.concatenate([idx_pos, idx_neg])
+        X, y = X[idx], y[idx]
+        if log:
+            log(f"  (Subsampled to {len(y)} rows for feature selection)")
+
     # Lasso
+    if log:
+        log("  Fitting Lasso...")
     lasso = LogisticRegression(
         penalty="l1", solver="saga", C=0.1, max_iter=2000,
         random_state=RANDOM_STATE, class_weight="balanced"
@@ -155,6 +177,8 @@ def run_feature_selection_once(
     coef_lasso = np.abs(lasso.coef_[0])
 
     # Ridge
+    if log:
+        log("  Fitting Ridge...")
     ridge = LogisticRegression(
         penalty="l2", solver="lbfgs", C=1.0, max_iter=2000,
         random_state=RANDOM_STATE, class_weight="balanced"
@@ -163,6 +187,8 @@ def run_feature_selection_once(
     coef_ridge = np.abs(ridge.coef_[0])
 
     # Elastic Net
+    if log:
+        log("  Fitting Elastic Net...")
     enet = LogisticRegression(
         penalty="elasticnet", solver="saga", l1_ratio=0.5, C=0.1, max_iter=2000,
         random_state=RANDOM_STATE, class_weight="balanced"
@@ -354,7 +380,7 @@ def run_walk_forward() -> None:
     selected_idx: np.ndarray = np.arange(X_full.shape[1])
     if N_FEATURES_SELECT and X_full.shape[1] > N_FEATURES_SELECT:
         selected_features, importance_by_feat = run_feature_selection_once(
-            X_full, y_full, feature_names_global, N_FEATURES_SELECT
+            X_full, y_full, feature_names_global, N_FEATURES_SELECT, log=log
         )
         selected_idx = get_feature_indices(selected_features, feature_names_global)
         log(f"\nSelected {len(selected_features)} features (consistent across all years):")
