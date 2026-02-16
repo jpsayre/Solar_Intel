@@ -30,14 +30,12 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
-    brier_score_loss,
     confusion_matrix,
     f1_score,
     precision_score,
     recall_score,
     roc_auc_score,
 )
-from sklearn.feature_selection import mutual_info_classif
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
@@ -137,31 +135,50 @@ def fit_preprocessor(X: pd.DataFrame, numeric: list[str], categorical: list[str]
     return preprocessor
 
 
-def select_features_lasso(
+def run_feature_selection_once(
     X: np.ndarray, y: np.ndarray, feature_names: list[str], n_features: int = 25
-) -> list[str]:
-    """LASSO (L1) feature selection. Returns top n_features by |coefficient|."""
+) -> tuple[list[str], dict[str, float]]:
+    """
+    Run Lasso, Ridge, Elastic Net; average importance; return top n_features ranked by avg.
+    Returns (selected_names, importance_by_feature).
+    """
     if X.shape[1] <= n_features:
-        return feature_names
-    model = LogisticRegression(
+        imp = {f: 1.0 for f in feature_names}
+        return feature_names, imp
+
+    # Lasso
+    lasso = LogisticRegression(
         penalty="l1", solver="saga", C=0.1, max_iter=2000,
         random_state=RANDOM_STATE, class_weight="balanced"
     )
-    model.fit(X, y)
-    coef = np.abs(model.coef_[0])
-    idx = np.argsort(coef)[::-1][:n_features]
-    return [feature_names[i] for i in idx]
+    lasso.fit(X, y)
+    coef_lasso = np.abs(lasso.coef_[0])
 
+    # Ridge
+    ridge = LogisticRegression(
+        penalty="l2", solver="lbfgs", C=1.0, max_iter=2000,
+        random_state=RANDOM_STATE, class_weight="balanced"
+    )
+    ridge.fit(X, y)
+    coef_ridge = np.abs(ridge.coef_[0])
 
-def select_features_mutual_info(
-    X: np.ndarray, y: np.ndarray, feature_names: list[str], n_features: int = 25
-) -> list[str]:
-    """Mutual information feature selection. Returns top n_features."""
-    if X.shape[1] <= n_features:
-        return feature_names
-    mi = mutual_info_classif(X, y, random_state=RANDOM_STATE)
-    idx = np.argsort(mi)[::-1][:n_features]
-    return [feature_names[i] for i in idx]
+    # Elastic Net
+    enet = LogisticRegression(
+        penalty="elasticnet", solver="saga", l1_ratio=0.5, C=0.1, max_iter=2000,
+        random_state=RANDOM_STATE, class_weight="balanced"
+    )
+    enet.fit(X, y)
+    coef_enet = np.abs(enet.coef_[0])
+
+    # Normalize each to [0, 1] and average
+    def norm(x: np.ndarray) -> np.ndarray:
+        m = x.max()
+        return x / m if m > 0 else x
+    avg_imp = (norm(coef_lasso) + norm(coef_ridge) + norm(coef_enet)) / 3
+    importance_by_feature = {feature_names[i]: float(avg_imp[i]) for i in range(len(feature_names))}
+    idx = np.argsort(avg_imp)[::-1][:n_features]
+    selected = [feature_names[i] for i in idx]
+    return selected, importance_by_feature
 
 
 def get_feature_indices(selected_names: list[str], all_names: list[str]) -> np.ndarray:
@@ -261,7 +278,8 @@ def evaluate_model(
 
     roc_auc = roc_auc_score(y_test, y_prob) if y_prob is not None and len(np.unique(y_test)) > 1 else 0
     pr_auc = average_precision_score(y_test, y_prob) if y_prob is not None and len(np.unique(y_test)) > 1 else 0
-    brier = brier_score_loss(y_test, y_prob) if y_prob is not None else 0
+    # Brier score = mean((p - y)^2) where p = predicted prob, y = actual 0/1
+    brier = float(np.mean((y_prob - y_test) ** 2)) if y_prob is not None else 0
 
     lift_capture = compute_lift_and_capture(y_test, y_prob, baseline_rate) if y_prob is not None else {}
 
@@ -312,6 +330,39 @@ def run_walk_forward() -> None:
     test_straps = set(straps[:n_test])
     train_straps = set(straps[n_test:])
     log(f"Train straps: {len(train_straps)}, Test straps: {len(test_straps)}")
+
+    # Pre-walk-forward: fit preprocessor and select features once on all training data
+    log("\n" + "=" * 60)
+    log("FEATURE SELECTION (Lasso + Ridge + Elastic Net, avg importance)")
+    log("=" * 60)
+    full_train_df = df[df["strap"].isin(train_straps)]
+    X_full_raw = prepare_features(full_train_df, feature_cols)
+    y_full = full_train_df["solar_next_year"].astype(int).values
+    numeric_full, categorical_full = get_feature_types(X_full_raw)
+    preprocessor_global = fit_preprocessor(X_full_raw, numeric_full, categorical_full)
+    X_full = preprocessor_global.transform(X_full_raw)
+    feature_names_global = []
+    if numeric_full:
+        feature_names_global.extend(numeric_full)
+    if "cat" in preprocessor_global.named_transformers_:
+        cat_names = preprocessor_global.named_transformers_["cat"].get_feature_names_out(
+            preprocessor_global.transformers_[1][2]
+        )
+        feature_names_global.extend(cat_names)
+
+    selected_features: list[str] = feature_names_global
+    selected_idx: np.ndarray = np.arange(X_full.shape[1])
+    if N_FEATURES_SELECT and X_full.shape[1] > N_FEATURES_SELECT:
+        selected_features, importance_by_feat = run_feature_selection_once(
+            X_full, y_full, feature_names_global, N_FEATURES_SELECT
+        )
+        selected_idx = get_feature_indices(selected_features, feature_names_global)
+        log(f"\nSelected {len(selected_features)} features (consistent across all years):")
+        for r, f in enumerate(selected_features, 1):
+            imp = importance_by_feat.get(f, 0)
+            log(f"  {r:2d}. {f} (importance={imp:.4f})")
+    else:
+        log(f"\nUsing all {len(feature_names_global)} features (N_FEATURES_SELECT not set or fewer features)")
 
     models = {
         "Logistic Regression": LogisticRegression(
@@ -364,49 +415,10 @@ def run_walk_forward() -> None:
         X_train_raw = prepare_features(train_df, feature_cols)
         X_test_raw = prepare_features(test_df, feature_cols)
 
-        numeric, categorical = get_feature_types(X_train_raw)
-        preprocessor = fit_preprocessor(X_train_raw, numeric, categorical)
-
-        X_train = preprocessor.transform(X_train_raw)
-        X_test = preprocessor.transform(X_test_raw)
-
-        # Feature names for selection (numeric + one-hot cat names)
-        feature_names = []
-        if numeric:
-            feature_names.extend(numeric)
-        if "cat" in preprocessor.named_transformers_:
-            cat_names = preprocessor.named_transformers_["cat"].get_feature_names_out(
-                preprocessor.transformers_[1][2]
-            )
-            feature_names.extend(cat_names)
-
-        # Feature selection on training data (LASSO for linear models; MI as fallback)
-        used_feature_names = feature_names
-        idx = np.arange(X_train.shape[1])  # default: all features
-        if N_FEATURES_SELECT and X_train.shape[1] > N_FEATURES_SELECT:
-            try:
-                selected = select_features_lasso(
-                    X_train, y_train, feature_names, N_FEATURES_SELECT
-                )
-                idx = get_feature_indices(selected, feature_names)
-                if len(idx) >= 5:
-                    X_train = X_train[:, idx]
-                    X_test = X_test[:, idx]
-                    used_feature_names = [feature_names[i] for i in idx]
-                    log(f"  Selected {len(idx)} features (LASSO)")
-            except Exception as e:
-                try:
-                    selected = select_features_mutual_info(
-                        X_train, y_train, feature_names, N_FEATURES_SELECT
-                    )
-                    idx = get_feature_indices(selected, feature_names)
-                    if len(idx) >= 5:
-                        X_train = X_train[:, idx]
-                        X_test = X_test[:, idx]
-                        used_feature_names = [feature_names[i] for i in idx]
-                        log(f"  Selected {len(idx)} features (Mutual Info, LASSO failed)")
-                except Exception as e2:
-                    log(f"  Feature selection failed ({e2}), using all features")
+        # Use global preprocessor and selected features (consistent across years)
+        X_train = preprocessor_global.transform(X_train_raw)[:, selected_idx]
+        X_test = preprocessor_global.transform(X_test_raw)[:, selected_idx]
+        used_feature_names = selected_features
 
         pos_rate_train = y_train.mean()
         baseline_rate = pos_rate_test = y_test.mean()
