@@ -46,7 +46,8 @@ LOG_TRANSFORM_COLS = ["saleprice", "saleprice_int", "sqft", "area_building", "re
 
 # Feature selection: top N features to keep per fold (None = use all)
 N_FEATURES_SELECT = 25
-# Max rows for feature selection (subsample if larger - SAGA is slow on big data)
+# Max rows for feature selection (subsample if larger - SAGA is slow on big data).
+# Set to None to use all data (slower but no subsampling).
 FEATURE_SELECTION_MAX_ROWS = 30_000
 
 # Paths
@@ -149,16 +150,16 @@ def run_feature_selection_once(
         imp = {f: 1.0 for f in feature_names}
         return feature_names, imp
 
-    # Subsample for speed when dataset is large
+    # Subsample for speed when dataset is large (skip if FEATURE_SELECTION_MAX_ROWS is None)
     n = X.shape[0]
-    if n > FEATURE_SELECTION_MAX_ROWS:
+    if FEATURE_SELECTION_MAX_ROWS is not None and n > FEATURE_SELECTION_MAX_ROWS:
+        max_rows = FEATURE_SELECTION_MAX_ROWS
         rng = np.random.default_rng(RANDOM_STATE)
-        idx = rng.choice(n, FEATURE_SELECTION_MAX_ROWS, replace=False)
         # Stratify: ensure we keep enough positives
         pos_idx = np.where(y == 1)[0]
         neg_idx = np.where(y == 0)[0]
-        n_pos = min(len(pos_idx), max(500, FEATURE_SELECTION_MAX_ROWS // 10))
-        n_neg = FEATURE_SELECTION_MAX_ROWS - n_pos
+        n_pos = min(len(pos_idx), max(500, max_rows // 10))
+        n_neg = max_rows - n_pos
         idx_pos = rng.choice(pos_idx, min(n_pos, len(pos_idx)), replace=False)
         idx_neg = rng.choice(neg_idx, min(n_neg, len(neg_idx)), replace=False)
         idx = np.concatenate([idx_pos, idx_neg])
