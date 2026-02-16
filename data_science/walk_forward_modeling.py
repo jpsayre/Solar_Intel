@@ -201,13 +201,13 @@ def get_feature_columns(df: pd.DataFrame) -> list[str]:
 
 
 def compute_lift_and_capture(y_true: np.ndarray, y_prob: np.ndarray, baseline_rate: float) -> dict:
-    """Compute top-k lift and capture rate. Returns dict with lift_10pct, lift_5pct, lift_2pct, capture_10pct, capture_5pct."""
+    """Compute top-k lift and capture rate. Returns dict with lift/capture for 10%, 5%, 2%."""
     if y_prob is None or len(y_true) == 0 or baseline_rate <= 0:
-        return {"lift_10pct": 0, "lift_5pct": 0, "lift_2pct": 0, "capture_10pct": 0, "capture_5pct": 0}
+        return {"lift_10pct": 0, "lift_5pct": 0, "lift_2pct": 0, "capture_10pct": 0, "capture_5pct": 0, "capture_2pct": 0}
     n = len(y_true)
     n_pos = int(y_true.sum())
     if n_pos == 0:
-        return {"lift_10pct": 0, "lift_5pct": 0, "lift_2pct": 0, "capture_10pct": 0, "capture_5pct": 0}
+        return {"lift_10pct": 0, "lift_5pct": 0, "lift_2pct": 0, "capture_10pct": 0, "capture_5pct": 0, "capture_2pct": 0}
     order = np.argsort(y_prob)[::-1]
     result = {}
     for pct, key in [(0.10, "10pct"), (0.05, "5pct"), (0.02, "2pct")]:
@@ -215,9 +215,6 @@ def compute_lift_and_capture(y_true: np.ndarray, y_prob: np.ndarray, baseline_ra
         top_k = order[:k]
         rate_in_top = y_true[top_k].mean()
         result[f"lift_{key}"] = rate_in_top / baseline_rate if baseline_rate > 0 else 0
-    for pct, key in [(0.10, "10pct"), (0.05, "5pct")]:
-        k = max(1, int(n * pct))
-        top_k = order[:k]
         captured = y_true[top_k].sum()
         result[f"capture_{key}"] = captured / n_pos if n_pos > 0 else 0
     return result
@@ -438,8 +435,9 @@ def run_walk_forward() -> None:
                 })
             log(
                 f"  {name}: ROC-AUC={metrics['roc_auc']:.4f}, PR-AUC={metrics['pr_auc']:.4f}, "
-                f"Brier={metrics['brier_score']:.4f}, lift@10%={metrics.get('lift_10pct', 0):.2f}x, "
-                f"capture@10%={metrics.get('capture_10pct', 0):.2%}"
+                f"Brier={metrics['brier_score']:.4f} | "
+                f"lift@10/5/2%={metrics.get('lift_10pct', 0):.2f}/{metrics.get('lift_5pct', 0):.2f}/{metrics.get('lift_2pct', 0):.2f}x | "
+                f"capture@10/5/2%={metrics.get('capture_10pct', 0):.2%}/{metrics.get('capture_5pct', 0):.2%}/{metrics.get('capture_2pct', 0):.2%}"
             )
 
         # Feature importance from LASSO (for stability tracking) - use final X_train feature set
@@ -502,7 +500,7 @@ def run_walk_forward() -> None:
     metric_cols = [
         "f1", "roc_auc", "pr_auc", "brier_score", "accuracy", "precision", "recall",
         "baseline_adoption_rate", "lift_10pct", "lift_5pct", "lift_2pct",
-        "capture_10pct", "capture_5pct",
+        "capture_10pct", "capture_5pct", "capture_2pct",
     ]
     agg_dict = {c: "first" for c in metric_cols if c in results_df.columns}
     summary = results_df.groupby(["model", "predict_year"]).agg(agg_dict).reset_index()
@@ -513,7 +511,7 @@ def run_walk_forward() -> None:
     log(summary.to_string(index=False))
 
     # Year-over-year metric stability (std across years)
-    stability_cols = [c for c in ["roc_auc", "pr_auc", "f1", "brier_score", "lift_10pct", "capture_10pct"] if c in results_df.columns]
+    stability_cols = [c for c in ["roc_auc", "pr_auc", "f1", "brier_score", "lift_10pct", "lift_5pct", "lift_2pct", "capture_10pct", "capture_5pct", "capture_2pct"] if c in results_df.columns]
     yoy_stability = None
     if stability_cols:
         yoy_stability = results_df.groupby("model")[stability_cols].std().round(4)
@@ -548,7 +546,7 @@ def run_walk_forward() -> None:
             )
 
     # Average metrics by model across years
-    avg_cols = ["f1", "roc_auc", "pr_auc", "brier_score", "accuracy", "lift_10pct", "capture_10pct"]
+    avg_cols = ["f1", "roc_auc", "pr_auc", "brier_score", "accuracy", "lift_10pct", "lift_5pct", "lift_2pct", "capture_10pct", "capture_5pct", "capture_2pct"]
     avg_cols = [c for c in avg_cols if c in results_df.columns]
     avg_by_model = results_df.groupby("model")[avg_cols].mean().round(4)
     log("\n--- Average by model (across years) ---")
@@ -612,14 +610,18 @@ def run_walk_forward() -> None:
             plt.close()
             log(f"Saved: {OUTPUT_DIR / 'walk_forward_decile_lift_by_year.png'}")
 
-    # Plot metrics over years by model (2x2 grid)
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    # Plot metrics over years by model (2x4 grid for lift/capture)
+    fig, axes = plt.subplots(2, 4, figsize=(16, 10))
     axes = axes.flatten()
     plot_configs = [
         ("roc_auc", "ROC-AUC"),
         ("pr_auc", "PR-AUC"),
         ("lift_10pct", "Top 10% Lift"),
+        ("lift_5pct", "Top 5% Lift"),
+        ("lift_2pct", "Top 2% Lift"),
         ("capture_10pct", "Capture Rate Top 10%"),
+        ("capture_5pct", "Capture Rate Top 5%"),
+        ("capture_2pct", "Capture Rate Top 2%"),
     ]
     for ax, (col, title) in zip(axes, plot_configs):
         if col in results_df.columns:
@@ -629,8 +631,10 @@ def run_walk_forward() -> None:
         ax.set_xlabel("Prediction Year")
         ax.set_ylabel(title)
         ax.set_title(title + " by Year")
-        ax.legend()
+        ax.legend(fontsize=7)
         ax.grid(True, alpha=0.3)
+    for j in range(len(plot_configs), len(axes)):
+        axes[j].set_visible(False)
     plt.tight_layout()
     plt.savefig(OUTPUT_DIR / "walk_forward_metrics_over_time.png", dpi=150)
     plt.close()
