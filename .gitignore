@@ -1,6 +1,7 @@
 *.csv
 remainingWork.md
 __pycache__/
+.mplconfig/
 .DS_Store
 test*
 *.html
