@@ -60,6 +60,14 @@ FEATURE_MIN_SAMPLES = 100
 # High-signal features exempt from min-sample filter (battery/ev_charger/heat_pump ~2x adoption lift)
 FEATURE_MIN_SAMPLES_EXEMPT = ["battery", "ev_charger", "heat_pump"]
 
+# Feature interactions to add (col_a * col_b). Both columns must exist. Evaluated in evaluate_interactions.py.
+INTERACTION_PAIRS = [
+    ("avg_electricity_price", "mainfloorsf"),   # Electricity cost proxy: larger home x higher $/kWh
+    ("average_rate", "mainfloorsf"),            # Mortgage sensitivity for larger homes
+    ("roof_score", "mainfloorsf"),              # Good roof + large home = more solar potential
+    ("closest_fifty_percentage", "avg_electricity_price"),  # Neighbors + high electricity
+]
+
 # Paths
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = PROJECT_ROOT / "data" / "working" / "parsed_permits_by_year.csv"
@@ -114,6 +122,19 @@ def get_feature_types(X: pd.DataFrame) -> tuple[list[str], list[str]]:
     return numeric, categorical
 
 
+def add_interaction_columns(X: pd.DataFrame, pairs: list[tuple[str, str]]) -> pd.DataFrame:
+    """Add interaction columns (col_a * col_b) when both exist and are numeric."""
+    for a, b in pairs:
+        if a in X.columns and b in X.columns:
+            va = pd.to_numeric(X[a], errors="coerce")
+            vb = pd.to_numeric(X[b], errors="coerce")
+            if np.issubdtype(va.dtype, np.number) and np.issubdtype(vb.dtype, np.number):
+                med_a = va.median()
+                med_b = vb.median()
+                X[f"{a}_x_{b}"] = va.fillna(med_a if pd.notna(med_a) else 0) * vb.fillna(med_b if pd.notna(med_b) else 0)
+    return X
+
+
 def add_time_bin_factors(X: pd.DataFrame) -> pd.DataFrame:
     """Convert time_since_sale and time_since_build to categorical bins.
     time_since_sale: 0-10, 10-20, 20-30, 30+ (collapse >=30 into one bin for sample size).
@@ -156,6 +177,7 @@ def prepare_features(df: pd.DataFrame, feature_cols: list[str]) -> pd.DataFrame:
             vals = np.maximum(vals, 1)  # avoid log(0)
             X[c] = np.log1p(vals)
     X = add_time_bin_factors(X)
+    X = add_interaction_columns(X, INTERACTION_PAIRS)
     numeric, categorical = get_feature_types(X)
     for c in numeric:
         if X[c].isnull().any():
