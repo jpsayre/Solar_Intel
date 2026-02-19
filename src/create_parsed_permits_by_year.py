@@ -7,7 +7,8 @@ Filters to straps in data/final/regrid_filtered.csv (alt_parcelnumb1 = strap).
 Computes neighbors_w_solar by year at radii 3, 1, 0.5, 0.25, 0.1, 0.05 miles.
 Computes last_year_neighbors_w_solar (neighbors who had solar in prev year) at 0.05, 0.1, 0.25, 0.5, 1.0 mi.
 Computes closest_fifty_percentage: % of 50 nearest neighbors with solar (year-aware).
-Joins roof_score, adds time_since_sale, time_since_build, recent_build, recent_purchase, solar_next_year.
+Joins roof_score, adds time_since_sale, time_since_build, recent_build, recent_purchase,
+likely_mortgage_rate (rate at purchase or refi if >=1 pct lower), solar_next_year.
 """
 
 import re
@@ -22,6 +23,7 @@ OUTPUT_PATH = Path(__file__).resolve().parents[1] / "data" / "working" / "parsed
 REGRID_FILTERED_PATH = Path(__file__).resolve().parents[1] / "data" / "final" / "regrid_filtered.csv"
 ROOF_SCORE_PATH = Path(__file__).resolve().parents[1] / "data" / "final" / "roof_score.csv"
 ELECTRICITY_PRICE_PATH = Path(__file__).resolve().parents[1] / "data" / "raw" / "Average_retail_price_of_electricity.csv"
+AVG_YEARLY_INTEREST_PATH = Path(__file__).resolve().parents[1] / "data" / "final" / "avg_yearly_interest.csv"
 
 # Columns to exclude from regrid when joining (alt_parcelnumb1 is redundant with strap)
 REGRID_EXCLUDE_COLUMNS = [
@@ -405,6 +407,32 @@ def main():
     result["recent_purchase"] = (
         (sale_year >= min_year_purchase) & sale_year.notna()
     ).astype(int)
+
+    # likely_mortgage_rate: rate at purchase, or lowest rate from purchase year onward if at least 1.0 pct lower (refi)
+    if AVG_YEARLY_INTEREST_PATH.exists():
+        rates_df = pd.read_csv(AVG_YEARLY_INTEREST_PATH)
+        rates = rates_df.set_index("year")["average_rate"].to_dict()
+        years_sorted = sorted(rates.keys())
+        lookup = {}
+        for sy in sale_year.dropna().unique():
+            sy = int(sy)
+            rate_at_purchase = rates.get(sy, np.nan)
+            future_years = [y for y in years_sorted if y >= sy]
+            if not future_years or pd.isna(rate_at_purchase):
+                lookup[sy] = rate_at_purchase
+            else:
+                min_rate = min(rates[y] for y in future_years)
+                if min_rate <= rate_at_purchase - 1.0:
+                    lookup[sy] = min_rate
+                else:
+                    lookup[sy] = rate_at_purchase
+        result["likely_mortgage_rate"] = sale_year.apply(
+            lambda x: lookup.get(int(x), np.nan) if pd.notna(x) else np.nan
+        ).astype(np.float64)
+        result["likely_mortgage_rate"] = result["likely_mortgage_rate"].fillna(rates_df["average_rate"].median())
+        print(f"Added likely_mortgage_rate (refi threshold 1.0 pct)")
+    else:
+        result["likely_mortgage_rate"] = np.nan
 
     # solar_next_year: 1 = year before first solar (for prediction), 2 = already have solar (filter out), 0 = no solar next year
     result = result.sort_values(["strap", "year"])

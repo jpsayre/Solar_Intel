@@ -66,6 +66,14 @@ INTERACTION_PAIRS = [
     ("average_rate", "mainfloorsf"),            # Mortgage sensitivity for larger homes
     ("roof_score", "mainfloorsf"),              # Good roof + large home = more solar potential
     ("closest_fifty_percentage", "avg_electricity_price"),  # Neighbors + high electricity
+    # National 30-year mortgage rate interactions
+    ("average_rate", "recent_purchase"),
+    ("average_rate", "saleprice"),
+    ("avg_electricity_price", "average_rate"),
+    # likely_mortgage_rate (rate at purchase or refi if >=1 pct lower) - same interactions
+    ("likely_mortgage_rate", "recent_purchase"),
+    ("likely_mortgage_rate", "saleprice"),
+    ("avg_electricity_price", "likely_mortgage_rate"),
 ]
 
 # Paths
