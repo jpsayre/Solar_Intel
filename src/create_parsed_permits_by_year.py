@@ -5,6 +5,8 @@ Fills missing years (2012-2026) per strap with 0s.
 Applies configurable persistence: each column can persist for N years (e.g. solar ~25yr, roof ~7yr).
 Filters to straps in data/final/regrid_filtered.csv (alt_parcelnumb1 = strap).
 Computes neighbors_w_solar by year at radii 3, 1, 0.5, 0.25, 0.1, 0.05 miles.
+Computes last_year_neighbors_w_solar (neighbors who had solar in prev year) at 0.05, 0.1, 0.25, 0.5, 1.0 mi.
+Computes closest_fifty_percentage: % of 50 nearest neighbors with solar (year-aware).
 Joins roof_score, adds time_since_sale, time_since_build, recent_build, recent_purchase, solar_next_year.
 """
 
@@ -19,6 +21,63 @@ INPUT_PATH = Path(__file__).resolve().parents[1] / "data" / "working" / "parsed_
 OUTPUT_PATH = Path(__file__).resolve().parents[1] / "data" / "working" / "parsed_permits_by_year.csv"
 REGRID_FILTERED_PATH = Path(__file__).resolve().parents[1] / "data" / "final" / "regrid_filtered.csv"
 ROOF_SCORE_PATH = Path(__file__).resolve().parents[1] / "data" / "final" / "roof_score.csv"
+ELECTRICITY_PRICE_PATH = Path(__file__).resolve().parents[1] / "data" / "raw" / "Average_retail_price_of_electricity.csv"
+
+# Columns to exclude from regrid when joining (alt_parcelnumb1 is redundant with strap)
+REGRID_EXCLUDE_COLUMNS = [
+    "alt_parcelnumb1",
+    "usedesc",
+    "zoning",
+    "zoning_description",
+    "year_built_effective_date",
+    "numstories",
+    "numrooms",
+    "num_bath",
+    "num_bath_partial",
+    "num_bedrooms",
+    "owner",
+    "mailadd",
+    "original_mailing_address",
+    "mail_state2",
+    "address",
+    "scity",
+    "original_address",
+    "city",
+    "county",
+    "state2",
+    "subdivision",
+    "lat",
+    "lon",
+    "recrdareano",
+    "area_building_definition",
+    "designcodedscr",
+    "qualitycodedscr",
+    "bldgclassdscr",
+    "constcodedscr",
+    "effectiveyear",
+    "bsmtsf",
+    "bsmttypedscr",
+    "carstoragesf",
+    "extwalldscrprim",
+    "extwalldscrsec",
+    "intwalldscr",
+    "roof_coverdscr",
+    "sales_cd",
+    "mainfloorsf_int",
+    "saleprice_int",
+    "owneroccupied",
+]
+
+# Required for roof_score join and derived columns - never exclude (silently ignored if in REGRID_EXCLUDE_COLUMNS)
+REGRID_REQUIRED_COLUMNS = [
+    "strap",
+    "original_index",
+    "saledate",
+    "calculated_build_year",
+    "saleprice",
+    "sqft",
+    "mainfloorsf",
+]
 
 RECENT_YEARS = 5  # <5 years for recent_rebuild, recent_purchase
 
@@ -26,6 +85,8 @@ YEAR_MIN = 2012
 YEAR_MAX = 2026
 
 NEIGHBOR_RADIUS_MILES = [3.0, 1.0, 0.5, 0.25, 0.1, 0.05]
+LAST_YEAR_NEIGHBOR_RADIUS_MILES = [0.05, 0.1, 0.25, 0.5, 1.0]
+CLOSEST_N_NEIGHBORS = 50
 EARTH_RADIUS_MILES = 3958.8
 
 # Persistence in years: how long a "1" remains relevant after the permit year.
@@ -52,6 +113,46 @@ PERSISTENCE_YEARS = {
     "pool_hot_tub": 25,
     "evaporative_cooler": 15,
 }
+
+def _load_electricity_by_year() -> pd.DataFrame:
+    """Load electricity price CSV and return avg_electricity_price, electricity_year_trend per year."""
+    df = pd.read_csv(ELECTRICITY_PRICE_PATH)
+    # First row has data; columns are description, units, Jan-01, Feb-01, ..., Nov-25
+    row = df.iloc[0]
+    year_metrics = []
+    for col in df.columns[2:]:  # skip description, units
+        parts = col.split("-")
+        if len(parts) == 2:
+            month_abbr, yy = parts[0], int(parts[1])
+            year = 2000 + yy if yy < 50 else 1900 + yy
+            month_num = {
+                "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+                "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12,
+            }.get(month_abbr)
+            if month_num is not None:
+                try:
+                    val = float(row[col])
+                    year_metrics.append({"year": year, "month": month_num, "price": val})
+                except (ValueError, TypeError):
+                    pass
+    monthly = pd.DataFrame(year_metrics)
+    if monthly.empty:
+        return pd.DataFrame(columns=["year", "avg_electricity_price", "electricity_year_trend"])
+
+    by_year = monthly.groupby("year")
+    avg_price = by_year["price"].mean()
+    slopes = []
+    for year, grp in by_year:
+        grp = grp.sort_values("month")
+        if len(grp) >= 2:
+            x = grp["month"].values.astype(float)
+            y = grp["price"].values.astype(float)
+            slope = np.polyfit(x, y, 1)[0]
+        else:
+            slope = np.nan
+        slopes.append({"year": year, "avg_electricity_price": avg_price[year], "electricity_year_trend": slope})
+    return pd.DataFrame(slopes)
+
 
 def _parse_sale_year(s: pd.Series) -> pd.Series:
     """Parse saledate to integer year. Returns NaN where unparseable."""
@@ -163,8 +264,22 @@ def main():
         "count_0_1mi",
         "count_0_05mi",
     ]
+    last_year_neighbor_cols = [
+        "last_year_neighbors_w_solar_0_05mi",
+        "last_year_neighbors_w_solar_0_1mi",
+        "last_year_neighbors_w_solar_0_25mi",
+        "last_year_neighbors_w_solar_0_5mi",
+        "last_year_neighbors_w_solar_1mi",
+    ]
     for col in neighbor_cols:
         result[col] = 0
+    for col in last_year_neighbor_cols:
+        result[col] = 0
+    result["closest_fifty_percentage"] = 0.0
+
+    # first_solar_year: first year each strap has solar_pv=1 (for last_year_neighbors: "installed in prev year")
+    first_solar_year = result[result["solar_pv"] == 1].groupby("strap")["year"].min()
+    first_solar_year = first_solar_year.to_dict()
 
     print(f"Computing neighbors_w_solar by year at {NEIGHBOR_RADIUS_MILES} mi ...")
     for year in range(YEAR_MIN, YEAR_MAX + 1):
@@ -184,11 +299,22 @@ def main():
                 others = idx_list[idx_list != i]
                 counts[i, j] = np.sum(solar_yes[others] == 1)
 
+        # closest_fifty_percentage: % of 50 nearest neighbors that have solar (this year's snapshot)
+        k = min(CLOSEST_N_NEIGHBORS + 1, len(valid_idx))
+        _, neighbors_k_idx = tree.query(coords_rad, k=k)
+        pct_solar = np.zeros(len(valid_idx), dtype=np.float64)
+        for i in range(len(valid_idx)):
+            others = neighbors_k_idx[i, 1:] if k > 1 else np.array([], dtype=int)
+            n_others = len(others)
+            if n_others > 0:
+                pct_solar[i] = 100.0 * np.sum(solar_yes[others] == 1) / n_others
+
         year_counts = pd.DataFrame(
             {"strap": [regrid_strap[valid_idx[i]] for i in range(len(valid_idx))]}
         )
         for j, col in enumerate(neighbor_cols):
             year_counts[col] = counts[:, j]
+        year_counts["closest_fifty_percentage"] = pct_solar.astype(np.float64)
 
         year_mask = result["year"] == year
         result_year = result.loc[year_mask].merge(
@@ -196,14 +322,53 @@ def main():
         )
         for col in neighbor_cols:
             result.loc[year_mask, col] = result_year[col].fillna(0).astype(int).values
+        result.loc[year_mask, "closest_fifty_percentage"] = (
+            result_year["closest_fifty_percentage"].fillna(0).astype(np.float64).values
+        )
+
+        # last_year_neighbors_w_solar: count neighbors who INSTALLED solar in previous year (Y-1)
+        # Use first_solar_year: only count straps whose first year with solar is Y-1 (then "removed" from future)
+        prev_year = year - 1
+        if prev_year >= YEAR_MIN:
+            solar_yes_prev = np.array(
+                [
+                    1 if first_solar_year.get(str(regrid_strap[i])) == prev_year else 0
+                    for i in valid_idx
+                ],
+                dtype=int,
+            )
+            counts_prev = np.zeros(
+                (len(valid_idx), len(LAST_YEAR_NEIGHBOR_RADIUS_MILES)), dtype=int
+            )
+            for j, radius_mi in enumerate(LAST_YEAR_NEIGHBOR_RADIUS_MILES):
+                radius_rad = radius_mi / EARTH_RADIUS_MILES
+                neighbors_idx = tree.query_radius(coords_rad, r=radius_rad)
+                for i in range(len(valid_idx)):
+                    idx_list = neighbors_idx[i]
+                    others = idx_list[idx_list != i]
+                    counts_prev[i, j] = np.sum(solar_yes_prev[others] == 1)
+            year_counts_prev = pd.DataFrame(
+                {"strap": [regrid_strap[valid_idx[i]] for i in range(len(valid_idx))]}
+            )
+            for j, col in enumerate(last_year_neighbor_cols):
+                year_counts_prev[col] = counts_prev[:, j]
+            result_year_prev = result.loc[year_mask].merge(
+                year_counts_prev, on="strap", how="left", suffixes=("_old", "")
+            )
+            for col in last_year_neighbor_cols:
+                result.loc[year_mask, col] = (
+                    result_year_prev[col].fillna(0).astype(int).values
+                )
 
         print(f"  Year {year} done")
 
-    for col in neighbor_cols:
+    for col in neighbor_cols + last_year_neighbor_cols:
         result[col] = result[col].fillna(0).astype(int)
+    result["closest_fifty_percentage"] = result["closest_fifty_percentage"].fillna(0).astype(np.float64)
 
     # Join regrid_filtered (property attributes, same for each strap year after year)
-    regrid_join = regrid.drop(columns=["alt_parcelnumb1"], errors="ignore")
+    exclude = [c for c in REGRID_EXCLUDE_COLUMNS if c not in REGRID_REQUIRED_COLUMNS]
+    regrid_join = regrid.drop(columns=exclude, errors="ignore")
     result = result.merge(regrid_join, on="strap", how="left")
     print(f"Joined regrid_filtered ({len(regrid_join.columns)} columns)")
 
@@ -215,6 +380,11 @@ def main():
     result["roof_score"] = result["roof_score"].fillna(roof_mean)
     print(f"Joined roof_score (filled {null_count} nulls with mean {roof_mean:.2f})")
 
+    # Join electricity price metrics by year
+    electricity_df = _load_electricity_by_year()
+    result = result.merge(electricity_df, on="year", how="left")
+    print(f"Joined electricity price metrics ({len(electricity_df)} years)")
+
     # Derived columns (year = current year for each row)
     sale_year = _parse_sale_year(result["saledate"])
     build_year = pd.to_numeric(result["calculated_build_year"], errors="coerce")
@@ -224,6 +394,12 @@ def main():
     result["time_since_build"] = (result["year"] - build_year).astype("Int64")
 
     result["recent_build"] = (result["time_since_build"] <= 7).astype(int)
+
+    saleprice = pd.to_numeric(result["saleprice"], errors="coerce")
+    sqft = pd.to_numeric(result["sqft"], errors="coerce")
+    mainfloorsf = pd.to_numeric(result["mainfloorsf"], errors="coerce")
+    result["land_price_sqft"] = saleprice / sqft.replace(0, np.nan)
+    result["building_price_sqft"] = saleprice / mainfloorsf.replace(0, np.nan)
 
     min_year_purchase = result["year"] - RECENT_YEARS
     result["recent_purchase"] = (
