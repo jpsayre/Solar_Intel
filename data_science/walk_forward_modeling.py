@@ -42,7 +42,7 @@ from sklearn.tree import DecisionTreeClassifier
 warnings.filterwarnings("ignore")
 
 # High-scale numeric columns: log-transform before scaling (prices, areas in $ or sqft)
-LOG_TRANSFORM_COLS = ["saleprice", "saleprice_int", "sqft", "area_building", "recrdareano", "mainfloorsf", "mainfloorsf_int", "bsmtsf", "carstoragesf"]
+LOG_TRANSFORM_COLS = ["saleprice", "saleprice_int", "sqft", "area_building", "recrdareano", "mainfloorsf", "mainfloorsf_int", "bsmtsf", "carstoragesf", "electricity_use_proxy"]
 
 # Feature selection: top N features to keep per fold (None = use all)
 N_FEATURES_SELECT = 25
@@ -61,6 +61,16 @@ FEATURE_MIN_SAMPLES = 100
 FEATURE_MIN_SAMPLES_EXEMPT = ["battery", "ev_charger", "heat_pump"]
 
 # Feature interactions to add (col_a * col_b). Both columns must exist. Evaluated in evaluate_interactions.py.
+# Optional: INTERACTION_TRANSFORMS maps (a, b) -> "log_a"|"log_b"|"log_both"|"sqrt_a"|"sqrt_b"|"sqrt_both" for optimized lift (from analyze_interaction_transforms.py)
+INTERACTION_TRANSFORMS: dict[tuple[str, str], str] = {
+    ("likely_mortgage_rate", "saleprice"): "log_b",
+    ("electricity_use_proxy", "likely_mortgage_rate"): "log_both",
+    ("avg_electricity_price", "mainfloorsf"): "log_both",
+    ("avg_electricity_price", "average_rate"): "log_a",
+    ("avg_electricity_price", "likely_mortgage_rate"): "log_a",
+    ("closest_fifty_percentage", "avg_electricity_price"): "log_a",
+    ("average_rate", "mainfloorsf"): "log_both",
+}
 INTERACTION_PAIRS = [
     ("avg_electricity_price", "mainfloorsf"),   # Electricity cost proxy: larger home x higher $/kWh
     ("average_rate", "mainfloorsf"),            # Mortgage sensitivity for larger homes
@@ -74,6 +84,9 @@ INTERACTION_PAIRS = [
     ("likely_mortgage_rate", "recent_purchase"),
     ("likely_mortgage_rate", "saleprice"),
     ("avg_electricity_price", "likely_mortgage_rate"),
+    # electricity_use_proxy interactions (high usage × price/rate = strong solar incentive)
+    ("electricity_use_proxy", "avg_electricity_price"),
+    ("electricity_use_proxy", "likely_mortgage_rate"),
 ]
 
 # Paths
@@ -115,12 +128,19 @@ GARAGE_MAP = {
 }
 
 YEAR_START = 2012
-YEAR_END = 2025  # predict solar in 2025 (train on 2012..2024)
+YEAR_END = 2026  # predict solar through 2026 (train on 2012..2025)
 TEST_STRAP_FRACTION = 0.2
 RANDOM_STATE = 42
 
 # Rolling vs cumulative: None = cumulative (use all years from YEAR_START); int = rolling (use last N years only)
-TRAIN_YEARS_WINDOW = 3  # Set to 5 for rolling 5-year window
+TRAIN_YEARS_WINDOW = 5  # Set to 5 for rolling 5-year window
+
+# Calibration: wrap RF/GB in CalibratedClassifierCV for better probability estimates (boosts lift when baseline shifts)
+USE_CALIBRATION = True
+CALIBRATION_METHOD = "isotonic"  # "isotonic" or "sigmoid" (Platt)
+
+# Year-specific feature selection: for last install year (e.g. 2025), use only recent N years for feature selection
+RECENT_FEATURE_SELECTION_YEARS = 5  # Use 2022-2024 for feature selection when predicting 2025
 
 
 def get_feature_types(X: pd.DataFrame) -> tuple[list[str], list[str]]:
@@ -130,10 +150,47 @@ def get_feature_types(X: pd.DataFrame) -> tuple[list[str], list[str]]:
     return numeric, categorical
 
 
-def add_interaction_columns(X: pd.DataFrame, pairs: list[tuple[str, str]]) -> pd.DataFrame:
-    """Add interaction columns (col_a * col_b) when both exist and are numeric."""
+def _interaction_transform(va: np.ndarray, vb: np.ndarray, name: str) -> np.ndarray:
+    """Apply transform to interaction. va, vb are 1d arrays."""
+    va = np.asarray(va, dtype=float)
+    vb = np.asarray(vb, dtype=float)
+    va = np.where(np.isnan(va), np.nanmedian(va), va)
+    vb = np.where(np.isnan(vb), np.nanmedian(vb), vb)
+    if name == "raw":
+        return va * vb
+    if name == "log_a":
+        return np.log1p(np.maximum(va, 0)) * vb
+    if name == "log_b":
+        return va * np.log1p(np.maximum(vb, 0))
+    if name == "log_both":
+        return np.log1p(np.maximum(va, 0)) * np.log1p(np.maximum(vb, 0))
+    if name == "sqrt_a":
+        return np.sqrt(np.maximum(va, 0)) * vb
+    if name == "sqrt_b":
+        return va * np.sqrt(np.maximum(vb, 0))
+    if name == "sqrt_both":
+        return np.sqrt(np.maximum(va, 0)) * np.sqrt(np.maximum(vb, 0))
+    return va * vb
+
+
+def add_interaction_columns(
+    X: pd.DataFrame,
+    pairs: list[tuple[str, str]],
+    df_raw: pd.DataFrame | None = None,
+) -> pd.DataFrame:
+    """Add interaction columns. Uses INTERACTION_TRANSFORMS when set; else raw product."""
     for a, b in pairs:
-        if a in X.columns and b in X.columns:
+        if a not in X.columns or b not in X.columns:
+            continue
+        transform = INTERACTION_TRANSFORMS.get((a, b), "raw")
+        if transform != "raw" and df_raw is not None and a in df_raw.columns and b in df_raw.columns:
+            va = pd.to_numeric(df_raw[a], errors="coerce").values
+            vb = pd.to_numeric(df_raw[b], errors="coerce").values
+            if len(va) == len(X):
+                X[f"{a}_x_{b}"] = _interaction_transform(va, vb, transform)
+            else:
+                X[f"{a}_x_{b}"] = _interaction_transform(X[a].values, X[b].values, "raw")
+        else:
             va = pd.to_numeric(X[a], errors="coerce")
             vb = pd.to_numeric(X[b], errors="coerce")
             if np.issubdtype(va.dtype, np.number) and np.issubdtype(vb.dtype, np.number):
@@ -185,7 +242,7 @@ def prepare_features(df: pd.DataFrame, feature_cols: list[str]) -> pd.DataFrame:
             vals = np.maximum(vals, 1)  # avoid log(0)
             X[c] = np.log1p(vals)
     X = add_time_bin_factors(X)
-    X = add_interaction_columns(X, INTERACTION_PAIRS)
+    X = add_interaction_columns(X, INTERACTION_PAIRS, df_raw=df)
     numeric, categorical = get_feature_types(X)
     for c in numeric:
         if X[c].isnull().any():
@@ -485,6 +542,25 @@ def compute_decile_lift(
     return deciles
 
 
+def assign_deciles(scores: np.ndarray) -> np.ndarray:
+    """Assign decile to each score: 0.5=top 5%, 1=5-10%, 2=10-20%, ..., 10=bottom 10%."""
+    n = len(scores)
+    if n == 0:
+        return np.array([], dtype=float)
+    order = np.argsort(scores)[::-1]
+    deciles = np.empty(n, dtype=float)
+    # Boundaries (exclusive upper): 0-5%, 5-10%, 10-20%, ..., 90-100%
+    boundaries = [(0.05, 0.5), (0.10, 1), (0.20, 2), (0.30, 3), (0.40, 4), (0.50, 5),
+                  (0.60, 6), (0.70, 7), (0.80, 8), (0.90, 9), (1.01, 10)]
+    for i, idx in enumerate(order):
+        pct = (i + 1) / n  # cumulative fraction (1st = 1/n, 2nd = 2/n, ...)
+        for thresh, val in boundaries:
+            if pct <= thresh:
+                deciles[idx] = val
+                break
+    return deciles
+
+
 def evaluate_model(
     model,
     X_train,
@@ -630,18 +706,22 @@ def run_walk_forward() -> None:
     train_straps = set(straps[n_test:])
     log(f"Train straps: {len(train_straps)}, Test straps: {len(test_straps)}")
 
+    rf_base = RandomForestClassifier(
+        n_estimators=100, random_state=RANDOM_STATE, max_depth=10, class_weight="balanced"
+    )
+    gb_base = GradientBoostingClassifier(
+        n_estimators=100, max_depth=5, random_state=RANDOM_STATE
+    )
     models = {
-        # "Logistic Regression": LogisticRegression(
-        #     max_iter=2000, random_state=RANDOM_STATE, class_weight="balanced"
-        # ),
-        # "Decision Tree": DecisionTreeClassifier(
-        #     random_state=RANDOM_STATE, max_depth=10, class_weight="balanced"
-        # ),
-        "Random Forest": RandomForestClassifier(
-            n_estimators=100, random_state=RANDOM_STATE, max_depth=10, class_weight="balanced"
+        "Random Forest": (
+            CalibratedClassifierCV(rf_base, method=CALIBRATION_METHOD, cv=3)
+            if USE_CALIBRATION
+            else rf_base
         ),
-        "Gradient Boosting": GradientBoostingClassifier(
-            n_estimators=100, max_depth=5, random_state=RANDOM_STATE
+        "Gradient Boosting": (
+            CalibratedClassifierCV(gb_base, method=CALIBRATION_METHOD, cv=3)
+            if USE_CALIBRATION
+            else gb_base
         ),
     }
     try:
@@ -729,26 +809,45 @@ def run_walk_forward() -> None:
         feature_names_fold = [f for f, k in zip(feature_names_fold, keep_mask) if k]
 
         # Feature selection on this fold's training data only
+        # For last install year, use only recent years for feature selection (captures current market patterns)
+        use_recent_for_fs = (
+            install_year == YEAR_END
+            and RECENT_FEATURE_SELECTION_YEARS is not None
+            and (TRAIN_YEARS_WINDOW is None or TRAIN_YEARS_WINDOW >= RECENT_FEATURE_SELECTION_YEARS)
+        )
+        if use_recent_for_fs:
+            train_df_fs = train_df[train_df["year"] >= install_year - RECENT_FEATURE_SELECTION_YEARS]
+            X_train_fs_raw = prepare_features(train_df_fs, feature_cols)
+            X_train_fs = preprocessor.transform(X_train_fs_raw)[:, keep_mask]
+            y_train_fs = train_df_fs["solar_next_year"].astype(int).values
+            n_pos_fs = int(y_train_fs.sum())
+            log(f"  Feature selection on recent {RECENT_FEATURE_SELECTION_YEARS} years only ({len(y_train_fs)} rows, {n_pos_fs} positives)")
+        else:
+            train_df_fs = train_df
+            X_train_fs = X_train_full
+            y_train_fs = y_train
+            n_pos_fs = int(y_train.sum())
+
         selected_features = feature_names_fold
         selected_idx = np.arange(X_train_full.shape[1])
         importance_by_feat = {}
         n_pos = int(y_train.sum())
         if N_FEATURES_SELECT and X_train_full.shape[1] > N_FEATURES_SELECT:
-            if n_pos < FEATURE_SELECTION_MIN_POSITIVES:
-                log(f"  Skipping feature selection: only {n_pos} positives (min={FEATURE_SELECTION_MIN_POSITIVES})")
+            if n_pos_fs < FEATURE_SELECTION_MIN_POSITIVES:
+                log(f"  Skipping feature selection: only {n_pos_fs} positives (min={FEATURE_SELECTION_MIN_POSITIVES})")
             else:
                 try:
                     n_cand = min(N_FEATURES_CANDIDATE, X_train_full.shape[1]) if USE_LIFT_RERANK else N_FEATURES_SELECT
                     candidates, importance_by_feat = run_feature_selection_once(
-                        X_train_full, y_train, feature_names_fold, n_cand, log=log
+                        X_train_fs, y_train_fs, feature_names_fold, n_cand, log=log
                     )
                     if USE_LIFT_RERANK and len(candidates) > N_FEATURES_SELECT:
                         selected_features, importance_by_feat = run_lift_rerank(
-                            X_train_full,
-                            y_train,
+                            X_train_fs,
+                            y_train_fs,
                             candidates,
                             feature_names_fold,
-                            train_df,
+                            train_df_fs,
                             N_FEATURES_SELECT,
                             log=log,
                         )
@@ -875,6 +974,59 @@ def run_walk_forward() -> None:
                 f"lift@20/10/5/2%={metrics_ens.get('lift_20pct', 0):.2f}/{metrics_ens.get('lift_10pct', 0):.2f}/{metrics_ens.get('lift_5pct', 0):.2f}/{metrics_ens.get('lift_2pct', 0):.2f}x | "
                 f"capture@20/10/5/2%={metrics_ens.get('capture_20pct', 0):.2%}/{metrics_ens.get('capture_10pct', 0):.2%}/{metrics_ens.get('capture_5pct', 0):.2%}/{metrics_ens.get('capture_2pct', 0):.2%}"
             )
+
+            # Hybrid: 70% Gradient Boosting + 30% RF+GB Ensemble
+            y_prob_hybrid = 0.7 * model_probs["Gradient Boosting"] + 0.3 * y_prob_ens
+            metrics_hybrid = metrics_from_proba(
+                y_test, y_prob_hybrid, "GB+Ensemble Hybrid (70/30)",
+                baseline_rate, brier_baseline_zero, brier_baseline_rate,
+            )
+            metrics_hybrid["install_year"] = install_year
+            metrics_hybrid["feature_year"] = feature_year
+            metrics_hybrid["train_n"] = len(y_train)
+            metrics_hybrid["test_n"] = len(y_test)
+            fold_results.append(metrics_hybrid)
+            all_results.append(metrics_hybrid)
+            for row in compute_decile_lift(y_test, y_prob_hybrid, baseline_rate):
+                all_decile_results.append({
+                    "model": "GB+Ensemble Hybrid (70/30)",
+                    "install_year": install_year,
+                    "feature_year": feature_year,
+                    **row,
+                })
+            log(
+                f"  GB+Ensemble Hybrid (70/30): ROC-AUC={metrics_hybrid['roc_auc']:.4f}, PR-AUC={metrics_hybrid['pr_auc']:.4f}, "
+                f"Brier={metrics_hybrid['brier_score']:.4f} (Δvs_rate={metrics_hybrid['brier_improvement_vs_rate']:+.4f}) | "
+                f"lift@20/10/5/2%={metrics_hybrid.get('lift_20pct', 0):.2f}/{metrics_hybrid.get('lift_10pct', 0):.2f}/{metrics_hybrid.get('lift_5pct', 0):.2f}/{metrics_hybrid.get('lift_2pct', 0):.2f}x | "
+                f"capture@20/10/5/2%={metrics_hybrid.get('capture_20pct', 0):.2%}/{metrics_hybrid.get('capture_10pct', 0):.2%}/{metrics_hybrid.get('capture_5pct', 0):.2%}/{metrics_hybrid.get('capture_2pct', 0):.2%}"
+            )
+
+            # Output straps without solar as of install_year (for YEAR_END only)
+            if install_year == YEAR_END:
+                full_df = df[(df["year"] == feature_year)]
+                X_full_raw = prepare_features(full_df, feature_cols)
+                X_full = preprocessor.transform(X_full_raw)[:, keep_mask][:, selected_idx]
+                y_prob_gb_full = models["Gradient Boosting"].predict_proba(X_full)[:, 1]
+                y_prob_rf_full = models["Random Forest"].predict_proba(X_full)[:, 1]
+                y_prob_ens_full = (y_prob_rf_full + y_prob_gb_full) / 2
+                y_prob_hybrid_full = 0.7 * y_prob_gb_full + 0.3 * y_prob_ens_full
+                mask_no_solar = (full_df["solar_next_year"].values == 0)
+                straps_no_solar = full_df["strap"].values[mask_no_solar]
+                gb_scores = y_prob_gb_full[mask_no_solar]
+                ens_scores = y_prob_ens_full[mask_no_solar]
+                hybrid_scores = y_prob_hybrid_full[mask_no_solar]
+                out_df = pd.DataFrame({
+                    "strap": straps_no_solar,
+                    "gb_score": gb_scores,
+                    "gb_decile": assign_deciles(gb_scores),
+                    "ensemble_score": ens_scores,
+                    "ensemble_decile": assign_deciles(ens_scores),
+                    "hybrid_score": hybrid_scores,
+                    "hybrid_decile": assign_deciles(hybrid_scores),
+                })
+                out_path = OUTPUT_DIR / f"straps_no_solar_as_of_{install_year}.csv"
+                out_df.to_csv(out_path, index=False)
+                log(f"  Saved {len(out_df):,} straps without solar as of {install_year}: {out_path}")
 
         # LogReg Calibrated: CalibratedClassifierCV (sigmoid default, isotonic when n_pos >= 200)
         # if n_train_pos >= 2:
@@ -1084,7 +1236,7 @@ def run_walk_forward() -> None:
         # Top 10% decile lift by install year: Gradient Boosting vs Random Forest vs Ensemble
         decile1 = decile_df[decile_df["decile"] == 1]
         fig, ax_top10 = plt.subplots(figsize=(10, 5))
-        for model_name in ["Gradient Boosting", "Random Forest", "RF+GB Ensemble"]:
+        for model_name in ["Gradient Boosting", "Random Forest", "RF+GB Ensemble", "GB+Ensemble Hybrid (70/30)"]:
             m = decile1[decile1["model"] == model_name].sort_values("install_year")
             if len(m) > 0:
                 ax_top10.plot(m["install_year"], m["lift"], "-o", label=model_name, markersize=6)
@@ -1103,7 +1255,7 @@ def run_walk_forward() -> None:
         # Top 10% decile capture by install year: Gradient Boosting vs Random Forest vs Ensemble
         decile1 = decile_df[decile_df["decile"] == 1]
         fig, ax_cap = plt.subplots(figsize=(10, 5))
-        for model_name in ["Gradient Boosting", "Random Forest", "RF+GB Ensemble"]:
+        for model_name in ["Gradient Boosting", "Random Forest", "RF+GB Ensemble", "GB+Ensemble Hybrid (70/30)"]:
             m = decile1[decile1["model"] == model_name].sort_values("install_year")
             if len(m) > 0:
                 ax_cap.plot(m["install_year"], m["capture_pct"], "-o", label=model_name, markersize=6)
@@ -1125,7 +1277,7 @@ def run_walk_forward() -> None:
 
         for pct, col, title_suffix in [(5, "lift_5pct", "5%"), (2, "lift_2pct", "2%")]:
             fig, ax = plt.subplots(figsize=(10, 5))
-            for model_name in ["Gradient Boosting", "Random Forest", "RF+GB Ensemble"]:
+            for model_name in ["Gradient Boosting", "Random Forest", "RF+GB Ensemble", "GB+Ensemble Hybrid (70/30)"]:
                 m = results_df[results_df["model"] == model_name].sort_values("install_year")
                 if len(m) > 0:
                     ax.plot(m["install_year"], m[col], "-o", label=model_name, markersize=6)
@@ -1177,6 +1329,44 @@ def run_walk_forward() -> None:
     plt.savefig(OUTPUT_DIR / "walk_forward_metrics_over_time.png", dpi=150)
     plt.close()
     log(f"Saved: {OUTPUT_DIR / 'walk_forward_metrics_over_time.png'}")
+
+    # Hybrid model only: 20%, 10%, 5% lift and capture graphs (exclude 2026, no baseline lines)
+    hybrid_name = "GB+Ensemble Hybrid (70/30)"
+    hybrid_df = results_df[
+        (results_df["model"] == hybrid_name) & (results_df["install_year"] < 2026)
+    ].sort_values("install_year")
+    hybrid_color = "#f59e0b"
+    if len(hybrid_df) > 0:
+        for pct, lift_col, cap_col in [
+            (20, "lift_20pct", "capture_20pct"),
+            (10, "lift_10pct", "capture_10pct"),
+            (5, "lift_5pct", "capture_5pct"),
+        ]:
+            if lift_col in results_df.columns:
+                fig, ax = plt.subplots(figsize=(10, 5))
+                ax.plot(hybrid_df["install_year"], hybrid_df[lift_col], "-o", color=hybrid_color, markersize=8)
+                ax.set_ylim(bottom=0)
+                ax.set_xlabel("Install Year")
+                ax.set_ylabel(f"Top {pct}% Lift (vs baseline)")
+                ax.set_title(f"Top {pct}% Lift by Install Year")
+                ax.grid(True, alpha=0.3)
+                plt.tight_layout()
+                plt.savefig(OUTPUT_DIR / f"hybrid_top{pct}pct_lift_by_year.png", dpi=150)
+                plt.close()
+                log(f"Saved: {OUTPUT_DIR / f'hybrid_top{pct}pct_lift_by_year.png'}")
+            if cap_col in results_df.columns:
+                fig, ax = plt.subplots(figsize=(10, 5))
+                ax.plot(hybrid_df["install_year"], hybrid_df[cap_col], "-o", color=hybrid_color, markersize=8)
+                ax.set_ylim(bottom=0)
+                ax.set_xlabel("Install Year")
+                ax.set_ylabel(f"Top {pct}% Capture (% of positives)")
+                ax.set_title(f"Top {pct}% Capture by Install Year")
+                ax.grid(True, alpha=0.3)
+                ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+                plt.tight_layout()
+                plt.savefig(OUTPUT_DIR / f"hybrid_top{pct}pct_capture_by_year.png", dpi=150)
+                plt.close()
+                log(f"Saved: {OUTPUT_DIR / f'hybrid_top{pct}pct_capture_by_year.png'}")
 
 
 def main() -> None:
