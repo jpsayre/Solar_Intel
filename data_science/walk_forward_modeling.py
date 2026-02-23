@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import warnings
+from datetime import datetime
 from pathlib import Path
 
 os.environ.setdefault("MPLCONFIGDIR", str(Path(__file__).resolve().parent / ".mplconfig"))
@@ -672,6 +673,7 @@ def run_walk_forward() -> None:
     def log(msg: str) -> None:
         print(msg, flush=True)
 
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     log("Loading data...")
     df = load_data()
     log(f"Loaded {len(df)} rows, years {df['year'].min()}-{df['year'].max()}")
@@ -1098,7 +1100,7 @@ def run_walk_forward() -> None:
             ax.legend()
             ax.grid(True, alpha=0.3)
             plt.tight_layout()
-            plt.savefig(OUTPUT_DIR / f"calibration_predict_{install_year}.png", dpi=150)
+            plt.savefig(OUTPUT_DIR / f"calibration_predict_{install_year}_{ts}.png", dpi=150)
             plt.close()
 
     # Summary
@@ -1201,9 +1203,9 @@ def run_walk_forward() -> None:
             ax.legend()
             ax.grid(True, alpha=0.3, axis="y")
             plt.tight_layout()
-            plt.savefig(OUTPUT_DIR / "walk_forward_decile_lift.png", dpi=150)
+            plt.savefig(OUTPUT_DIR / f"walk_forward_decile_lift_{ts}.png", dpi=150)
             plt.close()
-            log(f"Saved: {OUTPUT_DIR / 'walk_forward_decile_lift.png'}")
+            log(f"Saved: {OUTPUT_DIR / f'walk_forward_decile_lift_{ts}.png'}")
 
         # Decile lift by year (Gradient Boosting) - line chart
         if len(lr_decile) > 0:
@@ -1219,9 +1221,9 @@ def run_walk_forward() -> None:
             ax.legend(ncol=2, fontsize=8)
             ax.grid(True, alpha=0.3)
             plt.tight_layout()
-            plt.savefig(OUTPUT_DIR / "walk_forward_decile_lift_by_year.png", dpi=150)
+            plt.savefig(OUTPUT_DIR / f"walk_forward_decile_lift_by_year_{ts}.png", dpi=150)
             plt.close()
-            log(f"Saved: {OUTPUT_DIR / 'walk_forward_decile_lift_by_year.png'}")
+            log(f"Saved: {OUTPUT_DIR / f'walk_forward_decile_lift_by_year_{ts}.png'}")
 
         # Helper to add baseline adoption rate on secondary y-axis
         def _add_baseline_axis(ax, results_df: pd.DataFrame) -> None:
@@ -1248,9 +1250,9 @@ def run_walk_forward() -> None:
         ax_top10.legend(loc="upper left")
         ax_top10.grid(True, alpha=0.3)
         plt.tight_layout()
-        plt.savefig(OUTPUT_DIR / "walk_forward_top10_decile_lift_by_year.png", dpi=150)
+        plt.savefig(OUTPUT_DIR / f"walk_forward_top10_decile_lift_by_year_{ts}.png", dpi=150)
         plt.close()
-        log(f"Saved: {OUTPUT_DIR / 'walk_forward_top10_decile_lift_by_year.png'}")
+        log(f"Saved: {OUTPUT_DIR / f'walk_forward_top10_decile_lift_by_year_{ts}.png'}")
 
         # Top 10% decile capture by install year: Gradient Boosting vs Random Forest vs Ensemble
         decile1 = decile_df[decile_df["decile"] == 1]
@@ -1267,9 +1269,9 @@ def run_walk_forward() -> None:
         ax_cap.grid(True, alpha=0.3)
         ax_cap.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
         plt.tight_layout()
-        plt.savefig(OUTPUT_DIR / "walk_forward_top10_decile_capture_by_year.png", dpi=150)
+        plt.savefig(OUTPUT_DIR / f"walk_forward_top10_decile_capture_by_year_{ts}.png", dpi=150)
         plt.close()
-        log(f"Saved: {OUTPUT_DIR / 'walk_forward_top10_decile_capture_by_year.png'}")
+        log(f"Saved: {OUTPUT_DIR / f'walk_forward_top10_decile_capture_by_year_{ts}.png'}")
 
     # Top 5% and 2% lift by install year (from results_df) with baseline adoption rate
     if "lift_5pct" in results_df.columns and "lift_2pct" in results_df.columns:
@@ -1294,9 +1296,9 @@ def run_walk_forward() -> None:
             ax.legend(loc="upper left")
             ax.grid(True, alpha=0.3)
             plt.tight_layout()
-            plt.savefig(OUTPUT_DIR / f"walk_forward_top{pct}pct_lift_by_year.png", dpi=150)
+            plt.savefig(OUTPUT_DIR / f"walk_forward_top{pct}pct_lift_by_year_{ts}.png", dpi=150)
             plt.close()
-            log(f"Saved: {OUTPUT_DIR / f'walk_forward_top{pct}pct_lift_by_year.png'}")
+            log(f"Saved: {OUTPUT_DIR / f'walk_forward_top{pct}pct_lift_by_year_{ts}.png'}")
 
     # Plot metrics over years by model (2x5 grid for lift/capture)
     fig, axes = plt.subplots(2, 5, figsize=(20, 10))
@@ -1326,9 +1328,9 @@ def run_walk_forward() -> None:
     for j in range(len(plot_configs), len(axes)):
         axes[j].set_visible(False)
     plt.tight_layout()
-    plt.savefig(OUTPUT_DIR / "walk_forward_metrics_over_time.png", dpi=150)
+    plt.savefig(OUTPUT_DIR / f"walk_forward_metrics_over_time_{ts}.png", dpi=150)
     plt.close()
-    log(f"Saved: {OUTPUT_DIR / 'walk_forward_metrics_over_time.png'}")
+    log(f"Saved: {OUTPUT_DIR / f'walk_forward_metrics_over_time_{ts}.png'}")
 
     # Hybrid model only: 20%, 10%, 5% lift and capture graphs (exclude 2026, no baseline lines)
     hybrid_name = "GB+Ensemble Hybrid (70/30)"
@@ -1351,9 +1353,9 @@ def run_walk_forward() -> None:
                 ax.set_title(f"Top {pct}% Lift by Install Year")
                 ax.grid(True, alpha=0.3)
                 plt.tight_layout()
-                plt.savefig(OUTPUT_DIR / f"hybrid_top{pct}pct_lift_by_year.png", dpi=150)
+                plt.savefig(OUTPUT_DIR / f"hybrid_top{pct}pct_lift_by_year_{ts}.png", dpi=150)
                 plt.close()
-                log(f"Saved: {OUTPUT_DIR / f'hybrid_top{pct}pct_lift_by_year.png'}")
+                log(f"Saved: {OUTPUT_DIR / f'hybrid_top{pct}pct_lift_by_year_{ts}.png'}")
             if cap_col in results_df.columns:
                 fig, ax = plt.subplots(figsize=(10, 5))
                 ax.plot(hybrid_df["install_year"], hybrid_df[cap_col], "-o", color=hybrid_color, markersize=8)
@@ -1364,9 +1366,9 @@ def run_walk_forward() -> None:
                 ax.grid(True, alpha=0.3)
                 ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
                 plt.tight_layout()
-                plt.savefig(OUTPUT_DIR / f"hybrid_top{pct}pct_capture_by_year.png", dpi=150)
+                plt.savefig(OUTPUT_DIR / f"hybrid_top{pct}pct_capture_by_year_{ts}.png", dpi=150)
                 plt.close()
-                log(f"Saved: {OUTPUT_DIR / f'hybrid_top{pct}pct_capture_by_year.png'}")
+                log(f"Saved: {OUTPUT_DIR / f'hybrid_top{pct}pct_capture_by_year_{ts}.png'}")
 
 
 def main() -> None:

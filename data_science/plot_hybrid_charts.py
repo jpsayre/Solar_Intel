@@ -6,6 +6,7 @@ Run this after walk_forward_modeling.py has produced walk_forward_metrics.csv.
 No need to re-run the full modeling script to update charts.
 """
 
+from datetime import datetime
 from pathlib import Path
 
 import os
@@ -37,6 +38,7 @@ def main() -> None:
         print(f"No data for {HYBRID_NAME} (excluding 2026).")
         return
 
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     for pct, lift_col, cap_col in [
         (20, "lift_20pct", "capture_20pct"),
         (10, "lift_10pct", "capture_10pct"),
@@ -51,9 +53,9 @@ def main() -> None:
             ax.set_title(f"Top {pct}% Lift by Install Year")
             ax.grid(True, alpha=0.3)
             plt.tight_layout()
-            plt.savefig(OUTPUT_DIR / f"hybrid_top{pct}pct_lift_by_year.png", dpi=150)
+            plt.savefig(OUTPUT_DIR / f"hybrid_top{pct}pct_lift_by_year_{ts}.png", dpi=150)
             plt.close()
-            print(f"Saved: {OUTPUT_DIR / f'hybrid_top{pct}pct_lift_by_year.png'}")
+            print(f"Saved: {OUTPUT_DIR / f'hybrid_top{pct}pct_lift_by_year_{ts}.png'}")
 
         if cap_col in results_df.columns:
             fig, ax = plt.subplots(figsize=(10, 5))
@@ -65,9 +67,9 @@ def main() -> None:
             ax.grid(True, alpha=0.3)
             ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
             plt.tight_layout()
-            plt.savefig(OUTPUT_DIR / f"hybrid_top{pct}pct_capture_by_year.png", dpi=150)
+            plt.savefig(OUTPUT_DIR / f"hybrid_top{pct}pct_capture_by_year_{ts}.png", dpi=150)
             plt.close()
-            print(f"Saved: {OUTPUT_DIR / f'hybrid_top{pct}pct_capture_by_year.png'}")
+            print(f"Saved: {OUTPUT_DIR / f'hybrid_top{pct}pct_capture_by_year_{ts}.png'}")
 
 
 if __name__ == "__main__":

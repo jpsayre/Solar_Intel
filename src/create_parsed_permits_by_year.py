@@ -7,8 +7,11 @@ Filters to straps in data/final/regrid_filtered.csv (alt_parcelnumb1 = strap).
 Computes neighbors_w_solar by year at radii 3, 1, 0.5, 0.25, 0.1, 0.05 miles.
 Computes last_year_neighbors_w_solar (neighbors who had solar in prev year) at 0.05, 0.1, 0.25, 0.5, 1.0 mi.
 Computes closest_fifty_percentage: % of 50 nearest neighbors with solar (year-aware).
-Joins roof_score, adds time_since_sale, time_since_build, recent_build, recent_purchase,
-likely_mortgage_rate (rate at purchase or refi if >=1 pct lower), solar_next_year.
+Joins roof_score. Adds calculated_roof_age (time-aware, permit-aware: year - build_year, resets to 0 when roof permit pulled),
+time_since_sale, time_since_build, recent_build, recent_purchase,
+electricity_use_proxy (area × load factors: electric heat, AC, pool, EV, battery, etc.),
+likely_mortgage_rate (time-aware: starts 2012, drops when rate falls >0.75 pct, resets on sale year),
+solar_next_year.
 """
 
 import re
@@ -81,7 +84,7 @@ REGRID_REQUIRED_COLUMNS = [
     "mainfloorsf",
 ]
 
-RECENT_YEARS = 5  # <5 years for recent_rebuild, recent_purchase
+RECENT_YEARS = 3  # <5 years for recent_rebuild, recent_purchase
 
 YEAR_MIN = 2012
 YEAR_MAX = 2026
@@ -231,6 +234,14 @@ def main():
     result = full_years.merge(result, on=["strap", "year"], how="left")
     result[BINARY_COLUMNS] = result[BINARY_COLUMNS].fillna(0).astype(int)
 
+    # Roof permit years (before persistence) - years when a roof permit was actually pulled
+    roof_permit_years = (
+        result[result["roof_new_or_replace"] == 1]
+        .groupby("strap")["year"]
+        .apply(set)
+        .to_dict()
+    )
+
     # Apply configurable persistence: for each column, a "1" persists for N years
     result = result.sort_values(["strap", "year"])
     for col in BINARY_COLUMNS:
@@ -374,6 +385,31 @@ def main():
     result = result.merge(regrid_join, on="strap", how="left")
     print(f"Joined regrid_filtered ({len(regrid_join.columns)} columns)")
 
+    # calculated_roof_age: time-aware, permit-aware. Starts at year - calculated_build_year, resets to 0 when roof permit pulled, then increments.
+    build_year = pd.to_numeric(result["calculated_build_year"], errors="coerce")
+
+    def _roof_age_series(strap_rows: pd.DataFrame) -> pd.Series:
+        strap = strap_rows["strap"].iloc[0]
+        permit_years = roof_permit_years.get(str(strap), set())
+        by = strap_rows["_build_year"].iloc[0]
+        out = []
+        prev_age = None
+        for _, row in strap_rows.sort_values("year").iterrows():
+            y = row["year"]
+            if prev_age is None:
+                prev_age = 0 if y in permit_years else (max(0, int(y - by)) if pd.notna(by) else 0)
+            else:
+                prev_age = 0 if y in permit_years else prev_age + 1
+            out.append(prev_age)
+        return pd.Series(out, index=strap_rows.index)
+
+    result["_build_year"] = build_year
+    result = result.sort_values(["strap", "year"])
+    roof_age_series = result.groupby("strap", group_keys=False).apply(_roof_age_series)
+    result["calculated_roof_age"] = roof_age_series.astype(np.int64)
+    result.drop(columns=["_build_year"], inplace=True)
+    print("Added calculated_roof_age (time-aware, permit-aware: resets to 0 when roof permit pulled)")
+
     # Join roof_score (on original_index from regrid)
     roof_score_df = pd.read_csv(ROOF_SCORE_PATH)
     result = result.merge(roof_score_df, on="original_index", how="left")
@@ -403,34 +439,72 @@ def main():
     result["land_price_sqft"] = saleprice / sqft.replace(0, np.nan)
     result["building_price_sqft"] = saleprice / mainfloorsf.replace(0, np.nan)
 
+    # recent_purchase: sale happened by this year AND within last RECENT_YEARS (sale_year in [year-5, year])
     min_year_purchase = result["year"] - RECENT_YEARS
     result["recent_purchase"] = (
-        (sale_year >= min_year_purchase) & sale_year.notna()
+        (sale_year <= result["year"])
+        & (sale_year >= min_year_purchase)
+        & sale_year.notna()
     ).astype(int)
 
-    # likely_mortgage_rate: rate at purchase, or lowest rate from purchase year onward if at least 1.0 pct lower (refi)
+    # electricity_use_proxy: weighted proxy for expected electricity use (area + heating/AC type + appliances)
+    base_area = result["mainfloorsf"].fillna(result["area_building"])
+    base_area = pd.to_numeric(base_area, errors="coerce").fillna(base_area.median()).clip(lower=100)
+    heating_str = result["heatingdscr"].astype(str).str.upper() if "heatingdscr" in result.columns else pd.Series("", index=result.index)
+    ac_str = result["acdscr"].astype(str).str.upper() if "acdscr" in result.columns else pd.Series("", index=result.index)
+    electric_heating = ((heating_str.str.contains("ELECTRIC|HEAT PUMP", na=False)) | (result["heat_pump"] == 1)).astype(int)
+    central_ac = ((ac_str.str.contains("WHOLE HOUSE", na=False)) | (result["ac"] == 1)).astype(int)
+    evaporative = ((ac_str.str.contains("EVAPORATIVE", na=False)) | (result["evaporative_cooler"] == 1)).astype(int)
+    result["electricity_use_proxy"] = (
+        base_area
+        * (
+            1.0
+            + 0.15 * electric_heating
+            + 0.25 * central_ac
+            + 0.05 * evaporative
+            + 0.20 * result["pool_hot_tub"].fillna(0)
+            + 0.30 * result["ev_charger"].fillna(0)
+            + 0.10 * result["battery"].fillna(0)
+            + 0.10 * result["water_heater_electric"].fillna(0)
+        )
+    ).astype(np.float64)
+    print("Added electricity_use_proxy (area × load factors: electric heat, AC, pool, EV, battery, etc.)")
+
+    # likely_mortgage_rate: time-aware. Starts at 2012 rate, drops when national rate falls >0.75 pct, resets on sale year.
+    REFI_THRESHOLD = 0.75
     if AVG_YEARLY_INTEREST_PATH.exists():
         rates_df = pd.read_csv(AVG_YEARLY_INTEREST_PATH)
         rates = rates_df.set_index("year")["average_rate"].to_dict()
         years_sorted = sorted(rates.keys())
-        lookup = {}
-        for sy in sale_year.dropna().unique():
-            sy = int(sy)
-            rate_at_purchase = rates.get(sy, np.nan)
-            future_years = [y for y in years_sorted if y >= sy]
-            if not future_years or pd.isna(rate_at_purchase):
-                lookup[sy] = rate_at_purchase
-            else:
-                min_rate = min(rates[y] for y in future_years)
-                if min_rate <= rate_at_purchase - 1.0:
-                    lookup[sy] = min_rate
-                else:
-                    lookup[sy] = rate_at_purchase
-        result["likely_mortgage_rate"] = sale_year.apply(
-            lambda x: lookup.get(int(x), np.nan) if pd.notna(x) else np.nan
-        ).astype(np.float64)
-        result["likely_mortgage_rate"] = result["likely_mortgage_rate"].fillna(rates_df["average_rate"].median())
-        print(f"Added likely_mortgage_rate (refi threshold 1.0 pct)")
+        rate_median = rates_df["average_rate"].median()
+
+        def _likely_rate_series(strap_rows: pd.DataFrame) -> pd.Series:
+            sy = strap_rows["_sale_year"].iloc[0]
+            out = []
+            prev_likely = None
+            for _, row in strap_rows.sort_values("year").iterrows():
+                y = row["year"]
+                r = rates.get(y, np.nan)
+                if pd.isna(r):
+                    r = rate_median
+                if prev_likely is None:
+                    prev_likely = r
+                elif pd.notna(sy) and y == int(sy):
+                    prev_likely = r
+                elif r <= prev_likely - REFI_THRESHOLD:
+                    prev_likely = r
+                out.append(prev_likely)
+            return pd.Series(out, index=strap_rows.index)
+
+        result["_sale_year"] = sale_year
+        result = result.sort_values(["strap", "year"])
+        likely_series = result.groupby("strap", group_keys=False).apply(
+            _likely_rate_series, include_groups=False
+        )
+        result["likely_mortgage_rate"] = likely_series
+        result.drop(columns=["_sale_year"], inplace=True)
+        result["likely_mortgage_rate"] = result["likely_mortgage_rate"].fillna(rate_median).astype(np.float64)
+        print(f"Added likely_mortgage_rate (time-aware, refi threshold {REFI_THRESHOLD} pct)")
     else:
         result["likely_mortgage_rate"] = np.nan
 
