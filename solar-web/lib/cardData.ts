@@ -16,6 +16,8 @@ type HomeRow = {
   saledate?: string | null;
   calculated_build_year?: number | string | null;
   building_sqft?: number | string | null;
+  model_score?: number | null;
+  roof_score?: number | null;
   [key: string]: unknown;
 };
 
@@ -75,7 +77,12 @@ export function buildListingCardData(row: HomeRow): {
         : `${String(row.city).toUpperCase()}, ${String(row.state).toUpperCase()}`
       : `ID: ${row.original_index}`;
 
+  const modelScore = row.model_score != null ? String(row.model_score) : "—";
+  const roofScore = row.roof_score != null ? String(row.roof_score) : "—";
+
   const detailRows: CardRow[] = [
+    { label: "Model score", value: modelScore },
+    { label: "Roof score", value: roofScore },
     { label: "Owner name", value: ownerName },
     { label: "Orientation", value: getValue(row, "qualified_orientations") },
     { label: "Sale price", value: formatSalePrice(row.saleprice) },

@@ -13,6 +13,7 @@ export type MapPoint = {
   lng: number;
   index: string;
   address: string;
+  score: number | null;
 };
 
 export type MapBounds = {
@@ -22,9 +23,17 @@ export type MapBounds = {
   west: number;
 };
 
-const ORANGE = "#f59e0b";
 const DEFAULT_CENTER: [number, number] = [39.7, -105.0];
 const DEFAULT_ZOOM = 10;
+
+/** Interpolate from blue (score=0) to red (score=100) via HSL. */
+function scoreToColor(score: number | null): string {
+  if (score == null) return "#9ca3af"; // gray for no score
+  const clamped = Math.max(0, Math.min(100, score));
+  // hue: 240 (blue) at 0, 0 (red) at 100
+  const hue = 240 - (clamped / 100) * 240;
+  return `hsl(${hue}, 85%, 50%)`;
+}
 
 function FitBounds({ points }: { points: MapPoint[] }) {
   const map = useMap();
@@ -156,14 +165,16 @@ export default function HomeMap({
           <MapBoundsReporter onBoundsChange={onBoundsChange} onViewChange={onViewChange} />
         ) : null}
         <MarkerClusterGroup chunkedLoading>
-          {pointsList.map((p) => (
+          {pointsList.map((p) => {
+            const color = scoreToColor(p.score);
+            return (
             <CircleMarker
               key={p.index}
               center={[p.lat, p.lng]}
               radius={8}
               pathOptions={{
-                color: ORANGE,
-                fillColor: ORANGE,
+                color,
+                fillColor: color,
                 fillOpacity: 1,
                 weight: 2,
               }}
@@ -177,7 +188,8 @@ export default function HomeMap({
                 {p.address}
               </Tooltip>
             </CircleMarker>
-          ))}
+            );
+          })}
         </MarkerClusterGroup>
       </MapContainer>
     </div>

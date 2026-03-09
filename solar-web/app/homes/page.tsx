@@ -51,8 +51,17 @@ const FILTER_OPTIONS_LIMIT = 2000;
 type HomeRow = {
   index: string;
   original_index: number;
+  model_score?: number | null;
+  roof_score?: number | null;
   [key: string]: unknown;
 };
+
+type SortOption = "model_score" | "roof_score" | "index";
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: "model_score", label: "Model score (high → low)" },
+  { value: "roof_score", label: "Roof score (high → low)" },
+  { value: "index", label: "Index (A → Z)" },
+];
 
 const ROOF_ORIENTATION_OPTIONS = ["East", "South", "West"] as const;
 
@@ -114,6 +123,9 @@ function HomesPageContent() {
   const [imgUrls, setImgUrls] = useState<Record<number, string>>({});
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
 
+  const [sortBy, setSortBy] = useState<SortOption>("model_score");
+  const [scoresByIndex, setScoresByIndex] = useState<Record<string, { model_score: number | null; roof_score: number | null }>>({});
+
   const [followedHomeIndices, setFollowedHomeIndices] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -143,6 +155,27 @@ function HomesPageContent() {
     loadFollows();
     return () => { alive = false; };
   }, []);
+
+  // Fetch home_scores for current rows
+  useEffect(() => {
+    let alive = true;
+    const list = mapBounds ? boundsRows : (rows ?? []);
+    if (list.length === 0) return;
+    const indices = list.map((r) => r.index);
+    supabaseBrowser
+      .from("home_scores")
+      .select("home_index, model_score, roof_score")
+      .in("home_index", indices)
+      .then(({ data }) => {
+        if (!alive) return;
+        const byIndex: Record<string, { model_score: number | null; roof_score: number | null }> = {};
+        for (const row of (data ?? []) as { home_index: string; model_score: number | null; roof_score: number | null }[]) {
+          byIndex[row.home_index] = { model_score: row.model_score, roof_score: row.roof_score };
+        }
+        setScoresByIndex(byIndex);
+      });
+    return () => { alive = false; };
+  }, [mapBounds, boundsRows, rows]);
 
   useEffect(() => {
     let alive = true;
@@ -461,6 +494,14 @@ function HomesPageContent() {
 
   const displayedRows = useMemo(() => {
     let list = mapBounds ? boundsRows : (rows ?? []);
+
+    // Merge scores onto rows
+    list = list.map((r) => {
+      const scores = scoresByIndex[r.index];
+      if (!scores) return r;
+      return { ...r, model_score: scores.model_score, roof_score: scores.roof_score };
+    });
+
     const tagLower = tagFilter.trim().toLowerCase();
     const excludeLower = excludeTagFilter.trim().toLowerCase();
     if (tagLower || excludeLower || excludeDoNotContact) {
@@ -475,8 +516,24 @@ function HomesPageContent() {
         return true;
       });
     }
+
+    // Sort
+    list = [...list].sort((a, b) => {
+      if (sortBy === "model_score") {
+        const sa = (a.model_score as number | null | undefined) ?? -1;
+        const sb = (b.model_score as number | null | undefined) ?? -1;
+        return sb - sa;
+      }
+      if (sortBy === "roof_score") {
+        const sa = (a.roof_score as number | null | undefined) ?? -1;
+        const sb = (b.roof_score as number | null | undefined) ?? -1;
+        return sb - sa;
+      }
+      return String(a.index).localeCompare(String(b.index));
+    });
+
     return list;
-  }, [mapBounds, boundsRows, rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex]);
+  }, [mapBounds, boundsRows, rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex, scoresByIndex, sortBy]);
 
   const mapPoints = useMemo(() => {
     const list = mapBounds ? boundsRows : (rows ?? []);
@@ -491,14 +548,16 @@ function HomesPageContent() {
       )
       .map((r) => {
         const { addressLine1, addressLine2 } = buildListingCardData(r);
+        const scores = scoresByIndex[r.index];
         return {
           lat: Number(r.latitude),
           lng: Number(r.longitude),
           index: r.index,
           address: `${addressLine1}, ${addressLine2}`,
+          score: scores?.model_score ?? null,
         };
       });
-  }, [rows, mapBounds, boundsRows]);
+  }, [rows, mapBounds, boundsRows, scoresByIndex]);
 
   if (err) {
     return (
@@ -698,6 +757,23 @@ function HomesPageContent() {
               Clear all filters
             </button>
           )}
+        </div>
+
+        <div className="mb-4 flex items-center gap-3">
+          <label className="flex items-center gap-2">
+            <span className="text-xs font-medium text-slate-500">Sort by</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+            >
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div className="mb-8">
