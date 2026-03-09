@@ -640,7 +640,7 @@ function HomesPageContent() {
       <div className="mx-auto max-w-4xl">
         <header className="mb-6">
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-            Qualified Roofs Explorer
+            Explorer
           </h1>
         </header>
 
@@ -778,9 +778,7 @@ function HomesPageContent() {
                   className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
-            </div>
-            <div className="flex flex-wrap items-end gap-4">
-              <label className="flex items-center gap-2">
+              <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-slate-500">Sort by</span>
                 <select
                   value={sortBy}
@@ -794,14 +792,14 @@ function HomesPageContent() {
                   ))}
                 </select>
               </label>
-              <label className="flex cursor-pointer items-center gap-2 py-2">
+              <label className="flex cursor-pointer items-center gap-2 self-end py-2">
                 <input
                   type="checkbox"
                   checked={excludeDoNotContact}
                   onChange={(e) => setExcludeDoNotContact(e.target.checked)}
                   className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
                 />
-                <span className="text-sm text-slate-600">Exclude do not contact homes</span>
+                <span className="text-sm text-slate-600">Exclude do not contact</span>
               </label>
             </div>
           </div>
