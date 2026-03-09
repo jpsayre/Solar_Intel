@@ -30,19 +30,24 @@ export default function PricingPage() {
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 <tr>
-                  <td className="px-5 py-4 text-slate-700">Up to 15,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.35 / home</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.175 / home</td>
+                  <td className="px-5 py-4 text-slate-700">Up to 5,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$1.00 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.50 / home</td>
                 </tr>
                 <tr>
-                  <td className="px-5 py-4 text-slate-700">15,000 &ndash; 50,000</td>
+                  <td className="px-5 py-4 text-slate-700">5,000 &ndash; 20,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.60 / home</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.30 / home</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.15 / home</td>
+                </tr>
+                <tr>
+                  <td className="px-5 py-4 text-slate-700">20,000 &ndash; 50,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.40 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.20 / home</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">50,000 &ndash; 150,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.25 / home</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.125 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.30 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.15 / home</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">150,000+</td>
