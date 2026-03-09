@@ -125,6 +125,8 @@ function HomesPageContent() {
 
   const [sortBy, setSortBy] = useState<SortOption>("model_score");
   const [scoresByIndex, setScoresByIndex] = useState<Record<string, { model_score: number | null; roof_score: number | null }>>({});
+  const [minModelScore, setMinModelScore] = useState("");
+  const [minRoofScore, setMinRoofScore] = useState("");
 
   const [followedHomeIndices, setFollowedHomeIndices] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
@@ -517,6 +519,16 @@ function HomesPageContent() {
       });
     }
 
+    // Score minimum filters
+    const minModel = parseInt(minModelScore, 10);
+    const minRoof = parseInt(minRoofScore, 10);
+    if (Number.isFinite(minModel)) {
+      list = list.filter((r) => (r.model_score as number | null | undefined) != null && (r.model_score as number) >= minModel);
+    }
+    if (Number.isFinite(minRoof)) {
+      list = list.filter((r) => (r.roof_score as number | null | undefined) != null && (r.roof_score as number) >= minRoof);
+    }
+
     // Sort
     list = [...list].sort((a, b) => {
       if (sortBy === "model_score") {
@@ -533,7 +545,7 @@ function HomesPageContent() {
     });
 
     return list;
-  }, [mapBounds, boundsRows, rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex, scoresByIndex, sortBy]);
+  }, [mapBounds, boundsRows, rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex, scoresByIndex, sortBy, minModelScore, minRoofScore]);
 
   const mapPoints = useMemo(() => {
     const list = mapBounds ? boundsRows : (rows ?? []);
@@ -595,6 +607,8 @@ function HomesPageContent() {
     setTagFilter("");
     setExcludeTagFilter("");
     setExcludeDoNotContact(true);
+    setMinModelScore("");
+    setMinRoofScore("");
   };
 
   const toggleRoofOrientation = (orientation: string) => {
@@ -617,7 +631,9 @@ function HomesPageContent() {
     addressSearchApplied ||
     tagFilter.trim() ||
     excludeTagFilter.trim() ||
-    !excludeDoNotContact;
+    !excludeDoNotContact ||
+    minModelScore.trim() ||
+    minRoofScore.trim();
 
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
@@ -718,6 +734,30 @@ function HomesPageContent() {
               </div>
             </div>
             <div className="flex flex-wrap items-end gap-4">
+              <div className="flex flex-col gap-1 sm:w-28">
+                <span className="text-xs font-medium text-slate-500">Min model score</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={minModelScore}
+                  onChange={(e) => setMinModelScore(e.target.value)}
+                  placeholder="0"
+                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
+              <div className="flex flex-col gap-1 sm:w-28">
+                <span className="text-xs font-medium text-slate-500">Min roof score</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  value={minRoofScore}
+                  onChange={(e) => setMinRoofScore(e.target.value)}
+                  placeholder="0"
+                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+              </div>
               <div className="flex flex-col gap-1 sm:w-48">
                 <span className="text-xs font-medium text-slate-500">Filter by tag</span>
                 <input
@@ -738,6 +778,22 @@ function HomesPageContent() {
                   className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
+            </div>
+            <div className="flex flex-wrap items-end gap-4">
+              <label className="flex items-center gap-2">
+                <span className="text-xs font-medium text-slate-500">Sort by</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                >
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <label className="flex cursor-pointer items-center gap-2 py-2">
                 <input
                   type="checkbox"
@@ -758,23 +814,6 @@ function HomesPageContent() {
               Clear all filters
             </button>
           )}
-        </div>
-
-        <div className="mb-4 flex items-center gap-3">
-          <label className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-500">Sort by</span>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-            >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
 
         <div className="mb-8">
