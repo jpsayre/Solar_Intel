@@ -27,6 +27,15 @@ export type MapBounds = {
 const DEFAULT_CENTER: [number, number] = [39.7, -105.0];
 const DEFAULT_ZOOM = 10;
 
+function createGrayClusterIcon(cluster: L.MarkerCluster) {
+  const count = cluster.getChildCount();
+  return L.divIcon({
+    html: `<div style="background:rgba(156,163,175,0.75);color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border:2px solid rgba(107,114,128,0.6)">${count}</div>`,
+    className: "",
+    iconSize: L.point(36, 36),
+  });
+}
+
 /** Interpolate from blue (score=0) to red (score=100) via HSL. */
 function scoreToColor(score: number | null): string {
   if (score == null) return "#9ca3af"; // gray for no score
@@ -165,7 +174,7 @@ export default function HomeMap({
         {onBoundsChange ? (
           <MapBoundsReporter onBoundsChange={onBoundsChange} onViewChange={onViewChange} />
         ) : null}
-        <MarkerClusterGroup chunkedLoading disableClusteringAtZoom={13} maxClusterRadius={40}>
+        <MarkerClusterGroup chunkedLoading disableClusteringAtZoom={13} maxClusterRadius={40} iconCreateFunction={createGrayClusterIcon}>
           {pointsList.map((p) => {
             const color = scoreToColor(p.score);
             return (
