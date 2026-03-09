@@ -14,6 +14,7 @@ export type MapPoint = {
   index: string;
   address: string;
   score: number | null;
+  roofScore: number | null;
 };
 
 export type MapBounds = {
@@ -185,7 +186,12 @@ export default function HomeMap({
               }}
             >
               <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
-                {p.address}
+                <div>
+                  <div>{p.address}</div>
+                  <div style={{ fontSize: 11, opacity: 0.85 }}>
+                    Model: {p.score ?? "—"} · Roof: {p.roofScore ?? "—"}
+                  </div>
+                </div>
               </Tooltip>
             </CircleMarker>
             );

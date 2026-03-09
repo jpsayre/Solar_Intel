@@ -555,6 +555,7 @@ function HomesPageContent() {
           index: r.index,
           address: `${addressLine1}, ${addressLine2}`,
           score: scores?.model_score ?? null,
+          roofScore: scores?.roof_score ?? null,
         };
       });
   }, [rows, mapBounds, boundsRows, scoresByIndex]);
