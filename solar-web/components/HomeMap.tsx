@@ -199,7 +199,7 @@ export default function HomeMap({
                 <div>
                   <div>{p.address}</div>
                   <div style={{ fontSize: 11, opacity: 0.85 }}>
-                    Model: {p.score ?? "—"} · Roof: {p.roofScore ?? "—"}
+                    Likelihood: {p.score ?? "—"} · Roof: {p.roofScore ?? "—"}
                   </div>
                 </div>
               </Tooltip>

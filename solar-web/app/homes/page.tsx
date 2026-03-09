@@ -58,7 +58,7 @@ type HomeRow = {
 
 type SortOption = "model_score" | "roof_score" | "index";
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "model_score", label: "Model score (high → low)" },
+  { value: "model_score", label: "Likelihood score (high → low)" },
   { value: "roof_score", label: "Roof score (high → low)" },
   { value: "index", label: "Index (A → Z)" },
 ];
@@ -735,7 +735,7 @@ function HomesPageContent() {
             </div>
             <div className="flex flex-wrap items-end gap-4">
               <div className="flex flex-col gap-1 sm:w-28">
-                <span className="text-xs font-medium text-slate-500">Min model score</span>
+                <span className="text-xs font-medium text-slate-500">Min likelihood score</span>
                 <input
                   type="number"
                   min="0"

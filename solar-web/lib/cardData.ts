@@ -81,7 +81,7 @@ export function buildListingCardData(row: HomeRow): {
   const roofScore = row.roof_score != null ? String(row.roof_score) : "—";
 
   const detailRows: CardRow[] = [
-    { label: "Model score", value: modelScore },
+    { label: "Likelihood score", value: modelScore },
     { label: "Roof score", value: roofScore },
     { label: "Owner name", value: ownerName },
     { label: "Orientation", value: getValue(row, "qualified_orientations") },
