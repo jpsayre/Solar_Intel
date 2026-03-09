@@ -113,7 +113,8 @@ type ActionItemEntry = {
 export function buildFollowingCardRows(
   homeRow: HomeRow,
   orgCustom: Record<string, unknown> | null | undefined,
-  latestNote: { body: string } | null | undefined
+  latestNote: { body: string } | null | undefined,
+  scores?: { model_score: number | null; roof_score: number | null } | null
 ): CardRow[] {
   const ownerName =
     homeRow.owner_1 != null && String(homeRow.owner_1).trim() !== ""
@@ -159,7 +160,12 @@ export function buildFollowingCardRows(
     if (tagStrings.length > 0) tagsValue = tagStrings.join(", ");
   }
 
+  const rankingScore = scores?.model_score != null ? String(scores.model_score) : "—";
+  const roofScore = scores?.roof_score != null ? String(scores.roof_score) : "—";
+
   const rows: CardRow[] = [
+    { label: "Ranking score", value: rankingScore },
+    { label: "Roof score", value: roofScore },
     { label: "Owner name", value: ownerName },
     { label: "Contact info", value: contactValue, selectable: true },
     { label: "Open action items", value: actionItemsValue, listStyle: actionItemsValue !== "No open action items" },

@@ -40,6 +40,7 @@ export default function FollowingPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { custom: Record<string, unknown> | null }>>({});
   const [latestNoteByIndex, setLatestNoteByIndex] = useState<Record<string, { body: string }>>({});
+  const [scoresByIndex, setScoresByIndex] = useState<Record<string, { model_score: number | null; roof_score: number | null }>>({});
   const [searchText, setSearchText] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [excludeTagFilter, setExcludeTagFilter] = useState("");
@@ -127,6 +128,18 @@ export default function FollowingPage() {
       }
     }
     setLatestNoteByIndex(latestByIndex);
+
+    const scoreByIndex: Record<string, { model_score: number | null; roof_score: number | null }> = {};
+    if (indices.length > 0) {
+      const { data: scoresData } = await supabaseBrowser
+        .from("home_scores")
+        .select("home_index, model_score, roof_score")
+        .in("home_index", indices);
+      for (const row of (scoresData ?? []) as { home_index: string; model_score: number | null; roof_score: number | null }[]) {
+        scoreByIndex[row.home_index] = { model_score: row.model_score, roof_score: row.roof_score };
+      }
+    }
+    setScoresByIndex(scoreByIndex);
 
     setLoading(false);
   }, [router]);
@@ -288,7 +301,7 @@ export default function FollowingPage() {
                 const { addressLine1, addressLine2 } = buildListingCardData(r);
                 const orgCustom = orgHomeByIndex[r.index]?.custom;
                 const latestNote = latestNoteByIndex[r.index];
-                const detailRows = buildFollowingCardRows(r, orgCustom, latestNote);
+                const detailRows = buildFollowingCardRows(r, orgCustom, latestNote, scoresByIndex[r.index]);
                 const cardText = [
                   addressLine1,
                   addressLine2,
@@ -312,7 +325,7 @@ export default function FollowingPage() {
               const { addressLine1, addressLine2 } = buildListingCardData(r);
               const orgCustom = orgHomeByIndex[r.index]?.custom;
               const latestNote = latestNoteByIndex[r.index];
-              const detailRows = buildFollowingCardRows(r, orgCustom, latestNote);
+              const detailRows = buildFollowingCardRows(r, orgCustom, latestNote, scoresByIndex[r.index]);
               return (
                 <Link
                   key={r.index}

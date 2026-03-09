@@ -13,7 +13,6 @@ const BUCKET = "images";
 const COMMON_TAGS = [
   { key: "roof_condition", label: "Roof Condition" },
   { key: "roofing_material", label: "Roofing Material" },
-  { key: "roof_age", label: "Estimated Roof Age" },
   { key: "energy_bill", label: "Electricity Bill (kWh)" },
   { key: "interest_in_solar", label: "Interest in Solar" },
   { key: "interest_in_battery", label: "Interest in Battery" },
@@ -23,8 +22,6 @@ const COMMON_TAGS = [
 const ROOF_CONDITION_OPTIONS = ["Excellent", "Good", "Fair", "Poor"] as const;
 
 const INTEREST_OPTIONS = ["Unknown", "Cold", "Cool", "Warm", "Hot"] as const;
-
-const ROOF_AGE_OPTIONS = ["0-10", "10-20", "20+"] as const;
 
 const EV_OWNERSHIP_OPTIONS = ["Unknown", "Doesn't Want", "Interested", "Owns an EV", "Owns 2+ EVs"] as const;
 
@@ -120,6 +117,7 @@ export default function HomeDetailPage() {
   const [tagsErr, setTagsErr] = useState<string | null>(null);
   const [savingTags, setSavingTags] = useState(false);
   const [isFollowed, setIsFollowed] = useState(false);
+  const [scores, setScores] = useState<{ model_score: number | null; roof_score: number | null } | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextAutoSaveRef = useRef(true);
   const orgHomeRef = useRef(orgHome);
@@ -165,6 +163,16 @@ export default function HomeDetailPage() {
       }
 
       setRow(data as HomeRow);
+
+      // Fetch scores
+      const { data: scoreData } = await supabaseBrowser
+        .from("home_scores")
+        .select("model_score, roof_score")
+        .eq("home_index", idx)
+        .maybeSingle();
+      if (alive && scoreData) {
+        setScores({ model_score: scoreData.model_score, roof_score: scoreData.roof_score });
+      }
 
       // 3) Create a signed URL for the image (filename matches download_map_images: e.g. Boulder_CO_1014.png)
       const path = indexToImagePath((data as HomeRow).index);
@@ -586,7 +594,10 @@ export default function HomeDetailPage() {
     );
   }
 
-  const { addressLine1, addressLine2, detailRows } = buildListingCardData(row);
+  const rowWithScores = scores
+    ? { ...row, model_score: scores.model_score, roof_score: scores.roof_score }
+    : row;
+  const { addressLine1, addressLine2, detailRows } = buildListingCardData(rowWithScores);
 
   const custom = orgHome !== null && orgHome !== "none" && typeof orgHome === "object" && orgHome.custom && typeof orgHome.custom === "object" ? (orgHome.custom as Record<string, unknown>) : null;
   const contactInfoUpdatedText = custom?.contact_info_updated_at && typeof custom.contact_info_updated_at === "string" ? formatNoteTimestamp(custom.contact_info_updated_at) : null;
@@ -844,19 +855,6 @@ export default function HomeDetailPage() {
                         >
                           <option value="">Select…</option>
                           {INTEREST_OPTIONS.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
-                      ) : key === "roof_age" ? (
-                        <select
-                          value={customTags[key] ?? ""}
-                          onChange={(e) => setTagValue(key, e.target.value)}
-                          className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                        >
-                          <option value="">Select…</option>
-                          {ROOF_AGE_OPTIONS.map((opt) => (
                             <option key={opt} value={opt}>
                               {opt}
                             </option>
