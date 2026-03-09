@@ -17,7 +17,9 @@ export default function PricingPage() {
             Platform Access
           </h2>
           <p className="mb-6 text-sm text-slate-500">
-            Year 1 includes full dataset build, scoring, and platform access. Renewals cover quarterly score updates and continued platform access at 50% off.
+            Graduated pricing &mdash; like tax brackets, each tier only applies to homes in that range.
+            Year 1 includes full dataset build, scoring, and platform access.
+            Renewals cover quarterly score updates and continued platform access at 50% off.
           </p>
           <div className="overflow-hidden rounded-xl border border-neutral-200">
             <table className="w-full text-left text-sm">
@@ -26,36 +28,55 @@ export default function PricingPage() {
                   <th className="px-5 py-3 font-semibold text-slate-700">Homes</th>
                   <th className="px-5 py-3 font-semibold text-slate-700">1st Year</th>
                   <th className="px-5 py-3 font-semibold text-slate-700">Yearly Renewal</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">1st Year Range</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Renewal Range</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 <tr>
-                  <td className="px-5 py-4 text-slate-700">Up to 5,000</td>
+                  <td className="px-5 py-4 text-slate-700">First 5,000</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$1.00 / home</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.50 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$1 &ndash; $5,000</td>
+                  <td className="px-5 py-4 text-slate-500">$1 &ndash; $2,500</td>
                 </tr>
                 <tr>
-                  <td className="px-5 py-4 text-slate-700">5,000 &ndash; 20,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.60 / home</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.30 / home</td>
-                </tr>
-                <tr>
-                  <td className="px-5 py-4 text-slate-700">20,000 &ndash; 50,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.40 / home</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.20 / home</td>
-                </tr>
-                <tr>
-                  <td className="px-5 py-4 text-slate-700">50,000 &ndash; 150,000</td>
+                  <td className="px-5 py-4 text-slate-700">5,001 &ndash; 20,000</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.30 / home</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.15 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$5,000 &ndash; $9,500</td>
+                  <td className="px-5 py-4 text-slate-500">$2,500 &ndash; $4,750</td>
                 </tr>
                 <tr>
-                  <td className="px-5 py-4 text-slate-700">150,000+</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.20 / home</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.10 / home</td>
+                  <td className="px-5 py-4 text-slate-700">20,001 &ndash; 50,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.15 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.075 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$9,500 &ndash; $14,000</td>
+                  <td className="px-5 py-4 text-slate-500">$4,750 &ndash; $7,000</td>
+                </tr>
+                <tr>
+                  <td className="px-5 py-4 text-slate-700">50,001 &ndash; 150,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.08 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.04 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$14,000 &ndash; $22,000</td>
+                  <td className="px-5 py-4 text-slate-500">$7,000 &ndash; $11,000</td>
+                </tr>
+                <tr>
+                  <td className="px-5 py-4 text-slate-700">150,001+</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.05 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.025 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$22,000+</td>
+                  <td className="px-5 py-4 text-slate-500">$11,000+</td>
                 </tr>
               </tbody>
             </table>
+          </div>
+          <div className="mt-4 rounded-lg bg-slate-50 px-5 py-4 text-sm text-slate-600">
+            <div className="font-semibold text-slate-700 mb-2">Example territories (1st year)</div>
+            <ul className="space-y-1">
+              <li>Boulder County (~16k homes): <span className="font-semibold text-slate-900">$8,300</span> &mdash; 5,000 &times; $1.00 + 11,000 &times; $0.30</li>
+              <li>San Diego (~100k homes): <span className="font-semibold text-slate-900">$18,000</span> &mdash; 5k &times; $1.00 + 15k &times; $0.30 + 30k &times; $0.15 + 50k &times; $0.08</li>
+            </ul>
           </div>
           <p className="mt-3 text-xs text-slate-400">
             Pricing based on number of qualified residential properties in your territory. Minimum territory size is one city or municipality.
