@@ -27,7 +27,8 @@ export type MapBounds = {
 const DEFAULT_CENTER: [number, number] = [39.7, -105.0];
 const DEFAULT_ZOOM = 10;
 
-function createGrayClusterIcon(cluster: L.MarkerCluster) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function createGrayClusterIcon(cluster: any) {
   const count = cluster.getChildCount();
   return L.divIcon({
     html: `<div style="background:rgba(156,163,175,0.75);color:#fff;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;border:2px solid rgba(107,114,128,0.6)">${count}</div>`,
