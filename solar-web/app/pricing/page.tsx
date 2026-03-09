@@ -24,30 +24,30 @@ export default function PricingPage() {
               <thead>
                 <tr className="border-b border-neutral-200 bg-slate-50">
                   <th className="px-5 py-3 font-semibold text-slate-700">Homes</th>
-                  <th className="px-5 py-3 font-semibold text-slate-700">Year 1 / home</th>
-                  <th className="px-5 py-3 font-semibold text-slate-700">Renewal / home</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">1st Year</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Yearly Renewal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 <tr>
                   <td className="px-5 py-4 text-slate-700">Up to 15,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.35</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.175</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.35 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.175 / home</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">15,000 &ndash; 50,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.30</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.15</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.30 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.15 / home</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">50,000 &ndash; 150,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.25</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.125</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.25 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.125 / home</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">150,000+</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.20</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.10</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.20 / home</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.10 / home</td>
                 </tr>
               </tbody>
             </table>
