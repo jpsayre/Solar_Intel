@@ -1,0 +1,158 @@
+export default function PricingPage() {
+  return (
+    <main className="min-h-screen px-4 py-12 sm:px-6">
+      <div className="mx-auto max-w-4xl">
+        <header className="mb-10 text-center">
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            Pricing
+          </h1>
+          <p className="mt-3 text-lg text-slate-600">
+            ML-ranked solar leads with roof scoring, interactive maps, and team tools.
+          </p>
+        </header>
+
+        {/* Platform tiers */}
+        <section className="mb-16">
+          <h2 className="mb-6 text-xl font-semibold text-slate-900">
+            Platform Access
+          </h2>
+          <p className="mb-6 text-sm text-slate-500">
+            Annual subscription. Includes ranked dataset, interactive map, team collaboration tools, and quarterly score updates.
+          </p>
+          <div className="overflow-hidden rounded-xl border border-neutral-200">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 bg-slate-50">
+                  <th className="px-5 py-3 font-semibold text-slate-700">Tier</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Homes</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Annual price</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Per home</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                <tr>
+                  <td className="px-5 py-4 font-medium text-slate-900">Small</td>
+                  <td className="px-5 py-4 text-slate-700">Up to 15,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$5,000 / yr</td>
+                  <td className="px-5 py-4 text-slate-500">~$0.33</td>
+                </tr>
+                <tr>
+                  <td className="px-5 py-4 font-medium text-slate-900">Medium</td>
+                  <td className="px-5 py-4 text-slate-700">15,000 &ndash; 50,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$10,000 / yr</td>
+                  <td className="px-5 py-4 text-slate-500">~$0.20 &ndash; $0.33</td>
+                </tr>
+                <tr>
+                  <td className="px-5 py-4 font-medium text-slate-900">Large</td>
+                  <td className="px-5 py-4 text-slate-700">50,000 &ndash; 150,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$18,000 / yr</td>
+                  <td className="px-5 py-4 text-slate-500">~$0.12 &ndash; $0.36</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-slate-400">
+            Pricing based on number of qualified residential properties in your territory. Minimum territory size is one city or municipality. Contact us for territories over 150,000 homes.
+          </p>
+        </section>
+
+        {/* Enrichment credits */}
+        <section className="mb-16">
+          <h2 className="mb-6 text-xl font-semibold text-slate-900">
+            Email Enrichment Credits
+          </h2>
+          <p className="mb-6 text-sm text-slate-500">
+            Look up email addresses for homeowners directly from the platform. 1 credit = 1 home. Only charged on successful matches.
+          </p>
+          <div className="overflow-hidden rounded-xl border border-neutral-200">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 bg-slate-50">
+                  <th className="px-5 py-3 font-semibold text-slate-700">Pack</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Credits</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Price</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Per credit</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Savings</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                <tr>
+                  <td className="px-5 py-4 font-medium text-slate-900">Starter</td>
+                  <td className="px-5 py-4 text-slate-700">100</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$250</td>
+                  <td className="px-5 py-4 text-slate-500">$2.50</td>
+                  <td className="px-5 py-4 text-slate-400">&mdash;</td>
+                </tr>
+                <tr>
+                  <td className="px-5 py-4 font-medium text-slate-900">Growth</td>
+                  <td className="px-5 py-4 text-slate-700">500</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$1,000</td>
+                  <td className="px-5 py-4 text-slate-500">$2.00</td>
+                  <td className="px-5 py-4 text-green-600 font-medium">Save 20%</td>
+                </tr>
+                <tr>
+                  <td className="px-5 py-4 font-medium text-slate-900">Scale</td>
+                  <td className="px-5 py-4 text-slate-700">1,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$1,750</td>
+                  <td className="px-5 py-4 text-slate-500">$1.75</td>
+                  <td className="px-5 py-4 text-green-600 font-medium">Save 30%</td>
+                </tr>
+                <tr>
+                  <td className="px-5 py-4 font-medium text-slate-900">Enterprise</td>
+                  <td className="px-5 py-4 text-slate-700">5,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$7,500</td>
+                  <td className="px-5 py-4 text-slate-500">$1.50</td>
+                  <td className="px-5 py-4 text-green-600 font-medium">Save 40%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-slate-400">
+            Credits never expire. No charge for lookups that don&apos;t return a match.
+          </p>
+        </section>
+
+        {/* What's included */}
+        <section className="mb-16">
+          <h2 className="mb-6 text-xl font-semibold text-slate-900">
+            What&apos;s Included
+          </h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {[
+              { title: "ML Ranking Scores", desc: "Every home scored 1\u2013100 based on solar adoption likelihood using permit history, neighbor patterns, and property data." },
+              { title: "Roof Quality Scores", desc: "Roof orientation, area, and sun exposure analyzed via Google Solar API. Scored 1\u2013100." },
+              { title: "Interactive Map", desc: "Color-coded map with filtering by score, roof orientation, subdivision, and team-assigned interest levels." },
+              { title: "Team Collaboration", desc: "Follow homes, add tags, track action items, log notes, and rate solar/battery interest across your sales team." },
+              { title: "Quarterly Updates", desc: "Scores refreshed quarterly as new permits are filed and neighbor adoption patterns shift." },
+              { title: "Email Enrichment", desc: "Look up homeowner emails on demand. Pay per successful match, no wasted credits." },
+            ].map((item) => (
+              <div
+                key={item.title}
+                className="rounded-xl border border-neutral-200 bg-neutral-50/80 px-5 py-4"
+              >
+                <div className="font-semibold text-slate-900">{item.title}</div>
+                <div className="mt-1 text-sm text-slate-600">{item.desc}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="rounded-2xl border border-amber-200 bg-amber-50/60 px-6 py-8 text-center">
+          <h2 className="text-xl font-bold text-slate-900">
+            Ready to target your best solar prospects?
+          </h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Contact us to set up your territory and get started.
+          </p>
+          <a
+            href="mailto:jeff@solarintel.com"
+            className="mt-5 inline-block rounded-lg bg-amber-500 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+          >
+            Get in touch
+          </a>
+        </section>
+      </div>
+    </main>
+  );
+}
