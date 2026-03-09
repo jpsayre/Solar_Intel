@@ -56,11 +56,11 @@ type HomeRow = {
   [key: string]: unknown;
 };
 
-type SortOption = "model_score" | "roof_score" | "index";
+type SortOption = "model_score" | "roof_score" | "hybrid";
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "model_score", label: "Ranking score (high → low)" },
-  { value: "roof_score", label: "Roof score (high → low)" },
-  { value: "index", label: "Index (A → Z)" },
+  { value: "model_score", label: "Ranking score" },
+  { value: "roof_score", label: "Roof score" },
+  { value: "hybrid", label: "Hybrid" },
 ];
 
 const ROOF_ORIENTATION_OPTIONS = ["East", "South", "West"] as const;
@@ -541,7 +541,10 @@ function HomesPageContent() {
         const sb = (b.roof_score as number | null | undefined) ?? -1;
         return sb - sa;
       }
-      return String(a.index).localeCompare(String(b.index));
+      // hybrid: 0.6 * ranking + 0.4 * roof
+      const ha = ((a.model_score as number | null | undefined) ?? 0) * 0.6 + ((a.roof_score as number | null | undefined) ?? 0) * 0.4;
+      const hb = ((b.model_score as number | null | undefined) ?? 0) * 0.6 + ((b.roof_score as number | null | undefined) ?? 0) * 0.4;
+      return hb - ha;
     });
 
     return list;
