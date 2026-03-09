@@ -17,32 +17,37 @@ export default function PricingPage() {
             Platform Access
           </h2>
           <p className="mb-6 text-sm text-slate-500">
-            Annual subscription. Includes ranked dataset, interactive map, team collaboration tools, and quarterly score updates.
+            Year 1 includes full dataset build, scoring, and platform access. Renewals cover quarterly score updates and continued platform access at 50% off.
           </p>
           <div className="overflow-hidden rounded-xl border border-neutral-200">
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 bg-slate-50">
                   <th className="px-5 py-3 font-semibold text-slate-700">Homes</th>
-                  <th className="px-5 py-3 font-semibold text-slate-700">Per home / year</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Year 1 / home</th>
+                  <th className="px-5 py-3 font-semibold text-slate-700">Renewal / home</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-neutral-100">
                 <tr>
                   <td className="px-5 py-4 text-slate-700">Up to 15,000</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.35</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.175</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">15,000 &ndash; 50,000</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.30</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.15</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">50,000 &ndash; 150,000</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.25</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.125</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">150,000+</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.20</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.10</td>
                 </tr>
               </tbody>
             </table>
