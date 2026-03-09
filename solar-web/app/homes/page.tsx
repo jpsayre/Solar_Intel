@@ -683,7 +683,7 @@ function HomesPageContent() {
         <div className="mb-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
           <div className="mb-3 text-sm font-semibold text-slate-700">Filters</div>
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_minmax(220px,auto)]">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-slate-500">County</span>
                 <select
@@ -729,25 +729,20 @@ function HomesPageContent() {
                   ))}
                 </select>
               </label>
-              <div className="flex min-w-[220px] flex-col gap-1 overflow-visible">
-                <span className="text-xs font-medium text-slate-500">Roof orientation</span>
-                <div className="flex w-fit flex-row items-center gap-4 rounded-lg border border-neutral-200 bg-white px-4 py-2">
-                  {ROOF_ORIENTATION_OPTIONS.map((orientation) => (
-                    <label
-                      key={orientation}
-                      className="flex shrink-0 cursor-pointer items-center gap-2 whitespace-nowrap text-sm text-slate-900"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={roofOrientations.includes(orientation)}
-                        onChange={() => toggleRoofOrientation(orientation)}
-                        className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
-                      />
-                      {orientation}
-                    </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-500">Sort by</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortOption)}
+                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                >
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
                   ))}
-                </div>
-              </div>
+                </select>
+              </label>
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-xs font-medium text-slate-500">Address search</span>
@@ -840,20 +835,6 @@ function HomesPageContent() {
                   className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-500">Sort by</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                >
-                  {SORT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <label className="flex cursor-pointer items-center gap-2 self-end py-2">
                 <input
                   type="checkbox"
