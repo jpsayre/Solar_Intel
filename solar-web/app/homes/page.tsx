@@ -64,6 +64,8 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
 ];
 
 const ROOF_ORIENTATION_OPTIONS = ["East", "South", "West"] as const;
+const INTEREST_OPTIONS = ["", "Cold", "Cool", "Warm", "Hot"] as const;
+const INTEREST_RANK: Record<string, number> = { "Cold": 1, "Cool": 2, "Warm": 3, "Hot": 4 };
 
 type FilterOptions = {
   counties: string[];
@@ -127,6 +129,8 @@ function HomesPageContent() {
   const [scoresByIndex, setScoresByIndex] = useState<Record<string, { model_score: number | null; roof_score: number | null }>>({});
   const [minModelScore, setMinModelScore] = useState("");
   const [minRoofScore, setMinRoofScore] = useState("");
+  const [minSolarInterest, setMinSolarInterest] = useState("");
+  const [minBatteryInterest, setMinBatteryInterest] = useState("");
 
   const [followedHomeIndices, setFollowedHomeIndices] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
@@ -529,6 +533,24 @@ function HomesPageContent() {
       list = list.filter((r) => (r.roof_score as number | null | undefined) != null && (r.roof_score as number) >= minRoof);
     }
 
+    // Interest filters (from org_home custom data)
+    if (minSolarInterest && INTEREST_RANK[minSolarInterest]) {
+      const minRank = INTEREST_RANK[minSolarInterest];
+      list = list.filter((r) => {
+        const custom = orgHomeByIndex[r.index]?.custom;
+        const val = custom && typeof custom === "object" ? (custom.interest_in_solar as string) : "";
+        return (INTEREST_RANK[val] ?? 0) >= minRank;
+      });
+    }
+    if (minBatteryInterest && INTEREST_RANK[minBatteryInterest]) {
+      const minRank = INTEREST_RANK[minBatteryInterest];
+      list = list.filter((r) => {
+        const custom = orgHomeByIndex[r.index]?.custom;
+        const val = custom && typeof custom === "object" ? (custom.interest_in_battery as string) : "";
+        return (INTEREST_RANK[val] ?? 0) >= minRank;
+      });
+    }
+
     // Sort
     list = [...list].sort((a, b) => {
       if (sortBy === "model_score") {
@@ -548,7 +570,7 @@ function HomesPageContent() {
     });
 
     return list;
-  }, [mapBounds, boundsRows, rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex, scoresByIndex, sortBy, minModelScore, minRoofScore]);
+  }, [mapBounds, boundsRows, rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex, scoresByIndex, sortBy, minModelScore, minRoofScore, minSolarInterest, minBatteryInterest]);
 
   const mapPoints = useMemo(() => {
     const list = mapBounds ? boundsRows : (rows ?? []);
@@ -612,6 +634,8 @@ function HomesPageContent() {
     setExcludeDoNotContact(true);
     setMinModelScore("");
     setMinRoofScore("");
+    setMinSolarInterest("");
+    setMinBatteryInterest("");
   };
 
   const toggleRoofOrientation = (orientation: string) => {
@@ -636,7 +660,9 @@ function HomesPageContent() {
     excludeTagFilter.trim() ||
     !excludeDoNotContact ||
     minModelScore.trim() ||
-    minRoofScore.trim();
+    minRoofScore.trim() ||
+    minSolarInterest ||
+    minBatteryInterest;
 
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
@@ -761,6 +787,32 @@ function HomesPageContent() {
                   className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-500">Min solar interest</span>
+                <select
+                  value={minSolarInterest}
+                  onChange={(e) => setMinSolarInterest(e.target.value)}
+                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                >
+                  <option value="">Any</option>
+                  {INTEREST_OPTIONS.filter(Boolean).map((o) => (
+                    <option key={o} value={o}>{o}+</option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-medium text-slate-500">Min battery interest</span>
+                <select
+                  value={minBatteryInterest}
+                  onChange={(e) => setMinBatteryInterest(e.target.value)}
+                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                >
+                  <option value="">Any</option>
+                  {INTEREST_OPTIONS.filter(Boolean).map((o) => (
+                    <option key={o} value={o}>{o}+</option>
+                  ))}
+                </select>
+              </label>
               <div className="flex flex-col gap-1 sm:w-48">
                 <span className="text-xs font-medium text-slate-500">Filter by tag</span>
                 <input
