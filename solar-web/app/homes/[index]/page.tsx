@@ -635,8 +635,11 @@ export default function HomeDetailPage() {
             <h2 className="text-lg font-semibold text-slate-900">Enriched Data</h2>
             <span className="rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-800">PROTOTYPE</span>
           </div>
-          <p className="mb-4 text-sm text-slate-500">
-            Look up contact information for this property. Credits remaining: <span className="font-semibold text-slate-700">{enrichCredits}</span>
+          <p className="mb-2 text-sm text-slate-500">
+            Look up emails for this property. Credits remaining: <span className="font-semibold text-slate-700">{enrichCredits}</span>
+          </p>
+          <p className="mb-4 text-xs text-slate-400">
+            You are responsible for complying with all applicable do-not-contact, CAN-SPAM, and unsubscribe laws when using enriched data.
           </p>
           {enrichedEmail ? (
             <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
@@ -653,7 +656,7 @@ export default function HomeDetailPage() {
                 const parts = owner.toLowerCase().split(/\s+/);
                 const first = parts[0] || "john";
                 const last = parts[parts.length - 1] || "smith";
-                const fakeDomain = ["gmail.com", "yahoo.com", "outlook.com", "icloud.com"][Math.floor(Math.random() * 4)];
+                const fakeDomain = "fake.com";
                 setEnrichedEmail({
                   name: owner,
                   email: `${first}.${last}@${fakeDomain}`,
