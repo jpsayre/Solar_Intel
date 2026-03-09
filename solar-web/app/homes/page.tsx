@@ -125,7 +125,7 @@ function HomesPageContent() {
   const [imgUrls, setImgUrls] = useState<Record<number, string>>({});
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
 
-  const [sortBy, setSortBy] = useState<SortOption>("model_score");
+  const [sortBy, setSortBy] = useState<SortOption>("hybrid");
   const [scoresByIndex, setScoresByIndex] = useState<Record<string, { model_score: number | null; roof_score: number | null }>>({});
   const [minModelScore, setMinModelScore] = useState("");
   const [minRoofScore, setMinRoofScore] = useState("");
@@ -591,7 +591,7 @@ function HomesPageContent() {
         let colorScore: number | null = null;
         if (sortBy === "model_score") colorScore = ms;
         else if (sortBy === "roof_score") colorScore = rs;
-        else if (sortBy === "hybrid" && ms != null && rs != null) colorScore = ms * 0.6 + rs * 0.4;
+        else if (sortBy === "hybrid" && ms != null && rs != null) colorScore = Math.round((ms * 0.6 + rs * 0.4) * 10) / 10;
         else if (sortBy === "hybrid") colorScore = ms ?? rs;
         return {
           lat: Number(r.latitude),

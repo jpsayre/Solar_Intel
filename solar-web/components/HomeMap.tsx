@@ -199,7 +199,7 @@ export default function HomeMap({
                 <div>
                   <div>{p.address}</div>
                   <div style={{ fontSize: 11, opacity: 0.85 }}>
-                    Ranking: {p.score ?? "—"} · Roof: {p.roofScore ?? "—"}
+                    Ranking: {p.score != null ? Number(p.score.toFixed(1)) : "—"} · Roof: {p.roofScore != null ? Number(p.roofScore.toFixed(1)) : "—"}
                   </div>
                 </div>
               </Tooltip>
