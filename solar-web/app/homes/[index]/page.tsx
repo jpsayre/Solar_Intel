@@ -118,6 +118,8 @@ export default function HomeDetailPage() {
   const [savingTags, setSavingTags] = useState(false);
   const [isFollowed, setIsFollowed] = useState(false);
   const [scores, setScores] = useState<{ model_score: number | null; roof_score: number | null } | null>(null);
+  const [enrichCredits, setEnrichCredits] = useState(47);
+  const [enrichedEmail, setEnrichedEmail] = useState<{ name: string; email: string } | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextAutoSaveRef = useRef(true);
   const orgHomeRef = useRef(orgHome);
@@ -627,6 +629,43 @@ export default function HomeDetailPage() {
           priority
           unoptimized
         />
+
+        <section className="mt-6 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/50 p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-900">Enriched Data</h2>
+            <span className="rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-800">PROTOTYPE</span>
+          </div>
+          <p className="mb-4 text-sm text-slate-500">
+            Look up contact information for this property. Credits remaining: <span className="font-semibold text-slate-700">{enrichCredits}</span>
+          </p>
+          {enrichedEmail ? (
+            <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
+              <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">Email match</div>
+              <div className="mt-1 text-sm font-semibold text-neutral-900">{enrichedEmail.name}</div>
+              <div className="text-sm text-slate-600">{enrichedEmail.email}</div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={enrichCredits <= 0}
+              onClick={() => {
+                const owner = row.owner_1 ? String(row.owner_1).trim() : "J. Smith";
+                const parts = owner.toLowerCase().split(/\s+/);
+                const first = parts[0] || "john";
+                const last = parts[parts.length - 1] || "smith";
+                const fakeDomain = ["gmail.com", "yahoo.com", "outlook.com", "icloud.com"][Math.floor(Math.random() * 4)];
+                setEnrichedEmail({
+                  name: owner,
+                  email: `${first}.${last}@${fakeDomain}`,
+                });
+                setEnrichCredits((c) => Math.max(0, c - 1));
+              }}
+              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+            >
+              Enrich with email (1 credit)
+            </button>
+          )}
+        </section>
 
         {orgId != null && (
           <section className="mt-10">
