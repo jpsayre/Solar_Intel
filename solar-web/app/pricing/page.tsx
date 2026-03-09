@@ -30,21 +30,25 @@ export default function PricingPage() {
               <tbody className="divide-y divide-neutral-100">
                 <tr>
                   <td className="px-5 py-4 text-slate-700">Up to 15,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.33</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.35</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">15,000 &ndash; 50,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.25</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.30</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">50,000 &ndash; 150,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.25</td>
+                </tr>
+                <tr>
+                  <td className="px-5 py-4 text-slate-700">150,000+</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.20</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p className="mt-3 text-xs text-slate-400">
-            Pricing based on number of qualified residential properties in your territory. Minimum territory size is one city or municipality. Contact us for territories over 150,000 homes.
+            Pricing based on number of qualified residential properties in your territory. Minimum territory size is one city or municipality.
           </p>
         </section>
 
