@@ -586,16 +586,23 @@ function HomesPageContent() {
       .map((r) => {
         const { addressLine1, addressLine2 } = buildListingCardData(r);
         const scores = scoresByIndex[r.index];
+        const ms = scores?.model_score ?? null;
+        const rs = scores?.roof_score ?? null;
+        let colorScore: number | null = null;
+        if (sortBy === "model_score") colorScore = ms;
+        else if (sortBy === "roof_score") colorScore = rs;
+        else if (sortBy === "hybrid" && ms != null && rs != null) colorScore = ms * 0.6 + rs * 0.4;
+        else if (sortBy === "hybrid") colorScore = ms ?? rs;
         return {
           lat: Number(r.latitude),
           lng: Number(r.longitude),
           index: r.index,
           address: `${addressLine1}, ${addressLine2}`,
-          score: scores?.model_score ?? null,
-          roofScore: scores?.roof_score ?? null,
+          score: colorScore,
+          roofScore: rs,
         };
       });
-  }, [rows, mapBounds, boundsRows, scoresByIndex]);
+  }, [rows, mapBounds, boundsRows, scoresByIndex, sortBy]);
 
   if (err) {
     return (
