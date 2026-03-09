@@ -35,38 +35,38 @@ export default function PricingPage() {
               <tbody className="divide-y divide-neutral-100">
                 <tr>
                   <td className="px-5 py-4 text-slate-700">First 5,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$1.00 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$1 &ndash; $5,000</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.50 / home</td>
                   <td className="px-5 py-4 text-slate-500">$1 &ndash; $2,500</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.25 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$1 &ndash; $1,250</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">5,001 &ndash; 20,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.30 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$5,000 &ndash; $9,500</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.15 / home</td>
                   <td className="px-5 py-4 text-slate-500">$2,500 &ndash; $4,750</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.075 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$1,250 &ndash; $2,375</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">20,001 &ndash; 50,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.15 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$9,500 &ndash; $14,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.075 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$4,750 &ndash; $7,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.08 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$4,750 &ndash; $7,150</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.04 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$2,375 &ndash; $3,575</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">50,001 &ndash; 150,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.08 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$14,000 &ndash; $22,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.04 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$7,000 &ndash; $11,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.05 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$7,150 &ndash; $12,150</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.025 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$3,575 &ndash; $6,075</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">150,001+</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.05 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$22,000+</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.025 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$11,000+</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.03 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$12,150+</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.015 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$6,075+</td>
                 </tr>
               </tbody>
             </table>
@@ -74,8 +74,8 @@ export default function PricingPage() {
           <div className="mt-4 rounded-lg bg-slate-50 px-5 py-4 text-sm text-slate-600">
             <div className="font-semibold text-slate-700 mb-2">Example territories (1st year)</div>
             <ul className="space-y-1">
-              <li>Boulder County (~16k homes): <span className="font-semibold text-slate-900">$8,300</span> &mdash; 5,000 &times; $1.00 + 11,000 &times; $0.30</li>
-              <li>San Diego (~100k homes): <span className="font-semibold text-slate-900">$18,000</span> &mdash; 5k &times; $1.00 + 15k &times; $0.30 + 30k &times; $0.15 + 50k &times; $0.08</li>
+              <li>Boulder County (~16k homes): <span className="font-semibold text-slate-900">$4,150</span> &mdash; 5,000 &times; $0.50 + 11,000 &times; $0.15</li>
+              <li>San Diego (~100k homes): <span className="font-semibold text-slate-900">$9,650</span> &mdash; 5k &times; $0.50 + 15k &times; $0.15 + 30k &times; $0.08 + 50k &times; $0.05</li>
             </ul>
           </div>
           <p className="mt-3 text-xs text-slate-400">
@@ -86,38 +86,19 @@ export default function PricingPage() {
         {/* Enrichment credits */}
         <section className="mb-16">
           <h2 className="mb-6 text-xl font-semibold text-slate-900">
-            Email Enrichment Credits
+            Email Enrichment
           </h2>
-          <p className="mb-6 text-sm text-slate-500">
-            Look up email addresses for homeowners directly from the platform. 1 credit = 1 home. Only charged on successful matches.
-          </p>
-          <div className="overflow-hidden rounded-xl border border-neutral-200">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 bg-slate-50">
-                  <th className="px-5 py-3 font-semibold text-slate-700">Credits</th>
-                  <th className="px-5 py-3 font-semibold text-slate-700">Price</th>
-                  <th className="px-5 py-3 font-semibold text-slate-700">Per credit</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-neutral-100">
-                <tr>
-                  <td className="px-5 py-4 text-slate-700">100</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$250</td>
-                  <td className="px-5 py-4 text-slate-500">$2.50</td>
-                </tr>
-                <tr>
-                  <td className="px-5 py-4 text-slate-700">500</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$1,125</td>
-                  <td className="px-5 py-4 text-slate-500">$2.25</td>
-                </tr>
-                <tr>
-                  <td className="px-5 py-4 text-slate-700">1,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$2,000</td>
-                  <td className="px-5 py-4 text-slate-500">$2.00</td>
-                </tr>
-              </tbody>
-            </table>
+          <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 px-5 py-5">
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-slate-900">$2.00</span>
+              <span className="text-sm text-slate-500">/ home</span>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">
+              Look up email addresses for homeowners directly from the platform. Each credit covers both owners on record. Only charged on successful matches.
+            </p>
+            <p className="mt-3 text-sm text-slate-600">
+              <span className="font-semibold text-slate-900">20 free credits</span> included with every platform subscription.
+            </p>
           </div>
           <p className="mt-3 text-xs text-slate-400">
             Credits never expire. No charge for lookups that don&apos;t return a match.
