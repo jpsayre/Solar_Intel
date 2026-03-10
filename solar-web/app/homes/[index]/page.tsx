@@ -130,6 +130,8 @@ export default function HomeDetailPage() {
   const backLabel = from === "following" ? "Back to following" : from === "alerts" ? "Back to alerts" : "Back to explorer";
   const backHref = from === "following" ? "/following" : from === "alerts" ? "/alerts" : "/homes";
 
+  useEffect(() => { window.scrollTo(0, 0); }, []);
+
   const [row, setRow] = useState<HomeRow | null>(null);
   const [imgUrl, setImgUrl] = useState<string>("");
   const [err, setErr] = useState<string | null>(null);
