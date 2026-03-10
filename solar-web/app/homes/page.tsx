@@ -913,13 +913,15 @@ function HomesPageContent() {
             </div>
           </div>
           {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="mt-3 text-sm font-medium text-slate-600 underline hover:text-slate-900"
-            >
-              Clear all filters
-            </button>
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="text-sm font-medium text-slate-600 underline hover:text-slate-900"
+              >
+                Clear all filters
+              </button>
+            </div>
           )}
         </div>
 

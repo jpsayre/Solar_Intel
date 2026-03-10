@@ -46,7 +46,7 @@ export default function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 flex items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur sm:px-6">
       <Link
-        href="/about"
+        href="/homes"
         className="text-lg font-bold tracking-tight text-slate-900 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded"
       >
         Solar Intelligence
