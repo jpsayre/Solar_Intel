@@ -86,6 +86,14 @@ function formatNoteTimestamp(iso: string): string {
   });
 }
 
+const FAKE_PERMITS = [
+  { id: "1", date: "2023-08-14", type: "Electrical", description: "EV charger installation — 240V / 50A circuit", value: "$4,200", tagColor: "bg-blue-100 text-blue-700" },
+  { id: "2", date: "2022-03-02", type: "Building", description: "Kitchen remodel — cabinets, countertops, plumbing", value: "$38,500", tagColor: "bg-amber-100 text-amber-700" },
+  { id: "3", date: "2019-11-20", type: "Roofing", description: "Full roof replacement — architectural shingles", value: "$12,800", tagColor: "bg-green-100 text-green-700" },
+  { id: "4", date: "2017-06-05", type: "Mechanical", description: "HVAC replacement — high-efficiency heat pump", value: "$9,600", tagColor: "bg-purple-100 text-purple-700" },
+  { id: "5", date: "2015-09-12", type: "Building", description: "Basement finish — 850 sq ft, egress window", value: "$42,000", tagColor: "bg-amber-100 text-amber-700" },
+];
+
 export default function HomeDetailPage() {
   const router = useRouter();
   const params = useParams<{ index: string }>();
@@ -119,6 +127,7 @@ export default function HomeDetailPage() {
   const [isFollowed, setIsFollowed] = useState(false);
   const [scores, setScores] = useState<{ model_score: number | null; roof_score: number | null } | null>(null);
   const [enrichCredits, setEnrichCredits] = useState(47);
+  const [permitsOpen, setPermitsOpen] = useState(false);
   const [enrichedEmail, setEnrichedEmail] = useState<{ name: string; email: string } | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextAutoSaveRef = useRef(true);
@@ -629,6 +638,57 @@ export default function HomeDetailPage() {
           priority
           unoptimized
         />
+
+        <section className="mt-6 rounded-xl border border-neutral-200 bg-white">
+          <button
+            type="button"
+            onClick={() => setPermitsOpen((v) => !v)}
+            className="flex w-full items-center justify-between px-5 py-4 text-left focus:outline-none"
+          >
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-semibold text-slate-900">Permit History</h2>
+              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                {FAKE_PERMITS.length}
+              </span>
+            </div>
+            <svg
+              className={`h-5 w-5 text-slate-400 transition-transform ${permitsOpen ? "rotate-180" : ""}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {permitsOpen && (
+            <div className="border-t border-neutral-200 px-5 pb-4 pt-3">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-neutral-100 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
+                      <th className="pb-2 pr-4">Date</th>
+                      <th className="pb-2 pr-4">Type</th>
+                      <th className="pb-2 pr-4">Description</th>
+                      <th className="pb-2 text-right">Value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {FAKE_PERMITS.map((p) => (
+                      <tr key={p.id} className="border-b border-neutral-50">
+                        <td className="whitespace-nowrap py-2 pr-4 text-slate-600">{p.date}</td>
+                        <td className="py-2 pr-4">
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${p.tagColor}`}>
+                            {p.type}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-4 text-slate-700">{p.description}</td>
+                        <td className="whitespace-nowrap py-2 text-right text-slate-600">{p.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
 
         <section className="mt-6 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/50 p-5">
           <div className="mb-3 flex items-center gap-2">
