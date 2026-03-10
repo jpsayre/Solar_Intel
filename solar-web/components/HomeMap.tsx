@@ -38,7 +38,10 @@ function createGrayClusterIcon(cluster: any) {
 }
 
 /** Map score to a warm palette from light tan (low) to deep brown (high). */
-const SCORE_PALETTE = ["#062A77", "#343F66", "#625355", "#916844", "#BF7C33", "#ED9122"];
+const SCORE_PALETTE = [
+  "#1E3A8A", "#2B4C8E", "#3B5E8A", "#4D7178", "#5E8564",
+  "#7A9A4E", "#A0A632", "#C4952A", "#D97028", "#DC2626",
+];
 
 function scoreToColor(score: number | null): string {
   if (score == null) return "#9ca3af"; // gray for no score
