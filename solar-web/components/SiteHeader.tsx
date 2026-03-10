@@ -100,13 +100,6 @@ export default function SiteHeader() {
             >
               About
             </Link>
-            <Link
-              href="/pricing"
-              onClick={() => setMenuOpen(false)}
-              className={`block px-4 py-3 text-sm font-medium ${pathname === "/pricing" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
-            >
-              Pricing
-            </Link>
             {user ? (
               <>
                 <Link

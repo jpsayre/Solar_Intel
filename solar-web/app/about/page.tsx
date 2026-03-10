@@ -126,18 +126,12 @@ export default function AboutPage() {
             Ready to stop guessing?
           </h2>
           <p className="mt-1 text-sm text-slate-600">
-            See our territory pricing or jump straight into the data.
+            Jump straight into the data.
           </p>
           <div className="mt-4 flex flex-wrap justify-center gap-3">
             <Link
-              href="/pricing"
-              className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
-            >
-              View Pricing
-            </Link>
-            <Link
               href="/homes"
-              className="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+              className="inline-flex items-center justify-center rounded-xl bg-amber-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
             >
               Explore Homes
             </Link>
