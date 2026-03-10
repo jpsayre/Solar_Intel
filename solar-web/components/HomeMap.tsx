@@ -139,7 +139,11 @@ export default function HomeMap({
   onViewChange,
 }: HomeMapProps) {
   const pointsList = useMemo(
-    () => points.filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng)),
+    () =>
+      points
+        .filter((p) => Number.isFinite(p.lat) && Number.isFinite(p.lng))
+        // Render low scores first so high scores draw on top
+        .sort((a, b) => (a.score ?? -1) - (b.score ?? -1)),
     [points]
   );
 
