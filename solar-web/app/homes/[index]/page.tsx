@@ -743,9 +743,45 @@ export default function HomeDetailPage() {
           )}
         </section>
 
-        <div className="mt-6 rounded-xl border border-dashed border-neutral-300 bg-neutral-50/60 px-5 py-4 text-center text-sm text-slate-500">
-          Email enrichment under development
-        </div>
+        <section className="mt-6 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/50 p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-slate-900">Email Enrichment</h2>
+            <span className="rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-800">UNDER DEVELOPMENT</span>
+          </div>
+          <p className="mb-2 text-sm text-slate-500">
+            Look up emails for this property. Credits remaining: <span className="font-semibold text-slate-700">{enrichCredits}</span>
+          </p>
+          <p className="mb-4 text-xs text-slate-400">
+            Demo only — data shown is not real.
+          </p>
+          {enrichedEmail ? (
+            <div className="rounded-lg border border-neutral-200 bg-white px-4 py-3">
+              <div className="text-xs font-medium uppercase tracking-wider text-neutral-500">Email match</div>
+              <div className="mt-1 text-sm font-semibold text-neutral-900">{enrichedEmail.name}</div>
+              <div className="text-sm text-slate-600">{enrichedEmail.email}</div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={enrichCredits <= 0}
+              onClick={() => {
+                const owner = row.owner_1 ? String(row.owner_1).trim() : "J. Smith";
+                const parts = owner.toLowerCase().split(/\s+/);
+                const first = parts[0] || "john";
+                const last = parts[parts.length - 1] || "smith";
+                const fakeDomain = "example.com";
+                setEnrichedEmail({
+                  name: owner,
+                  email: `${first}.${last}@${fakeDomain}`,
+                });
+                setEnrichCredits((c) => Math.max(0, c - 1));
+              }}
+              className="rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
+            >
+              Enrich with email (1 credit)
+            </button>
+          )}
+        </section>
 
         {orgId != null && (<>
           <section className="mt-10">
@@ -1068,7 +1104,7 @@ export default function HomeDetailPage() {
             </div>
           </section>
 
-          <div className="mt-6 rounded-xl border border-dashed border-neutral-300 bg-neutral-50/60 px-5 py-4 text-center text-sm text-slate-500">
+          <div className="mt-6 rounded-xl border-2 border-dashed border-amber-300 bg-amber-50/50 px-5 py-4 text-center text-sm text-amber-800">
             Document storage under development
           </div>
         </>)}
