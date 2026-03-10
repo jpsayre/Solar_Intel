@@ -16,6 +16,9 @@ Eliminates the second query for scores. Every dot arrives pre-colored.
 **1b. Create `get_map_points` RPC** returning only lat/lng/scores for all homes.
 ~400KB for 20K homes. One request, sub-second, all dots colored immediately.
 
+**1b-note.** Map limited to 1000 homes (Supabase PostgREST max rows default).
+Cards still load separately at 500 per page for full detail.
+
 **1c. Enable `preferCanvas: true`** on the Leaflet MapContainer.
 Renders all CircleMarkers to a single `<canvas>` instead of individual DOM elements.
 Gets us to 10-20K points without framework changes.

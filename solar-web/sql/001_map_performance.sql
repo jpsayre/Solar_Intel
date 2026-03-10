@@ -27,7 +27,7 @@ LEFT JOIN home_scores s ON h.index = s.home_index;
 CREATE OR REPLACE FUNCTION get_map_points(
   p_county text DEFAULT NULL,
   p_city text DEFAULT NULL,
-  p_limit int DEFAULT 50000
+  p_limit int DEFAULT 1000
 )
 RETURNS TABLE(
   index text,
