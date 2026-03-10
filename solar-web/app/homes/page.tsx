@@ -940,7 +940,7 @@ function HomesPageContent() {
             ) : (
               <>
                 Showing {mapPoints.length.toLocaleString()} homes.
-                {rpcMapPoints && rpcMapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to load more."}
+                {mapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to load more."}
               </>
             )}
           </p>

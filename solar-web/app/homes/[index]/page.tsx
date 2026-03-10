@@ -86,13 +86,41 @@ function formatNoteTimestamp(iso: string): string {
   });
 }
 
-const FAKE_PERMITS = [
-  { id: "1", date: "2023-08-14", type: "Electrical", description: "EV charger installation — 240V / 50A circuit", value: "$4,200", tagColor: "bg-blue-100 text-blue-700" },
-  { id: "2", date: "2022-03-02", type: "Building", description: "Kitchen remodel — cabinets, countertops, plumbing", value: "$38,500", tagColor: "bg-amber-100 text-amber-700" },
-  { id: "3", date: "2019-11-20", type: "Roofing", description: "Full roof replacement — architectural shingles", value: "$12,800", tagColor: "bg-green-100 text-green-700" },
-  { id: "4", date: "2017-06-05", type: "Mechanical", description: "HVAC replacement — high-efficiency heat pump", value: "$9,600", tagColor: "bg-purple-100 text-purple-700" },
-  { id: "5", date: "2015-09-12", type: "Building", description: "Basement finish — 850 sq ft, egress window", value: "$42,000", tagColor: "bg-amber-100 text-amber-700" },
-];
+type PermitRow = {
+  id: number;
+  permit_type: string;
+  description: string | null;
+  filed_date: string;
+  valuation: number | null;
+};
+
+const PERMIT_TAG_COLORS: Record<string, string> = {
+  solar: "bg-amber-100 text-amber-800",
+  roof: "bg-blue-100 text-blue-700",
+  battery: "bg-green-100 text-green-700",
+  ev_charger: "bg-purple-100 text-purple-700",
+  electrical: "bg-indigo-100 text-indigo-700",
+  heat_pump: "bg-purple-100 text-purple-700",
+  hvac: "bg-purple-100 text-purple-700",
+  remodel: "bg-amber-100 text-amber-700",
+  construction: "bg-amber-100 text-amber-700",
+  other: "bg-slate-100 text-slate-700",
+};
+
+const PERMIT_TYPE_LABELS: Record<string, string> = {
+  solar: "Solar",
+  roof: "Roof",
+  battery: "Battery",
+  ev_charger: "EV Charger",
+  electrical: "Electrical",
+  heat_pump: "Heat Pump",
+  hvac: "HVAC",
+  water_heater: "Water Heater",
+  generator: "Generator",
+  remodel: "Remodel",
+  construction: "Construction",
+  other: "Other",
+};
 
 export default function HomeDetailPage() {
   const router = useRouter();
@@ -127,6 +155,7 @@ export default function HomeDetailPage() {
   const [scores, setScores] = useState<{ model_score: number | null; roof_score: number | null } | null>(null);
   const [enrichCredits, setEnrichCredits] = useState(47);
   const [permitsOpen, setPermitsOpen] = useState(false);
+  const [permits, setPermits] = useState<PermitRow[]>([]);
   const [enrichedEmail, setEnrichedEmail] = useState<{ name: string; email: string } | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextAutoSaveRef = useRef(true);
@@ -182,6 +211,16 @@ export default function HomeDetailPage() {
         .maybeSingle();
       if (alive && scoreData) {
         setScores({ model_score: scoreData.model_score, roof_score: scoreData.roof_score });
+      }
+
+      // 2b) Fetch permits for this home
+      const { data: permitData } = await supabaseBrowser
+        .from("permits")
+        .select("id, permit_type, description, filed_date, valuation")
+        .eq("home_index", idx)
+        .order("filed_date", { ascending: false });
+      if (alive && permitData) {
+        setPermits(permitData as PermitRow[]);
       }
 
       // 3) Create a signed URL for the image (filename matches download_map_images: e.g. Boulder_CO_1014.png)
@@ -647,7 +686,7 @@ export default function HomeDetailPage() {
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold text-slate-900">Permit History</h2>
               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                {FAKE_PERMITS.length}
+                {permits.length}
               </span>
             </div>
             <svg
@@ -670,16 +709,22 @@ export default function HomeDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {FAKE_PERMITS.map((p) => (
+                    {permits.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-4 text-center text-sm text-slate-400">No permits on file</td>
+                      </tr>
+                    ) : permits.map((p) => (
                       <tr key={p.id} className="border-b border-neutral-50">
-                        <td className="whitespace-nowrap py-2 pr-4 text-slate-600">{p.date}</td>
+                        <td className="whitespace-nowrap py-2 pr-4 text-slate-600">{p.filed_date}</td>
                         <td className="py-2 pr-4">
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${p.tagColor}`}>
-                            {p.type}
+                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PERMIT_TAG_COLORS[p.permit_type] ?? PERMIT_TAG_COLORS.other}`}>
+                            {PERMIT_TYPE_LABELS[p.permit_type] ?? p.permit_type}
                           </span>
                         </td>
-                        <td className="py-2 pr-4 text-slate-700">{p.description}</td>
-                        <td className="whitespace-nowrap py-2 text-right text-slate-600">{p.value}</td>
+                        <td className="py-2 pr-4 text-slate-700">{p.description ?? "—"}</td>
+                        <td className="whitespace-nowrap py-2 text-right text-slate-600">
+                          {p.valuation != null ? `$${p.valuation.toLocaleString()}` : "—"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
