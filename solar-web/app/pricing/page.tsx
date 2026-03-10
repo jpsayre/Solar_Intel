@@ -35,38 +35,38 @@ export default function PricingPage() {
               <tbody className="divide-y divide-neutral-100">
                 <tr>
                   <td className="px-5 py-4 text-slate-700">First 5,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.80 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$0 &ndash; $4,000</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.50 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$1 &ndash; $2,500</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.25 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$1 &ndash; $1,250</td>
+                  <td className="px-5 py-4 text-slate-500">$0 &ndash; $2,500</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">5,001 &ndash; 20,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.15 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$2,500 &ndash; $4,750</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.075 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$1,250 &ndash; $2,375</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.40 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$4,000 &ndash; $10,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.25 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$2,500 &ndash; $6,250</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">20,001 &ndash; 50,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.08 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$4,750 &ndash; $7,150</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.04 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$2,375 &ndash; $3,575</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.20 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$10,000 &ndash; $16,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.12 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$6,250 &ndash; $9,850</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">50,001 &ndash; 150,000</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.05 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$7,150 &ndash; $12,150</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.025 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$3,575 &ndash; $6,075</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.10 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$16,000 &ndash; $26,000</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.06 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$9,850 &ndash; $15,850</td>
                 </tr>
                 <tr>
                   <td className="px-5 py-4 text-slate-700">150,001+</td>
+                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.05 / home</td>
+                  <td className="px-5 py-4 text-slate-500">$26,000+</td>
                   <td className="px-5 py-4 text-slate-900 font-semibold">$0.03 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$12,150+</td>
-                  <td className="px-5 py-4 text-slate-900 font-semibold">$0.015 / home</td>
-                  <td className="px-5 py-4 text-slate-500">$6,075+</td>
+                  <td className="px-5 py-4 text-slate-500">$15,850+</td>
                 </tr>
               </tbody>
             </table>
@@ -74,8 +74,8 @@ export default function PricingPage() {
           <div className="mt-4 rounded-lg bg-slate-50 px-5 py-4 text-sm text-slate-600">
             <div className="font-semibold text-slate-700 mb-2">Example territories (1st year)</div>
             <ul className="space-y-1">
-              <li>Boulder County (~16k homes): <span className="font-semibold text-slate-900">$4,150</span> &mdash; 5,000 &times; $0.50 + 11,000 &times; $0.15</li>
-              <li>San Diego (~100k homes): <span className="font-semibold text-slate-900">$9,650</span> &mdash; 5k &times; $0.50 + 15k &times; $0.15 + 30k &times; $0.08 + 50k &times; $0.05</li>
+              <li>Boulder County (~16k homes): <span className="font-semibold text-slate-900">$8,400</span> &mdash; 5,000 &times; $0.80 + 11,000 &times; $0.40</li>
+              <li>San Diego (~100k homes): <span className="font-semibold text-slate-900">$21,000</span> &mdash; 5k &times; $0.80 + 15k &times; $0.40 + 30k &times; $0.20 + 50k &times; $0.10</li>
             </ul>
           </div>
           <p className="mt-3 text-xs text-slate-400">
