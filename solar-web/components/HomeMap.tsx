@@ -38,12 +38,12 @@ function createGrayClusterIcon(cluster: any) {
 }
 
 /** Map score to a warm palette from light tan (low) to deep brown (high). */
-const SCORE_PALETTE = ["#dfb586", "#d5a57f", "#bb7640", "#a85720", "#a33c04"];
+const SCORE_PALETTE = ["#062A77", "#343F66", "#625355", "#916844", "#BF7C33", "#ED9122"];
 
 function scoreToColor(score: number | null): string {
   if (score == null) return "#9ca3af"; // gray for no score
   const clamped = Math.max(0, Math.min(100, score));
-  const idx = Math.min(Math.floor(clamped / 20), SCORE_PALETTE.length - 1);
+  const idx = Math.min(Math.floor(clamped / (100 / SCORE_PALETTE.length)), SCORE_PALETTE.length - 1);
   return SCORE_PALETTE[idx];
 }
 
