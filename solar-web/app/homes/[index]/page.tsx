@@ -88,6 +88,7 @@ function formatNoteTimestamp(iso: string): string {
 
 type PermitRow = {
   id: number;
+  permit_number: string | null;
   permit_type: string;
   description: string | null;
   filed_date: string;
@@ -218,7 +219,7 @@ export default function HomeDetailPage() {
       // 2b) Fetch permits for this home
       const { data: permitData } = await supabaseBrowser
         .from("permits")
-        .select("id, permit_type, description, filed_date, valuation")
+        .select("id, permit_number, permit_type, description, filed_date, valuation")
         .eq("home_index", idx)
         .order("filed_date", { ascending: false });
       if (alive && permitData) {
@@ -705,6 +706,7 @@ export default function HomeDetailPage() {
                   <thead>
                     <tr className="border-b border-neutral-100 text-left text-xs font-medium uppercase tracking-wider text-slate-500">
                       <th className="pb-2 pr-4">Date</th>
+                      <th className="pb-2 pr-4">Permit #</th>
                       <th className="pb-2 pr-4">Type</th>
                       <th className="pb-2 pr-4">Description</th>
                       <th className="pb-2 text-right">Value</th>
@@ -713,11 +715,15 @@ export default function HomeDetailPage() {
                   <tbody>
                     {permits.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="py-4 text-center text-sm text-slate-400">No permits on file</td>
+                        <td colSpan={5} className="py-4 text-center text-sm text-slate-400">No permits on file</td>
                       </tr>
-                    ) : permits.map((p) => (
+                    ) : permits.map((p) => {
+                      const [y, m, d] = p.filed_date.split("-");
+                      const dateFormatted = `${parseInt(m)}/${parseInt(d)}/${y}`;
+                      return (
                       <tr key={p.id} className="border-b border-neutral-50">
-                        <td className="whitespace-nowrap py-2 pr-4 text-slate-600">{p.filed_date}</td>
+                        <td className="whitespace-nowrap py-2 pr-4 text-slate-600">{dateFormatted}</td>
+                        <td className="whitespace-nowrap py-2 pr-4 text-slate-500 text-xs">{p.permit_number ?? "—"}</td>
                         <td className="py-2 pr-4">
                           <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PERMIT_TAG_COLORS[p.permit_type] ?? PERMIT_TAG_COLORS.other}`}>
                             {PERMIT_TYPE_LABELS[p.permit_type] ?? p.permit_type}
@@ -728,7 +734,8 @@ export default function HomeDetailPage() {
                           {p.valuation != null ? `$${p.valuation.toLocaleString()}` : "—"}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
