@@ -165,6 +165,7 @@ export default function HomeMap({
         zoom={hasInitialView ? initialZoom! : DEFAULT_ZOOM}
         className="h-[320px] w-full"
         scrollWheelZoom={true}
+        preferCanvas={true}
         style={{ minHeight: 320 }}
       >
         <TileLayer

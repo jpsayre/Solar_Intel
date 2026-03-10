@@ -47,6 +47,7 @@ const PAGE_SIZE = 500;
 const NEXT_PAGE_SIZE = 100;
 const BOUNDS_QUERY_LIMIT = 500;
 const FILTER_OPTIONS_LIMIT = 2000;
+const MAP_POINTS_LIMIT = 2000;
 
 type HomeRow = {
   index: string;
@@ -139,6 +140,30 @@ function HomesPageContent() {
   const [tagFilter, setTagFilter] = useState("");
   const [excludeTagFilter, setExcludeTagFilter] = useState("");
   const [excludeDoNotContact, setExcludeDoNotContact] = useState(true);
+
+  // Lightweight map points from RPC (scores pre-joined, no gray flash)
+  type RpcMapPoint = { index: string; latitude: number; longitude: number; model_score: number | null; roof_score: number | null; hybrid_score: number | null };
+  const [rpcMapPoints, setRpcMapPoints] = useState<RpcMapPoint[] | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    async function loadMapPoints() {
+      const { data: userData } = await supabaseBrowser.auth.getUser();
+      if (!alive || !userData.user) return;
+      const params: Record<string, unknown> = { p_limit: MAP_POINTS_LIMIT };
+      if (county) params.p_county = county;
+      if (city) params.p_city = city;
+      const { data, error } = await supabaseBrowser.rpc("get_map_points", params);
+      if (!alive) return;
+      if (error) {
+        console.error("get_map_points error:", error);
+        return;
+      }
+      setRpcMapPoints((data ?? []) as RpcMapPoint[]);
+    }
+    loadMapPoints();
+    return () => { alive = false; };
+  }, [county, city]);
 
   useEffect(() => {
     let alive = true;
@@ -573,6 +598,26 @@ function HomesPageContent() {
   }, [mapBounds, boundsRows, rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex, scoresByIndex, sortBy, minModelScore, minRoofScore, minSolarInterest, minBatteryInterest]);
 
   const mapPoints = useMemo(() => {
+    // Prefer lightweight RPC data for map dots (scores pre-joined, no gray flash)
+    if (rpcMapPoints && rpcMapPoints.length > 0) {
+      return rpcMapPoints
+        .filter((r) => Number.isFinite(r.latitude) && Number.isFinite(r.longitude))
+        .map((r) => {
+          let colorScore: number | null = null;
+          if (sortBy === "model_score") colorScore = r.model_score;
+          else if (sortBy === "roof_score") colorScore = r.roof_score;
+          else colorScore = r.hybrid_score;
+          return {
+            lat: r.latitude,
+            lng: r.longitude,
+            index: r.index,
+            address: r.index, // lightweight — no full address in RPC
+            score: colorScore,
+            roofScore: r.roof_score,
+          };
+        });
+    }
+    // Fallback: derive from full rows + separate scores (legacy path)
     const list = mapBounds ? boundsRows : (rows ?? []);
     if (!list.length) return [];
     return list
@@ -602,7 +647,7 @@ function HomesPageContent() {
           roofScore: rs,
         };
       });
-  }, [rows, mapBounds, boundsRows, scoresByIndex, sortBy]);
+  }, [rpcMapPoints, rows, mapBounds, boundsRows, scoresByIndex, sortBy]);
 
   if (err) {
     return (
