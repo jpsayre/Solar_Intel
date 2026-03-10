@@ -145,25 +145,37 @@ function HomesPageContent() {
   type RpcMapPoint = { index: string; latitude: number; longitude: number; model_score: number | null; roof_score: number | null; hybrid_score: number | null };
   const [rpcMapPoints, setRpcMapPoints] = useState<RpcMapPoint[] | null>(null);
 
-  useEffect(() => {
-    let alive = true;
-    async function loadMapPoints() {
-      const { data: userData } = await supabaseBrowser.auth.getUser();
-      if (!alive || !userData.user) return;
-      const params: Record<string, unknown> = { p_limit: MAP_POINTS_LIMIT };
-      if (county) params.p_county = county;
-      if (city) params.p_city = city;
-      const { data, error } = await supabaseBrowser.rpc("get_map_points", params).limit(MAP_POINTS_LIMIT);
-      if (!alive) return;
-      if (error) {
-        console.error("get_map_points error:", error);
-        return;
-      }
-      setRpcMapPoints((data ?? []) as RpcMapPoint[]);
+  // Reload map points when bounds change (debounced via mapBounds state)
+  const loadMapPoints = useCallback(async (bounds?: MapBounds | null) => {
+    const { data: userData } = await supabaseBrowser.auth.getUser();
+    if (!userData.user) return;
+    const params: Record<string, unknown> = { p_limit: MAP_POINTS_LIMIT };
+    if (county) params.p_county = county;
+    if (city) params.p_city = city;
+    if (bounds) {
+      params.p_south = bounds.south;
+      params.p_north = bounds.north;
+      params.p_west = bounds.west;
+      params.p_east = bounds.east;
     }
-    loadMapPoints();
-    return () => { alive = false; };
+    const { data, error } = await supabaseBrowser.rpc("get_map_points", params).limit(MAP_POINTS_LIMIT);
+    if (error) {
+      console.error("get_map_points error:", error);
+      return;
+    }
+    setRpcMapPoints((data ?? []) as RpcMapPoint[]);
   }, [county, city]);
+
+  // Initial load (no bounds yet)
+  useEffect(() => {
+    loadMapPoints();
+  }, [loadMapPoints]);
+
+  // Reload on bounds change
+  useEffect(() => {
+    if (!mapBounds) return;
+    loadMapPoints(mapBounds);
+  }, [mapBounds, loadMapPoints]);
 
   useEffect(() => {
     let alive = true;
@@ -931,20 +943,26 @@ function HomesPageContent() {
           </p>
         )}
 
-        {!mapBounds && hasMore && (
+        {((!mapBounds && hasMore) || displayedRows.length > offset) && (
           <div className="mb-6">
             <button
               type="button"
-              onClick={() => loadNextPage()}
+              onClick={() => {
+                if (mapBounds) {
+                  setOffset((prev) => prev + NEXT_PAGE_SIZE);
+                } else {
+                  loadNextPage();
+                }
+              }}
               className="rounded-xl border border-neutral-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
             >
-              Next — load 100 more
+              Load more
             </button>
           </div>
         )}
 
         <div className="flex flex-col gap-8">
-          {displayedRows.map((r) => {
+          {displayedRows.slice(0, offset).map((r) => {
             const url = imgUrls[r.original_index];
             const e = imgErrors[r.original_index];
             const imageUrl = url || "/window.svg";

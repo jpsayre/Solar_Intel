@@ -27,6 +27,10 @@ LEFT JOIN home_scores s ON h.index = s.home_index;
 CREATE OR REPLACE FUNCTION get_map_points(
   p_county text DEFAULT NULL,
   p_city text DEFAULT NULL,
+  p_south double precision DEFAULT NULL,
+  p_north double precision DEFAULT NULL,
+  p_west double precision DEFAULT NULL,
+  p_east double precision DEFAULT NULL,
   p_limit int DEFAULT 1000
 )
 RETURNS TABLE(
@@ -54,6 +58,10 @@ RETURNS TABLE(
   LEFT JOIN home_scores s ON h.index = s.home_index
   WHERE (p_county IS NULL OR h.county = p_county)
     AND (p_city IS NULL OR h.city = p_city)
+    AND (p_south IS NULL OR h.latitude >= p_south)
+    AND (p_north IS NULL OR h.latitude <= p_north)
+    AND (p_west IS NULL OR h.longitude >= p_west)
+    AND (p_east IS NULL OR h.longitude <= p_east)
   LIMIT p_limit;
 $$ LANGUAGE sql STABLE;
 
