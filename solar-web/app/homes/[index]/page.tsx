@@ -747,7 +747,7 @@ export default function HomeDetailPage() {
           Email enrichment under development
         </div>
 
-        {orgId != null && (
+        {orgId != null && (<>
           <section className="mt-10">
             <h2 className="mb-2 text-lg font-semibold text-slate-900">My Organization&apos;s Info</h2>
             <p className="mb-4 text-sm text-slate-500">
@@ -1071,7 +1071,7 @@ export default function HomeDetailPage() {
           <div className="mt-6 rounded-xl border border-dashed border-neutral-300 bg-neutral-50/60 px-5 py-4 text-center text-sm text-slate-500">
             Document storage under development
           </div>
-        )}
+        </>)}
 
         {orgId === null && orgHome === "none" && (
           <div className="mt-10 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
