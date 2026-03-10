@@ -169,9 +169,9 @@ function HomesPageContent() {
     }
   }, [county, city]);
 
-  // Initial load (no bounds yet)
+  // Re-fire RPC when filters change (loadMapPoints deps include county/city)
   useEffect(() => {
-    loadMapPoints();
+    loadMapPoints(mapBounds);
   }, [loadMapPoints]);
 
   useEffect(() => {
@@ -611,10 +611,18 @@ function HomesPageContent() {
   }, [mapBounds, boundsRows, rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex, scoresByIndex, sortBy, minModelScore, minRoofScore, minSolarInterest, minBatteryInterest]);
 
   const mapPoints = useMemo(() => {
+    const minModel = parseInt(minModelScore, 10);
+    const minRoof = parseInt(minRoofScore, 10);
+
     // Prefer lightweight RPC data for map dots (scores pre-joined, no gray flash)
     if (rpcMapPoints && rpcMapPoints.length > 0) {
       return rpcMapPoints
-        .filter((r) => Number.isFinite(r.latitude) && Number.isFinite(r.longitude))
+        .filter((r) => {
+          if (!Number.isFinite(r.latitude) || !Number.isFinite(r.longitude)) return false;
+          if (Number.isFinite(minModel) && (r.model_score == null || r.model_score < minModel)) return false;
+          if (Number.isFinite(minRoof) && (r.roof_score == null || r.roof_score < minRoof)) return false;
+          return true;
+        })
         .map((r) => {
           let colorScore: number | null = null;
           if (sortBy === "model_score") colorScore = r.model_score;
@@ -660,7 +668,7 @@ function HomesPageContent() {
           roofScore: rs,
         };
       });
-  }, [rpcMapPoints, rows, mapBounds, boundsRows, scoresByIndex, sortBy]);
+  }, [rpcMapPoints, rows, mapBounds, boundsRows, scoresByIndex, sortBy, minModelScore, minRoofScore]);
 
   if (err) {
     return (
