@@ -5,6 +5,7 @@ type DetailRow = {
   value: string;
   selectable?: boolean;
   listStyle?: boolean;
+  disclaimer?: string;
 };
 
 type ListingCardProps = {
@@ -31,6 +32,7 @@ function PillRow({
   value,
   selectable,
   listStyle,
+  disclaimer,
   stacked,
 }: DetailRow & { stacked?: boolean }) {
   const valueContent = listStyle ? (
@@ -67,18 +69,26 @@ function PillRow({
           {label.toUpperCase()}
         </div>
         {valueContent}
+        {disclaimer && (
+          <div className="text-[11px] leading-tight text-neutral-400">{disclaimer}</div>
+        )}
       </div>
     );
   }
 
   return (
-    <div className="flex items-start justify-between gap-4 rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3">
-      <div className="text-xs font-medium uppercase tracking-wider text-neutral-500 shrink-0">
-        {label.toUpperCase()}
+    <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3">
+      <div className="flex items-start justify-between gap-4">
+        <div className="text-xs font-medium uppercase tracking-wider text-neutral-500 shrink-0">
+          {label.toUpperCase()}
+        </div>
+        <div className="text-sm font-semibold text-neutral-900 min-w-0 text-right">
+          {valueContent}
+        </div>
       </div>
-      <div className="text-sm font-semibold text-neutral-900 min-w-0 text-right">
-        {valueContent}
-      </div>
+      {disclaimer && (
+        <div className="mt-1.5 text-[11px] leading-tight text-neutral-400">{disclaimer}</div>
+      )}
     </div>
   );
 }
@@ -156,6 +166,7 @@ export default function ListingCard({
                 value={r.value}
                 selectable={r.selectable}
                 listStyle={r.listStyle}
+                disclaimer={r.disclaimer}
                 stacked={stackedRows}
               />
             ))}

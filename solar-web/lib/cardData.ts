@@ -1,4 +1,4 @@
-export type CardRow = { label: string; value: string; selectable?: boolean; listStyle?: boolean };
+export type CardRow = { label: string; value: string; selectable?: boolean; listStyle?: boolean; disclaimer?: string };
 
 /** Matches Supabase public.homes table (+ optional extras). */
 type HomeRow = {
@@ -88,7 +88,6 @@ export function buildListingCardData(row: HomeRow): {
     { label: "Sale price", value: formatSalePrice(row.saleprice) },
     { label: "Sale date", value: formatDateMMDDYYYY(row.saledate) },
     { label: "Build year", value: getValue(row, "calculated_build_year") },
-    { label: "Roof age", value: getValue(row, "calculated_roof_age") !== "—" ? `${getValue(row, "calculated_roof_age")} years` : "—" },
     { label: "Square footage", value: formatNumberWithCommas(row.building_sqft) },
   ];
 

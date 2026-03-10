@@ -601,6 +601,20 @@ export default function HomeDetailPage() {
     : row;
   const { addressLine1, addressLine2, detailRows } = buildListingCardData(rowWithScores);
 
+  // Add roof age after "Build year" row (detail page only)
+  const roofAgeValue = row.calculated_roof_age != null && String(row.calculated_roof_age).trim() !== ""
+    ? String(row.calculated_roof_age)
+    : null;
+  if (roofAgeValue) {
+    const buildYearIdx = detailRows.findIndex((r) => r.label === "Build year");
+    const insertIdx = buildYearIdx >= 0 ? buildYearIdx + 1 : detailRows.length;
+    detailRows.splice(insertIdx, 0, {
+      label: "Est. roof age",
+      value: `${roofAgeValue} years`,
+      disclaimer: "Estimated from public permit and build records. May not reflect actual roof age.",
+    } as typeof detailRows[number]);
+  }
+
   const custom = orgHome !== null && orgHome !== "none" && typeof orgHome === "object" && orgHome.custom && typeof orgHome.custom === "object" ? (orgHome.custom as Record<string, unknown>) : null;
   const contactInfoUpdatedText = custom?.contact_info_updated_at && typeof custom.contact_info_updated_at === "string" ? formatNoteTimestamp(custom.contact_info_updated_at) : null;
   const homeInfoUpdatedText = custom?.home_info_updated_at && typeof custom.home_info_updated_at === "string" ? formatNoteTimestamp(custom.home_info_updated_at) : null;
