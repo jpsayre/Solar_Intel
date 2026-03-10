@@ -7,7 +7,7 @@ type PermitAlert = {
   id: string;
   homeIndex: string;
   address: string;
-  permitType: "solar" | "roof";
+  permitType: "solar" | "roof" | "battery" | "ev_charger";
   description: string;
   issueDate: string;
   daysAgo: number;
@@ -34,19 +34,41 @@ const FAKE_ALERTS: PermitAlert[] = [
   { id: "10", homeIndex: "BOULDER_CO_2044", address: "855 35th St, Boulder", permitType: "roof", description: "Full tear-off and re-roof — synthetic slate tiles", issueDate: daysAgoDate(25), daysAgo: 25, value: "$32,000" },
   { id: "11", homeIndex: "BOULDER_CO_13775", address: "4685 Baseline Rd, Boulder", permitType: "solar", description: "Solar PV system — 7.2 kW with optimizers", issueDate: daysAgoDate(27), daysAgo: 27, value: "$19,800" },
   { id: "12", homeIndex: "BOULDER_CO_950", address: "1220 Cedar Ave, Boulder", permitType: "roof", description: "Roof replacement — asphalt shingles, 22 sq, new underlayment", issueDate: daysAgoDate(29), daysAgo: 29, value: "$11,400" },
+  { id: "13", homeIndex: "BOULDER_CO_5230", address: "3050 5th St, Boulder", permitType: "battery", description: "Tesla Powerwall 3 installation — 13.5 kWh residential battery", issueDate: daysAgoDate(3), daysAgo: 3, value: "$12,500" },
+  { id: "14", homeIndex: "BOULDER_CO_9102", address: "1605 Cascade Ave, Boulder", permitType: "ev_charger", description: "Level 2 EV charger — 240V / 48A hardwired, garage mount", issueDate: daysAgoDate(6), daysAgo: 6, value: "$3,800" },
+  { id: "15", homeIndex: "BOULDER_CO_7781", address: "4220 Aurora Ave, Boulder", permitType: "battery", description: "Enphase IQ Battery 5P — 2x units, 10 kWh total", issueDate: daysAgoDate(11), daysAgo: 11, value: "$16,200" },
+  { id: "16", homeIndex: "BOULDER_CO_14550", address: "890 University Ave, Boulder", permitType: "ev_charger", description: "ChargePoint Home Flex — 50A circuit, outdoor pedestal", issueDate: daysAgoDate(15), daysAgo: 15, value: "$4,100" },
+  { id: "17", homeIndex: "BOULDER_CO_2290", address: "2340 Spruce St, Boulder", permitType: "battery", description: "Generac PWRcell — 18 kWh whole-home battery backup", issueDate: daysAgoDate(19), daysAgo: 19, value: "$19,800" },
+  { id: "18", homeIndex: "BOULDER_CO_11400", address: "1055 Moorhead Ave, Boulder", permitType: "ev_charger", description: "Wallbox Pulsar Plus — 240V / 40A, indoor garage install", issueDate: daysAgoDate(23), daysAgo: 23, value: "$3,200" },
 ];
 
-type FilterType = "all" | "solar" | "roof";
+type FilterType = "all" | "solar" | "roof" | "battery" | "ev_charger";
+
+const PERMIT_LABELS: Record<PermitAlert["permitType"], string> = {
+  solar: "Solar",
+  roof: "Roof",
+  battery: "Battery",
+  ev_charger: "EV Charger",
+};
+
+const PERMIT_TAG_COLORS: Record<PermitAlert["permitType"], string> = {
+  solar: "bg-amber-100 text-amber-800",
+  roof: "bg-blue-100 text-blue-700",
+  battery: "bg-green-100 text-green-700",
+  ev_charger: "bg-purple-100 text-purple-700",
+};
 
 export default function AlertsPage() {
   const [filter, setFilter] = useState<FilterType>("all");
 
-  const filtered = FAKE_ALERTS.filter(
-    (a) => filter === "all" || a.permitType === filter
-  );
+  const filtered = FAKE_ALERTS
+    .filter((a) => filter === "all" || a.permitType === filter)
+    .sort((a, b) => a.daysAgo - b.daysAgo);
 
   const solarCount = FAKE_ALERTS.filter((a) => a.permitType === "solar").length;
   const roofCount = FAKE_ALERTS.filter((a) => a.permitType === "roof").length;
+  const batteryCount = FAKE_ALERTS.filter((a) => a.permitType === "battery").length;
+  const evCount = FAKE_ALERTS.filter((a) => a.permitType === "ev_charger").length;
 
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
@@ -56,16 +78,18 @@ export default function AlertsPage() {
             Permit Alerts
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Solar and roof permits issued in the last 30 days. New roof = solar-ready lead.
+            Solar, roof, battery, and EV charger permits issued in the last 30 days.
           </p>
         </header>
 
-        <div className="mb-6 flex items-center gap-2">
+        <div className="mb-6 flex flex-wrap items-center gap-2">
           {(
             [
               { key: "all", label: `All (${FAKE_ALERTS.length})` },
               { key: "solar", label: `Solar (${solarCount})` },
               { key: "roof", label: `Roof (${roofCount})` },
+              { key: "battery", label: `Battery (${batteryCount})` },
+              { key: "ev_charger", label: `EV Charger (${evCount})` },
             ] as const
           ).map((opt) => (
             <button
@@ -99,13 +123,9 @@ export default function AlertsPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                          a.permitType === "solar"
-                            ? "bg-amber-100 text-amber-800"
-                            : "bg-blue-100 text-blue-700"
-                        }`}
+                        className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${PERMIT_TAG_COLORS[a.permitType]}`}
                       >
-                        {a.permitType === "solar" ? "Solar" : "Roof"}
+                        {PERMIT_LABELS[a.permitType]}
                       </span>
                       <span className="text-xs text-slate-400">
                         {a.daysAgo === 0
