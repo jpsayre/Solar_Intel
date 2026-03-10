@@ -815,7 +815,7 @@ function HomesPageContent() {
                   ))}
                 </select>
               </label>
-              <div className="flex flex-col gap-1 sm:w-48">
+              <div className="flex flex-col gap-1 sm:w-36">
                 <span className="text-xs font-medium text-slate-500">Filter by tag</span>
                 <input
                   type="text"
@@ -825,7 +825,7 @@ function HomesPageContent() {
                   className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
-              <div className="flex flex-col gap-1 sm:w-48">
+              <div className="flex flex-col gap-1 sm:w-36">
                 <span className="text-xs font-medium text-slate-500">Exclude tags</span>
                 <input
                   type="text"
