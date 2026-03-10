@@ -37,13 +37,14 @@ function createGrayClusterIcon(cluster: any) {
   });
 }
 
-/** Interpolate from blue (score=0) to red (score=100) via HSL. */
+/** Map score to a warm palette from light tan (low) to deep brown (high). */
+const SCORE_PALETTE = ["#dfb586", "#d5a57f", "#bb7640", "#a85720", "#a33c04"];
+
 function scoreToColor(score: number | null): string {
   if (score == null) return "#9ca3af"; // gray for no score
   const clamped = Math.max(0, Math.min(100, score));
-  // hue: 240 (blue) at 0, 0 (red) at 100
-  const hue = 240 - (clamped / 100) * 240;
-  return `hsl(${hue}, 85%, 50%)`;
+  const idx = Math.min(Math.floor(clamped / 20), SCORE_PALETTE.length - 1);
+  return SCORE_PALETTE[idx];
 }
 
 function FitBounds({ points }: { points: MapPoint[] }) {
