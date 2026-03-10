@@ -180,7 +180,7 @@ export default function HomeMap({
         {onBoundsChange ? (
           <MapBoundsReporter onBoundsChange={onBoundsChange} onViewChange={onViewChange} />
         ) : null}
-        <MarkerClusterGroup chunkedLoading disableClusteringAtZoom={13} maxClusterRadius={40} iconCreateFunction={createGrayClusterIcon}>
+        <MarkerClusterGroup chunkedLoading disableClusteringAtZoom={15} maxClusterRadius={40} iconCreateFunction={createGrayClusterIcon}>
           {pointsList.map((p) => {
             const color = scoreToColor(p.score);
             return (
