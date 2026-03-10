@@ -144,11 +144,11 @@ function HomesPageContent() {
   // Lightweight map points from RPC (scores pre-joined, no gray flash)
   type RpcMapPoint = { index: string; latitude: number; longitude: number; model_score: number | null; roof_score: number | null; hybrid_score: number | null };
   const [rpcMapPoints, setRpcMapPoints] = useState<RpcMapPoint[] | null>(null);
+  const rpcRequestRef = useRef(0); // track latest RPC request to ignore stale responses
 
-  // Reload map points when bounds change (debounced via mapBounds state)
+  // Load map points (no debounce here — caller is responsible for debouncing)
   const loadMapPoints = useCallback(async (bounds?: MapBounds | null) => {
-    const { data: userData } = await supabaseBrowser.auth.getUser();
-    if (!userData.user) return;
+    const reqId = ++rpcRequestRef.current;
     const params: Record<string, unknown> = { p_limit: MAP_POINTS_LIMIT };
     if (county) params.p_county = county;
     if (city) params.p_city = city;
@@ -163,19 +163,16 @@ function HomesPageContent() {
       console.error("get_map_points error:", error);
       return;
     }
-    setRpcMapPoints((data ?? []) as RpcMapPoint[]);
+    // Only apply if this is still the latest request (ignore stale responses)
+    if (reqId === rpcRequestRef.current) {
+      setRpcMapPoints((data ?? []) as RpcMapPoint[]);
+    }
   }, [county, city]);
 
   // Initial load (no bounds yet)
   useEffect(() => {
     loadMapPoints();
   }, [loadMapPoints]);
-
-  // Reload on bounds change
-  useEffect(() => {
-    if (!mapBounds) return;
-    loadMapPoints(mapBounds);
-  }, [mapBounds, loadMapPoints]);
 
   useEffect(() => {
     let alive = true;
@@ -199,11 +196,20 @@ function HomesPageContent() {
     return () => { alive = false; };
   }, []);
 
-  // Fetch home_scores for current rows
+  // Fetch home_scores for card rows (skip if RPC already provides scores for map dots)
   useEffect(() => {
     let alive = true;
     const list = mapBounds ? boundsRows : (rows ?? []);
     if (list.length === 0) return;
+    // Build scores from RPC data if available (avoids extra network request)
+    if (rpcMapPoints && rpcMapPoints.length > 0) {
+      const byIndex: Record<string, { model_score: number | null; roof_score: number | null }> = {};
+      for (const rp of rpcMapPoints) {
+        byIndex[rp.index] = { model_score: rp.model_score, roof_score: rp.roof_score };
+      }
+      setScoresByIndex(byIndex);
+      return;
+    }
     const indices = list.map((r) => r.index);
     supabaseBrowser
       .from("home_scores")
@@ -218,7 +224,7 @@ function HomesPageContent() {
         setScoresByIndex(byIndex);
       });
     return () => { alive = false; };
-  }, [mapBounds, boundsRows, rows]);
+  }, [mapBounds, boundsRows, rows, rpcMapPoints]);
 
   useEffect(() => {
     let alive = true;
@@ -367,8 +373,6 @@ function HomesPageContent() {
 
   const loadNextPage = useCallback(async () => {
     if (!rows || rows.length === 0) return;
-    const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
-    if (userErr || !userData.user) return;
 
     let query = supabaseBrowser
       .from("homes")
@@ -408,11 +412,6 @@ function HomesPageContent() {
   const loadRowsInBounds = useCallback(
     async (bounds: MapBounds) => {
       setBoundsLoading(true);
-      const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
-      if (userErr || !userData.user) {
-        setBoundsLoading(false);
-        return;
-      }
 
       let query = supabaseBrowser
         .from("homes")
@@ -528,12 +527,14 @@ function HomesPageContent() {
     if (boundsDebounceRef.current) clearTimeout(boundsDebounceRef.current);
     boundsDebounceRef.current = setTimeout(() => {
       boundsDebounceRef.current = null;
+      // Fire both RPC (map dots) and card query together after debounce
+      loadMapPoints(mapBounds);
       loadRowsInBounds(mapBounds);
     }, 400);
     return () => {
       if (boundsDebounceRef.current) clearTimeout(boundsDebounceRef.current);
     };
-  }, [mapBounds, loadRowsInBounds]);
+  }, [mapBounds, loadRowsInBounds, loadMapPoints]);
 
   const displayedRows = useMemo(() => {
     let list = mapBounds ? boundsRows : (rows ?? []);
