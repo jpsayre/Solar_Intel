@@ -154,14 +154,6 @@ export default function HomeMap({
     Number.isFinite(initialCenter[1]) &&
     Number.isFinite(initialZoom);
 
-  if (pointsList.length === 0) {
-    return (
-      <div className="flex h-[320px] items-center justify-center rounded-2xl border border-neutral-200 bg-neutral-50 text-sm text-slate-500">
-        No locations to show. Adjust filters or add homes with latitude/longitude.
-      </div>
-    );
-  }
-
   return (
     <div className="relative z-0 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm [&_.leaflet-interactive]:cursor-pointer">
       <MapContainer

@@ -932,14 +932,7 @@ function HomesPageContent() {
             ) : (
               <>
                 Showing {mapPoints.length.toLocaleString()} homes.
-                {rpcMapPoints && rpcMapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to load more."}{" "}
-                <button
-                  type="button"
-                  onClick={() => setMapBounds(null)}
-                  className="font-medium text-amber-600 underline hover:text-amber-700"
-                >
-                  Show all
-                </button>
+                {rpcMapPoints && rpcMapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to load more."}
               </>
             )}
           </p>
