@@ -99,9 +99,8 @@ export default function HomeDetailPage() {
   const params = useParams<{ index: string }>();
   const searchParams = useSearchParams();
   const from = searchParams.get("from");
-  const fromFollowing = from === "following";
-  const backLabel = fromFollowing ? "Back to following" : "Back to explorer";
-  const backHref = fromFollowing ? "/following" : "/homes";
+  const backLabel = from === "following" ? "Back to following" : from === "alerts" ? "Back to alerts" : "Back to explorer";
+  const backHref = from === "following" ? "/following" : from === "alerts" ? "/alerts" : "/homes";
 
   const [row, setRow] = useState<HomeRow | null>(null);
   const [imgUrl, setImgUrl] = useState<string>("");

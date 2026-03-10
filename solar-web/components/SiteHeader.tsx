@@ -107,6 +107,13 @@ export default function SiteHeader() {
                 >
                   Following
                 </Link>
+                <Link
+                  href="/alerts"
+                  onClick={() => setMenuOpen(false)}
+                  className={`block px-4 py-3 text-sm font-medium ${pathname === "/alerts" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
+                >
+                  Permit Alerts
+                </Link>
                 <div className="border-t border-slate-100 mt-1 pt-1">
                   <button
                     type="button"
