@@ -153,7 +153,7 @@ function HomesPageContent() {
       const params: Record<string, unknown> = { p_limit: MAP_POINTS_LIMIT };
       if (county) params.p_county = county;
       if (city) params.p_city = city;
-      const { data, error } = await supabaseBrowser.rpc("get_map_points", params);
+      const { data, error } = await supabaseBrowser.rpc("get_map_points", params).limit(MAP_POINTS_LIMIT);
       if (!alive) return;
       if (error) {
         console.error("get_map_points error:", error);
