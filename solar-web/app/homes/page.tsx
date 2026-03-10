@@ -47,7 +47,7 @@ const PAGE_SIZE = 500;
 const NEXT_PAGE_SIZE = 100;
 const BOUNDS_QUERY_LIMIT = 500;
 const FILTER_OPTIONS_LIMIT = 2000;
-const MAP_POINTS_LIMIT = 2000;
+const MAP_POINTS_LIMIT = 50000;
 
 type HomeRow = {
   index: string;

@@ -27,7 +27,7 @@ LEFT JOIN home_scores s ON h.index = s.home_index;
 CREATE OR REPLACE FUNCTION get_map_points(
   p_county text DEFAULT NULL,
   p_city text DEFAULT NULL,
-  p_limit int DEFAULT 2000
+  p_limit int DEFAULT 50000
 )
 RETURNS TABLE(
   index text,
@@ -54,14 +54,6 @@ RETURNS TABLE(
   LEFT JOIN home_scores s ON h.index = s.home_index
   WHERE (p_county IS NULL OR h.county = p_county)
     AND (p_city IS NULL OR h.city = p_city)
-  ORDER BY
-    CASE
-      WHEN s.model_score IS NOT NULL AND s.roof_score IS NOT NULL
-        THEN ROUND(0.6 * s.model_score + 0.4 * s.roof_score)
-      WHEN s.model_score IS NOT NULL THEN s.model_score
-      WHEN s.roof_score IS NOT NULL THEN s.roof_score
-      ELSE 0
-    END DESC
   LIMIT p_limit;
 $$ LANGUAGE sql STABLE;
 
