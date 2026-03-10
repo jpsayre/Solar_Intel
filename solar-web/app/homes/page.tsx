@@ -931,7 +931,8 @@ function HomesPageContent() {
               "Loading homes in map view…"
             ) : (
               <>
-                Showing {mapPoints.length} homes.{" "}
+                Showing {mapPoints.length.toLocaleString()} homes.
+                {rpcMapPoints && rpcMapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to load more."}{" "}
                 <button
                   type="button"
                   onClick={() => setMapBounds(null)}
