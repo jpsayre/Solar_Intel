@@ -152,6 +152,10 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     # --- EV charger
     features["ev_charger"] = _desc_matches(text, DESC_PATTERNS["ev_charger"])
 
+    # If EV charger or battery is detected, remove solar_pv flag
+    # (e.g. category="Solar" but description="level 2 charger for EV")
+    features["solar_pv"] = features["solar_pv"] & ~features["ev_charger"] & ~features["battery"]
+
     # --- Roof
     features["roof_new_or_replace"] = (
         _cat_matches(cat, CATEGORY_MATCHES["roof_new_or_replace"])

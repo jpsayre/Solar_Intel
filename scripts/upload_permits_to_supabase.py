@@ -93,17 +93,26 @@ CATEGORY_TO_TYPE = {
 
 # Keywords in description to refine classification beyond category
 DESCRIPTION_OVERRIDES = [
-    ("solar", "solar"),
-    ("photovoltaic", "solar"),
-    (" pv ", "solar"),
-    ("battery", "battery"),
-    ("powerwall", "battery"),
-    ("energy storage", "battery"),
+    # EV charger — check BEFORE solar (category "ENERGY EFFICIENT SYSTEM" is often solar,
+    # but description may say "level 2 charger for EV")
     ("ev charger", "ev_charger"),
     ("ev charging", "ev_charger"),
     ("electric vehicle", "ev_charger"),
     ("chargepoint", "ev_charger"),
     ("wallbox", "ev_charger"),
+    ("level 2 charg", "ev_charger"),
+    ("level 2 ev", "ev_charger"),
+    ("evse", "ev_charger"),
+    ("charger for ev", "ev_charger"),
+    # Battery — check BEFORE solar
+    ("battery", "battery"),
+    ("powerwall", "battery"),
+    ("energy storage", "battery"),
+    # Solar
+    ("solar", "solar"),
+    ("photovoltaic", "solar"),
+    (" pv ", "solar"),
+    # Other
     ("heat pump", "heat_pump"),
     ("mini-split", "heat_pump"),
     ("mini split", "heat_pump"),
