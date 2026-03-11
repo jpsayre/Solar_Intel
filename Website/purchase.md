@@ -18,6 +18,3 @@ Tier 2: These homes are in the top 5-10% range. They're expected to generate at 
 Tier 3: These homes are in the top 10-20% range. They're expected to generate at least 1 sale per 33 outreaches
 
 40 Tier 3 Homes: $800
-
-
-Note: Baseline adoption rate is ~1.5% of homes/year which equals 1 sale per 67 outreaches
