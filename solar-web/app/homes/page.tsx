@@ -759,7 +759,15 @@ function HomesPageContent() {
         </header>
 
         <div className="mb-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 text-sm font-semibold text-slate-700">Filters</div>
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700">Filters</span>
+            <span className="group relative">
+              <span className="flex h-5 w-5 cursor-default items-center justify-center rounded-full border border-neutral-300 text-xs font-medium text-neutral-400">i</span>
+              <span className="pointer-events-none absolute right-0 top-7 z-20 w-56 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-xs text-slate-600 opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                All homes shown are single-family, owner-occupied residential properties.
+              </span>
+            </span>
+          </div>
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="flex flex-col gap-1">
