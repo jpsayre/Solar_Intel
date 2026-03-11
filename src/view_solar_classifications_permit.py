@@ -13,7 +13,10 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
+from flask_auth import register_admin_auth
+
 app = Flask(__name__, template_folder="templates")
+register_admin_auth(app)
 
 # Project root (parent of src/)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

@@ -18,7 +18,10 @@ from pathlib import Path
 import pandas as pd
 from flask import Flask, jsonify, render_template, request, send_from_directory
 
+from flask_auth import register_admin_auth
+
 app = Flask(__name__, template_folder=Path(__file__).resolve().parent / "templates")
+register_admin_auth(app)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 CSV_PATH = PROJECT_ROOT / "data" / "working" / "Boulder_CO_Filtered_API_Output.csv"

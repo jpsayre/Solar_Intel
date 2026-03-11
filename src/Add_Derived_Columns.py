@@ -1,19 +1,14 @@
 """
-Add derived columns to Boulder semi-final solar classifier CSV:
+Add derived columns to the Regrid+API joined CSV:
 
-1. neighbors_w_solar at several radii: count of homes with solar_panels=='Yes' within 0.5, 0.25, 0.1, and 0.05 miles (by lat/lon)
-2. time_since_sale: years since saledate (current_year - sale year)
-3. time_since_build: years since calculated_build_year (current_year - build year)
-4. city_solar_percentage: share of each city's rows that have solar_panels=='Yes' (percentage)
-5. recent_rebuild: 1 if year_built_effective_date has a year within the last 10 years, else 0
-6. recent_purchase: 1 if saledate was within the last 2 years, else 0
-7. recent_build: 1 if yearbuilt was within the last 5 years, else 0
-8. electric_heating: 1 if heatingdscr contains "Electric" or "Heat Pump", else 0
-
-Reads:  data/working/Boulder_CO_Regrid_joined_with_API.csv
-Writes: data/working/Boulder_CO_Regrid_joined_with_API test.csv
-
-Requires: pandas, numpy
+1. neighbors_w_solar at several radii (if solar_panels column exists)
+2. time_since_sale: years since saledate
+3. time_since_build: years since calculated_build_year
+4. city_solar_percentage (if solar_panels column exists)
+5. recent_rebuild: 1 if year_built_effective_date within last N years
+6. recent_purchase: 1 if saledate within last N years
+7. recent_build: 1 if yearbuilt within last N years
+8. electric_heating: 1 if heatingdscr contains "Electric" or "Heat Pump"
 """
 
 from __future__ import annotations
@@ -23,10 +18,6 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-
-# --- Configuration ---
-INPUT_CSV = "data/working/Boulder_CO_Regrid_joined_with_API.csv"
-OUTPUT_CSV = "data/working/Boulder_CO_Regrid_joined_with_API test.csv"
 # Radii (miles) for neighbor-with-solar counts; one column per radius
 NEIGHBOR_RADIUS_MILES = [0.5, 0.25, 0.1, 0.05]
 CURRENT_YEAR = 2026
@@ -105,10 +96,15 @@ def parse_sale_year(saledate_series: pd.Series) -> pd.Series:
     return saledate_series.map(one)
 
 
-def main() -> None:
-    base = Path(__file__).resolve().parent.parent
-    input_path = base / INPUT_CSV
-    output_path = base / OUTPUT_CSV
+def main(config=None) -> None:
+    if config:
+        input_path = config.regrid_joined_path
+        output_path = config.working_dir / "regrid_with_derived.csv"
+        config.ensure_dirs()
+    else:
+        base = Path(__file__).resolve().parent.parent
+        input_path = base / "data" / "working" / "Boulder_CO_Regrid_joined_with_API.csv"
+        output_path = base / "data" / "working" / "Boulder_CO_Regrid_joined_with_API test.csv"
 
     if not input_path.exists():
         raise FileNotFoundError(f"Input CSV not found: {input_path}")
@@ -127,7 +123,11 @@ def main() -> None:
         raise ValueError("Need either (latitude, longitude) or (lat, lon) columns")
 
     # 1) neighbors_w_solar at each radius: count others within radius with solar_panels == 'Yes'
-    solar_yes = (df["solar_panels"].astype(str).str.strip().str.lower() == "yes").values
+    has_solar_col = "solar_panels" in df.columns
+    if has_solar_col:
+        solar_yes = (df["solar_panels"].astype(str).str.strip().str.lower() == "yes").values
+    else:
+        solar_yes = np.zeros(len(df), dtype=bool)
     lat_arr = lat.values.astype(float)
     lon_arr = lon.values.astype(float)
     n = len(df)
@@ -162,11 +162,14 @@ def main() -> None:
     df["time_since_build"] = (CURRENT_YEAR - build_year).astype("Int64")
 
     # 4) city_solar_percentage
-    city_pct = (
-        df.groupby("city")["solar_panels"]
-        .transform(lambda s: 100.0 * (s.astype(str).str.strip().str.lower() == "yes").mean())
-    )
-    df["city_solar_percentage"] = city_pct.round(2)
+    if has_solar_col:
+        city_pct = (
+            df.groupby("city")["solar_panels"]
+            .transform(lambda s: 100.0 * (s.astype(str).str.strip().str.lower() == "yes").mean())
+        )
+        df["city_solar_percentage"] = city_pct.round(2)
+    else:
+        df["city_solar_percentage"] = 0.0
 
     # 5) recent_rebuild: 1 if year_built_effective_date within last RECENT_REBUILD_YEARS years
     effective_year = parse_effective_year(df["year_built_effective_date"])
@@ -196,4 +199,13 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", help="County config name or path")
+    args = parser.parse_args()
+
+    if args.config:
+        from pipeline_config import load_config
+        main(load_config(args.config))
+    else:
+        main()

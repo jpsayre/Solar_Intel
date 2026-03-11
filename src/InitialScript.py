@@ -1,104 +1,128 @@
+"""
+Step 0: Filter Regrid data and call Google Sunroof API.
+
+Reads the raw Regrid export, applies property filters, then calls the
+Google Solar API for each property to get roof segment data.
+
+NOTE - the API output appends to the existing CSV. Delete the output
+file to recreate from scratch.
+"""
+
 import pandas as pd
 from datetime import datetime
 import SunroofBatchAPI_test
 
-"""
-This script is reading in the Regrid data and then applying filters to it before calling the Google Sunroof API for the defined row range.
 
-NOTE - the data adds on to the existing csv_output file. So that can cause problems if this code changes anything. Sometimes it's best to delete the output file and recreate from scratch.
-"""
+def apply_regrid_filters(df, filters):
+    """Apply configurable filters to the Regrid dataframe.
 
-location = 'Boulder_CO'
+    Args:
+        df: Raw Regrid DataFrame
+        filters: Dict of filter rules from county config
+    """
+    if not filters:
+        return df
 
-# csv_path = '/Users/jeffs/Projects/SolarProject/data/raw/BoulderColorado_Full_Paid_WorkingCopy.csv'
-csv_path = '/Users/jeffs/Projects/SolarProject/data/working/test_images_dataset.csv'
-csv_output = '/Users/jeffs/Projects/SolarProject/data/working/'+location+'_Python_SunroofAPI_Output_test.csv'
+    if "usedesc" in filters:
+        df = df[df["usedesc"].isin(filters["usedesc"])]
 
+    if "zoning_description_contains" in filters:
+        pattern = filters["zoning_description_contains"]
+        df = df[df["zoning_description"].str.contains(pattern, case=False, na=False)]
 
-df = pd.read_csv(csv_path)
+    if "designcodedscr" in filters:
+        df = df[df["designcodedscr"].isin(filters["designcodedscr"])]
 
-#Rows to sample
-df = df = df.iloc[0:200]
+    if "sales_cd" in filters:
+        df = df[df["sales_cd"].isin(filters["sales_cd"])]
 
-# df = df.reset_index(names='original_index')
+    if "mainfloorsf_min" in filters:
+        df = df[df["mainfloorsf"] >= filters["mainfloorsf_min"]]
 
+    if "saleprice_min" in filters:
+        df = df[df["saleprice"] >= filters["saleprice_min"]]
 
+    if filters.get("owner_occupied"):
+        df['OwnerOccupied'] = (
+            df['mailadd'].astype(str).str[:6] == df['address'].astype(str).str[:6]
+        )
+        df = df[df["OwnerOccupied"] == True]
 
-# #Filters applied to data
-# allowed_designs = [
-#     "1 Story - Ranch",
-#     "2-3 Story",
-#     "Split-level",
-#     "Bi-level",
-#     "PATIO HOMES",
-#     "MODULAR",
-#     "A-Frame",
-# ]
+    if "calculated_build_year_min" in filters:
+        df['calculated_build_year'] = (
+            df[['yearbuilt', 'year_built_effective_date']]
+            .apply(pd.to_numeric, errors='coerce')
+            .max(axis=1)
+        )
+        df = df[df["calculated_build_year"] >= filters["calculated_build_year_min"]]
 
-# df = df[
-#     (df["usedesc"] == "SINGLE FAM.RES.-LAND") &
-#     (df["zoning_description"].str.contains("residential", case=False, na=False)) &
-#     (df["designcodedscr"].isin(allowed_designs)) &
-#     (df["sales_cd"] == "Q") &
-#     (df["mainfloorsf"] >= 800) &
-#     (df["saleprice"] >= 250000)
-# ]
-
-
-# print("Home Type Filters: ",len(df))
-
-
-# df['OwnerOccupied'] = (
-#     df['mailadd'].astype(str).str[:6] == df['address'].astype(str).str[:6]
-# )
-# df = df[df["OwnerOccupied"] == True]
-
-# print("Owner Occupied Filters: ",len(df))
+    return df
 
 
-# #Creating data, but not currently using as filters
-# df['calculated_build_year'] = (
-#     df[['yearbuilt', 'year_built_effective_date']]
-#     .apply(pd.to_numeric, errors='coerce')
-#     .max(axis=1)
-# )
+def run(config, max_calls=None, chunk_size=50, start_row=0):
+    """Filter Regrid data and call Sunroof API.
 
-# df = df[df["calculated_build_year"] >= 1960]
+    Args:
+        config: CountyConfig object
+        max_calls: Max API calls to make (None = all rows)
+        chunk_size: Rows per API batch
+        start_row: Row to start from (for resuming)
+    """
+    config.ensure_dirs()
 
-# current_year = datetime.now().year
+    print(f"Reading Regrid data from {config.regrid_csv}")
+    df = pd.read_csv(config.regrid_csv)
+    print(f"Raw records: {len(df)}")
 
-# df['calculated_roof_age'] = current_year - df['calculated_build_year']
+    df = apply_regrid_filters(df, config.regrid_filters)
+    print(f"After filters: {len(df)}")
+
+    # Ensure we have original_index
+    if "original_index" not in df.columns:
+        df = df.reset_index(names="original_index")
+
+    # Save the filtered Regrid data (used later by create_parsed_permits_by_year)
+    df.to_csv(str(config.regrid_filtered_path), index=False)
+    print(f"Saved filtered Regrid to {config.regrid_filtered_path}")
+
+    csv_output = str(config.sunroof_api_output_path)
+
+    if max_calls is None:
+        max_calls = len(df)
+
+    call_counter = 0
+    current_row = start_row
+
+    print(f"Starting Sunroof API calls: start_row={start_row}, max_calls={max_calls}")
+
+    while call_counter < max_calls:
+        remaining = max_calls - call_counter
+        current_chunk = min(chunk_size, remaining)
+
+        subset = df.iloc[current_row : current_row + current_chunk]
+
+        if subset.empty:
+            break
+
+        SunroofBatchAPI_test.run(
+            subset,
+            csv_output,
+            resume=True
+        )
+
+        current_row += current_chunk
+        call_counter += len(subset)
+
+    print(f"Sunroof API complete. Output: {csv_output}")
 
 
-# df.to_csv('/Users/jeffs/Projects/SolarProject/data/working/'+location+'_Primary_Regrid_Filter_Output.csv', index=False)
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", required=True, help="County config name or path")
+    parser.add_argument("--max-calls", type=int, default=None, help="Max API calls")
+    parser.add_argument("--start-row", type=int, default=0, help="Start row for resuming")
+    args = parser.parse_args()
 
-# print("Dataset Total: ",len(df))
-
-# print(df.head(10))
-
-max_calls = 200
-call_counter = 0
-chunk_size = 50
-#set the start row to right where you left off, not +1 (ie: 200 calls, start at 200)
-start_row = 0
-
-print("Last Run Start Row: ", str(start_row))
-print("Call Count: ", str(max_calls))
-
-while call_counter < max_calls:
-    remaining = max_calls - call_counter
-    current_chunk = min(chunk_size, remaining)
-
-    subset = df.iloc[start_row : start_row + current_chunk]
-
-    if subset.empty:
-        break
-
-    SunroofBatchAPI_test.run(
-        subset,
-        csv_output,
-        resume=True
-    )
-
-    start_row += current_chunk
-    call_counter += len(subset)
+    from pipeline_config import load_config
+    run(load_config(args.config), max_calls=args.max_calls, start_row=args.start_row)

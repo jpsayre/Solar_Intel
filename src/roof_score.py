@@ -164,12 +164,22 @@ def compute_roof_score(row: dict, matching_segments: list[dict]) -> float | None
     return round(max(score_sum), 2)
 
 
-def run(output_csv: str | None = None, sql_limit: int | None = None) -> None:
+def run(output_csv: str | None = None, sql_limit: int | None = None, config=None) -> None:
+    if config:
+        out_path = str(config.roof_score_path)
+        config.ensure_dirs()
+    else:
+        out_path = output_csv or DEFAULT_OUTPUT_CSV
+
     db_url = os.getenv("DATABASE_SOLAR_INTEL_URL")
     if not db_url:
-        raise RuntimeError("DATABASE_SOLAR_INTEL_URL is not set")
-
-    out_path = output_csv or DEFAULT_OUTPUT_CSV
+        # Fallback: compute roof scores from the Sunroof API output CSV
+        csv_path = config.sunroof_api_output_path if config else None
+        if csv_path and os.path.exists(csv_path):
+            print(f"DATABASE_SOLAR_INTEL_URL not set. Computing roof scores from {csv_path}")
+            df = pd.read_csv(csv_path)
+            return _compute_from_dataframe(df, out_path)
+        raise RuntimeError("DATABASE_SOLAR_INTEL_URL is not set and no Sunroof API CSV found")
     conn = psycopg2.connect(db_url)
 
     try:
@@ -216,12 +226,49 @@ def run(output_csv: str | None = None, sql_limit: int | None = None) -> None:
     print(f"Wrote {len(out_df)} rows to {out_path}")
 
 
+def _compute_from_dataframe(df: pd.DataFrame, out_path: str) -> None:
+    """Compute roof scores from a DataFrame (CSV fallback when no DB available)."""
+    rows = df.to_dict("records")
+
+    original_index_col = "original_index"
+    if original_index_col not in df.columns:
+        for c in df.columns:
+            if c.lower() == "original_index":
+                original_index_col = c
+                break
+
+    ok_col = "ok" if "ok" in df.columns else "OK"
+    is_ok = df[ok_col].astype(str).str.strip().str.lower() == "true"
+
+    roof_scores = []
+    for i, row in enumerate(rows):
+        if not is_ok.iloc[i]:
+            roof_scores.append(None)
+            continue
+        orientations, matching_segments = get_all_orientations(row)
+        score = compute_roof_score(row, matching_segments)
+        roof_scores.append(score)
+
+    out_df = pd.DataFrame({
+        "original_index": df[original_index_col],
+        "roof_score": roof_scores,
+    })
+
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+    out_df.to_csv(out_path, index=False)
+    print(f"Wrote {len(out_df)} rows to {out_path}")
+
+
 if __name__ == "__main__":
-    output = sys.argv[1] if len(sys.argv) > 1 else None
-    limit = None
-    if len(sys.argv) > 2:
-        try:
-            limit = int(sys.argv[2])
-        except ValueError:
-            pass
-    run(output_csv=output, sql_limit=limit)
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", help="County config name or path")
+    parser.add_argument("--output", help="Output CSV path")
+    parser.add_argument("--limit", type=int, help="SQL LIMIT")
+    args = parser.parse_args()
+
+    if args.config:
+        from pipeline_config import load_config
+        run(config=load_config(args.config), sql_limit=args.limit)
+    else:
+        run(output_csv=args.output, sql_limit=args.limit)
