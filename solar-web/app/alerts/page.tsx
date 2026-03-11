@@ -51,7 +51,7 @@ export default function AlertsPage() {
     let alive = true;
     async function load() {
       const { data, error } = await supabaseBrowser.rpc("get_recent_permits", {
-        p_days: 30,
+        p_days: 90,
         p_types: ["solar", "roof", "battery", "ev_charger"],
         p_limit: 200,
       });

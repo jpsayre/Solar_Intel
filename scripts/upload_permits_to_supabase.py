@@ -38,7 +38,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 COUNTY_CONFIGS = {
     "boulder_co": {
-        "permits_csv": PROJECT_ROOT / "data" / "raw" / "Permits.csv",
+        "permits_csv": PROJECT_ROOT / "data" / "raw" / "Boulder_CO_Permits_3_11_26.csv",
         "regrid_csv": PROJECT_ROOT / "data" / "working" / "Boulder_CO_Regrid_joined_with_API.csv",
         "index_prefix": "BOULDER_CO_",
         "county_name": "Boulder",
