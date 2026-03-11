@@ -36,7 +36,7 @@ const FEATURES = [
 const DIFFERENTIATORS = [
   {
     heading: "Data science, not just data",
-    body: "Most lead providers hand you a list filtered by home value and roof age. We build predictive models that learn which combinations of property attributes, neighborhood dynamics, permit history, and economic factors actually predict solar adoption. Our top-scored decile captures 37% of all future installs.",
+    body: "Most lead providers hand you a list filtered by home value and roof age. We build predictive models that learn which combinations of property attributes, neighborhood dynamics, permit history, and economic factors actually predict solar adoption. Our top 5% of homes capture 20% of sales.",
   },
   {
     heading: "Validated on real outcomes",
@@ -62,7 +62,7 @@ export default function AboutPage() {
               Solar Intelligence
             </h1>
             <p className="mt-2 text-lg text-slate-600">
-              Smarter solar leads. Fewer wasted doors.
+              Smarter solar means less wasted time.
             </p>
           </div>
           <Link
