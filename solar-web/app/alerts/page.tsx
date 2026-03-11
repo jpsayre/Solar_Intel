@@ -85,7 +85,7 @@ export default function AlertsPage() {
             Permit Alerts
           </h1>
           <p className="mt-1 text-sm text-slate-600">
-            Solar, roof, battery, and EV charger permits issued in the last 30 days.
+            Solar, roof, battery, and EV charger permits issued in the last 90 days.
           </p>
         </header>
 
@@ -120,7 +120,7 @@ export default function AlertsPage() {
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-2xl border border-neutral-200 bg-neutral-50/80 px-6 py-12 text-center text-slate-600">
-            <p className="font-medium">No permits in the last 30 days</p>
+            <p className="font-medium">No permits in the last 90 days</p>
           </div>
         ) : (
           <div className="flex flex-col gap-3">
