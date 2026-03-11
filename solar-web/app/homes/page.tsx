@@ -916,23 +916,7 @@ function HomesPageContent() {
           )}
         </p>
 
-        {((!mapBounds && hasMore) || displayedRows.length > offset) && (
-          <div className="mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                if (mapBounds) {
-                  setOffset((prev) => prev + NEXT_PAGE_SIZE);
-                } else {
-                  loadNextPage();
-                }
-              }}
-              className="rounded-xl border border-neutral-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2"
-            >
-              Load more
-            </button>
-          </div>
-        )}
+
 
         <div className="flex flex-col gap-8">
           {displayedRows.slice(0, offset).map((r) => {
