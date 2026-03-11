@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,6 +12,7 @@ const supabase = createClient(
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
@@ -26,7 +27,8 @@ export default function LoginPage() {
       return;
     }
 
-    router.push("/");
+    const redirect = searchParams.get("redirect");
+    router.push(redirect && redirect.startsWith("/") ? redirect : "/homes");
     router.refresh();
   }
 
