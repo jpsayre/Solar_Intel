@@ -13,6 +13,7 @@ Uses strap-based train/test split for proper out-of-sample evaluation.
 
 from __future__ import annotations
 
+import copy
 import os
 import warnings
 from datetime import datetime
@@ -40,10 +41,19 @@ from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
+try:
+    import lightgbm as lgb
+    HAS_LIGHTGBM = True
+except ImportError:
+    HAS_LIGHTGBM = False
+
 warnings.filterwarnings("ignore")
 
+# Sample weighting: exponential decay so recent years matter more
+SAMPLE_WEIGHT_DECAY = 0.85  # weight = decay^(max_year - year), e.g. 5yr old data gets 0.85^5 = 0.44
+
 # High-scale numeric columns: log-transform before scaling (prices, areas in $ or sqft)
-LOG_TRANSFORM_COLS = ["saleprice", "saleprice_int", "sqft", "area_building", "recrdareano", "mainfloorsf", "mainfloorsf_int", "bsmtsf", "carstoragesf", "electricity_use_proxy"]
+LOG_TRANSFORM_COLS = ["saleprice", "saleprice_int", "sqft", "area_building", "recrdareano", "mainfloorsf", "mainfloorsf_int", "bsmtsf", "carstoragesf", "electricity_use_proxy", "median_household_income", "median_home_value", "income_per_sqft", "est_annual_electricity_cost"]
 
 # Feature selection: top N features to keep per fold (None = use all)
 N_FEATURES_SELECT = 25
@@ -53,7 +63,7 @@ N_FEATURES_CANDIDATE = 50
 USE_LIFT_RERANK = True
 # Max rows for feature selection (subsample if larger - SAGA is slow on big data).
 # Set to None to use all data (slower but no subsampling).
-FEATURE_SELECTION_MAX_ROWS = 10_000
+FEATURE_SELECTION_MAX_ROWS = None
 # Skip feature selection if fewer than this many positives in train (Lasso/Ridge unstable)
 FEATURE_SELECTION_MIN_POSITIVES = 30
 # Drop one-hot/binary features with fewer than this many samples (n=1) in train
@@ -69,8 +79,14 @@ INTERACTION_TRANSFORMS: dict[tuple[str, str], str] = {
     ("avg_electricity_price", "mainfloorsf"): "log_both",
     ("avg_electricity_price", "average_rate"): "log_a",
     ("avg_electricity_price", "likely_mortgage_rate"): "log_a",
-    ("closest_fifty_percentage", "avg_electricity_price"): "log_a",
-    ("average_rate", "mainfloorsf"): "log_both",
+    ("closest_fifty_percentage", "avg_electricity_price"): "log_b",
+    ("average_rate", "mainfloorsf"): "log_a",
+    ("average_rate", "saleprice"): "log_a",
+    ("roof_score", "mainfloorsf"): "log_both",
+    ("median_household_income", "avg_electricity_price"): "log_a",
+    ("median_household_income", "closest_fifty_percentage"): "log_b",
+    ("median_home_value", "roof_score"): "log_both",
+    ("pct_owner_occupied", "closest_fifty_percentage"): "log_b",
 }
 INTERACTION_PAIRS = [
     ("avg_electricity_price", "mainfloorsf"),   # Electricity cost proxy: larger home x higher $/kWh
@@ -88,14 +104,33 @@ INTERACTION_PAIRS = [
     # electricity_use_proxy interactions (high usage × price/rate = strong solar incentive)
     ("electricity_use_proxy", "avg_electricity_price"),
     ("electricity_use_proxy", "likely_mortgage_rate"),
+    # Census interactions
+    ("median_household_income", "closest_fifty_percentage"),  # Ability to pay × social contagion
+    ("median_home_value", "roof_score"),                      # High-value home × good roof
+    ("pct_college_educated", "avg_electricity_price"),        # Education × cost awareness
+    ("pct_owner_occupied", "closest_fifty_percentage"),       # Neighbor effect only on owners
 ]
 
-# Paths
+# Paths (defaults, overridden when config is provided)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = PROJECT_ROOT / "data" / "working" / "parsed_permits_by_year.csv"
 AVG_YEARLY_INTEREST_PATH = PROJECT_ROOT / "data" / "final" / "avg_yearly_interest.csv"
 OUTPUT_DIR = PROJECT_ROOT / "data_science" / "output" / "walk_forward"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# These can be overridden by set_config()
+_config = None
+
+def set_config(config):
+    """Override paths from a CountyConfig object."""
+    global DATA_PATH, AVG_YEARLY_INTEREST_PATH, OUTPUT_DIR, YEAR_START, YEAR_END, _config
+    _config = config
+    DATA_PATH = config.parsed_permits_by_year_path
+    AVG_YEARLY_INTEREST_PATH = config.avg_yearly_interest_path
+    OUTPUT_DIR = config.output_dir
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    YEAR_START = config.year_min
+    YEAR_END = config.year_max
 
 # Columns to exclude from features (identifiers, target, leakage)
 EXCLUDE_COLS = [
@@ -151,12 +186,18 @@ def get_feature_types(X: pd.DataFrame) -> tuple[list[str], list[str]]:
     return numeric, categorical
 
 
-def _interaction_transform(va: np.ndarray, vb: np.ndarray, name: str) -> np.ndarray:
-    """Apply transform to interaction. va, vb are 1d arrays."""
+def _interaction_transform(
+    va: np.ndarray, vb: np.ndarray, name: str,
+    med_a: float | None = None, med_b: float | None = None,
+) -> np.ndarray:
+    """Apply transform to interaction. va, vb are 1d arrays.
+    med_a/med_b: pre-computed medians (from train set) for NaN fill."""
     va = np.asarray(va, dtype=float)
     vb = np.asarray(vb, dtype=float)
-    va = np.where(np.isnan(va), np.nanmedian(va), va)
-    vb = np.where(np.isnan(vb), np.nanmedian(vb), vb)
+    fill_a = med_a if med_a is not None else np.nanmedian(va)
+    fill_b = med_b if med_b is not None else np.nanmedian(vb)
+    va = np.where(np.isnan(va), fill_a, va)
+    vb = np.where(np.isnan(vb), fill_b, vb)
     if name == "raw":
         return va * vb
     if name == "log_a":
@@ -178,26 +219,32 @@ def add_interaction_columns(
     X: pd.DataFrame,
     pairs: list[tuple[str, str]],
     df_raw: pd.DataFrame | None = None,
+    train_medians: dict[str, float] | None = None,
 ) -> pd.DataFrame:
-    """Add interaction columns. Uses INTERACTION_TRANSFORMS when set; else raw product."""
+    """Add interaction columns. Uses INTERACTION_TRANSFORMS when set; else raw product.
+    train_medians: {col: median} from training data for NaN fill (avoids test leakage)."""
+    if train_medians is None:
+        train_medians = {}
     for a, b in pairs:
         if a not in X.columns or b not in X.columns:
             continue
         transform = INTERACTION_TRANSFORMS.get((a, b), "raw")
+        ma = train_medians.get(a)
+        mb = train_medians.get(b)
         if transform != "raw" and df_raw is not None and a in df_raw.columns and b in df_raw.columns:
             va = pd.to_numeric(df_raw[a], errors="coerce").values
             vb = pd.to_numeric(df_raw[b], errors="coerce").values
             if len(va) == len(X):
-                X[f"{a}_x_{b}"] = _interaction_transform(va, vb, transform)
+                X[f"{a}_x_{b}"] = _interaction_transform(va, vb, transform, med_a=ma, med_b=mb)
             else:
-                X[f"{a}_x_{b}"] = _interaction_transform(X[a].values, X[b].values, "raw")
+                X[f"{a}_x_{b}"] = _interaction_transform(X[a].values, X[b].values, "raw", med_a=ma, med_b=mb)
         else:
             va = pd.to_numeric(X[a], errors="coerce")
             vb = pd.to_numeric(X[b], errors="coerce")
             if np.issubdtype(va.dtype, np.number) and np.issubdtype(vb.dtype, np.number):
-                med_a = va.median()
-                med_b = vb.median()
-                X[f"{a}_x_{b}"] = va.fillna(med_a if pd.notna(med_a) else 0) * vb.fillna(med_b if pd.notna(med_b) else 0)
+                fill_a = ma if ma is not None else (va.median() if pd.notna(va.median()) else 0)
+                fill_b = mb if mb is not None else (vb.median() if pd.notna(vb.median()) else 0)
+                X[f"{a}_x_{b}"] = va.fillna(fill_a) * vb.fillna(fill_b)
     return X
 
 
@@ -230,27 +277,31 @@ def add_time_bin_factors(X: pd.DataFrame) -> pd.DataFrame:
     return X
 
 
-def prepare_features(df: pd.DataFrame, feature_cols: list[str]) -> pd.DataFrame:
-    """Prepare feature matrix: log-transform high-scale cols, time bins, missing values, categoricals."""
+def prepare_features(
+    df: pd.DataFrame, feature_cols: list[str],
+    train_medians: dict[str, float] | None = None,
+) -> pd.DataFrame:
+    """Prepare feature matrix: log-transform high-scale cols, time bins, missing values, categoricals.
+    train_medians: if provided, use these for NaN fills and interaction transforms (avoids test leakage)."""
     X = df[feature_cols].copy()
-    # Recategorize garage to reduce overfitting (no_garage, attached_garage, detached_garage, other)
     if GARAGE_COL in X.columns:
         X[GARAGE_COL] = X[GARAGE_COL].apply(lambda v: GARAGE_MAP.get(str(v).strip(), "other"))
-    # Log-transform high-scale columns (prices, areas) to compress scale
     for c in LOG_TRANSFORM_COLS:
         if c in X.columns and X[c].dtype in (np.float64, np.int64, "float64", "int64", "Int64"):
-            vals = X[c].fillna(X[c].median())
-            vals = np.maximum(vals, 1)  # avoid log(0)
+            med = train_medians.get(c) if train_medians else None
+            vals = X[c].fillna(med if med is not None else X[c].median())
+            vals = np.maximum(vals, 1)
             X[c] = np.log1p(vals)
     X = add_time_bin_factors(X)
-    X = add_interaction_columns(X, INTERACTION_PAIRS, df_raw=df)
+    X = add_interaction_columns(X, INTERACTION_PAIRS, df_raw=df, train_medians=train_medians)
     numeric, categorical = get_feature_types(X)
     for c in numeric:
         if X[c].isnull().any():
-            X[c] = X[c].fillna(X[c].median())
+            med = train_medians.get(c) if train_medians else None
+            X[c] = X[c].fillna(med if med is not None else X[c].median())
     for c in categorical:
         if c in X.columns and X[c].nunique() <= 20:
-            X[c] = X[c].fillna("MISSING")
+            X[c] = X[c].fillna("MISSING").astype(str)
     return X
 
 
@@ -492,6 +543,95 @@ def get_feature_columns(df: pd.DataFrame) -> list[str]:
     return feature_cols
 
 
+def rank_fusion(model_probs: dict[str, np.ndarray], model_names: list[str]) -> np.ndarray:
+    """Convert each model's probabilities to percentile ranks and average them.
+
+    Rank fusion prevents one model's probability scale from dominating the blend.
+    """
+    from scipy.stats import rankdata
+    n = len(next(iter(model_probs[m] for m in model_names if m in model_probs)))
+    rank_sum = np.zeros(n)
+    count = 0
+    for m in model_names:
+        if m in model_probs:
+            ranks = rankdata(model_probs[m], method="average") / n  # percentile ranks [0,1]
+            rank_sum += ranks
+            count += 1
+    return rank_sum / count if count > 0 else rank_sum
+
+
+def lift_optimized_weights(
+    y_true: np.ndarray,
+    model_probs: dict[str, np.ndarray],
+    model_names: list[str],
+    baseline_rate: float,
+    target_pcts: tuple[float, ...] = (0.02, 0.05, 0.10),
+    n_grid: int = 11,
+) -> tuple[np.ndarray, dict[str, float]]:
+    """Grid search over weight simplex to maximize average lift at target percentiles.
+
+    Returns (blended_probs, best_weights_dict).
+    """
+    available = [m for m in model_names if m in model_probs]
+    if len(available) < 2:
+        m = available[0] if available else model_names[0]
+        return model_probs[m], {m: 1.0}
+
+    prob_arrays = [model_probs[m] for m in available]
+    n_models = len(available)
+
+    # Generate weight grid on simplex
+    if n_models == 2:
+        weights_list = []
+        for i in range(n_grid):
+            w = i / (n_grid - 1)
+            weights_list.append([w, 1 - w])
+    elif n_models == 3:
+        weights_list = []
+        steps = max(5, n_grid // 2)
+        for i in range(steps + 1):
+            for j in range(steps + 1 - i):
+                k = steps - i - j
+                weights_list.append([i / steps, j / steps, k / steps])
+    else:
+        # For 4+ models: random search on simplex
+        rng = np.random.default_rng(42)
+        weights_list = []
+        for _ in range(200):
+            w = rng.dirichlet(np.ones(n_models))
+            weights_list.append(w.tolist())
+        # Also try equal weights and single-model weights
+        weights_list.append([1.0 / n_models] * n_models)
+        for i in range(n_models):
+            w = [0.0] * n_models
+            w[i] = 1.0
+            weights_list.append(w)
+
+    best_score = -1
+    best_weights = [1.0 / n_models] * n_models
+    n = len(y_true)
+    n_pos = int(y_true.sum())
+
+    if n_pos == 0 or baseline_rate <= 0:
+        blended = sum(w * p for w, p in zip(best_weights, prob_arrays))
+        return blended, dict(zip(available, best_weights))
+
+    for weights in weights_list:
+        blended = sum(w * p for w, p in zip(weights, prob_arrays))
+        order = np.argsort(blended)[::-1]
+        total_lift = 0
+        for pct in target_pcts:
+            k = max(1, int(n * pct))
+            rate_top = y_true[order[:k]].mean()
+            total_lift += rate_top / baseline_rate
+        if total_lift > best_score:
+            best_score = total_lift
+            best_weights = weights
+
+    blended = sum(w * p for w, p in zip(best_weights, prob_arrays))
+    return blended, dict(zip(available, best_weights))
+
+
 def compute_lift_and_capture(y_true: np.ndarray, y_prob: np.ndarray, baseline_rate: float) -> dict:
     """Compute top-k lift and capture rate. Returns dict with lift/capture for 10%, 5%, 2%."""
     if y_prob is None or len(y_true) == 0 or baseline_rate <= 0:
@@ -572,9 +712,16 @@ def evaluate_model(
     baseline_rate: float,
     brier_baseline_zero: float,
     brier_baseline_rate: float,
+    sample_weight: np.ndarray | None = None,
 ) -> tuple[dict, np.ndarray | None]:
     """Train model and return metrics on test set. Also returns y_prob for calibration."""
-    model.fit(X_train, y_train)
+    if sample_weight is not None and hasattr(model, "fit"):
+        try:
+            model.fit(X_train, y_train, sample_weight=sample_weight)
+        except TypeError:
+            model.fit(X_train, y_train)
+    else:
+        model.fit(X_train, y_train)
     y_pred = model.predict(X_test)
     y_prob = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else None
 
@@ -690,6 +837,9 @@ def run_walk_forward() -> None:
     df = df[df["solar_next_year"].isin([0, 1])]
     log(f"After excluding solar_next_year=2: {len(df)} rows")
 
+    # Add survival-inspired time_at_risk feature (years since YEAR_START without solar)
+    df["time_at_risk"] = df["year"] - YEAR_START
+
     feature_cols = get_feature_columns(df)
     if DROP_POTENTIAL_LEAKY_FLAGS:
         leaky_set = set(POTENTIAL_LEAKY_COLS)
@@ -708,11 +858,32 @@ def run_walk_forward() -> None:
     train_straps = set(straps[n_test:])
     log(f"Train straps: {len(train_straps)}, Test straps: {len(test_straps)}")
 
+    # Load tuned hyperparameters if available
+    tuned_params_path = Path(__file__).resolve().parent / "tuned_params.json"
+    tuned = {}
+    if tuned_params_path.exists():
+        import json
+        with open(tuned_params_path) as f:
+            tuned = json.load(f)
+        log(f"Loaded tuned hyperparameters from {tuned_params_path.name}")
+
+    rf_params = tuned.get("rf", {}).get("params", {})
     rf_base = RandomForestClassifier(
-        n_estimators=100, random_state=RANDOM_STATE, max_depth=10, class_weight="balanced"
+        n_estimators=rf_params.get("n_estimators", 100),
+        max_depth=rf_params.get("max_depth", 10),
+        min_samples_leaf=rf_params.get("min_samples_leaf", 1),
+        max_features=rf_params.get("max_features", "sqrt"),
+        class_weight=rf_params.get("class_weight", "balanced"),
+        random_state=RANDOM_STATE,
     )
+    gb_params = tuned.get("gb", {}).get("params", {})
     gb_base = GradientBoostingClassifier(
-        n_estimators=100, max_depth=5, random_state=RANDOM_STATE
+        n_estimators=gb_params.get("n_estimators", 100),
+        max_depth=gb_params.get("max_depth", 5),
+        learning_rate=gb_params.get("learning_rate", 0.1),
+        subsample=gb_params.get("subsample", 1.0),
+        min_samples_leaf=gb_params.get("min_samples_leaf", 1),
+        random_state=RANDOM_STATE,
     )
     models = {
         "Random Forest": (
@@ -730,12 +901,33 @@ def run_walk_forward() -> None:
         import xgboost as xgb
         models["XGBoost"] = xgb.XGBClassifier(
             n_estimators=100, max_depth=5, random_state=RANDOM_STATE,
-            scale_pos_weight=50,  # approximate 1/0.02 for ~2% positive rate
+            scale_pos_weight=50,
         )
     except ImportError:
         pass
+    if HAS_LIGHTGBM:
+        lgbm_params = tuned.get("lgbm", {}).get("params", {})
+        models["LightGBM"] = lgb.LGBMClassifier(
+            n_estimators=lgbm_params.get("n_estimators", 200),
+            max_depth=lgbm_params.get("max_depth", 6),
+            learning_rate=lgbm_params.get("learning_rate", 0.05),
+            num_leaves=lgbm_params.get("num_leaves", 31),
+            min_child_samples=lgbm_params.get("min_child_samples", 20),
+            subsample=lgbm_params.get("subsample", 1.0),
+            colsample_bytree=lgbm_params.get("colsample_bytree", 1.0),
+            reg_alpha=lgbm_params.get("reg_alpha", 0.0),
+            reg_lambda=lgbm_params.get("reg_lambda", 0.0),
+            random_state=RANDOM_STATE,
+            is_unbalance=True, verbose=-1,
+        )
+    mlp_params = tuned.get("mlp", {}).get("params", {})
+    mlp_arch_str = mlp_params.get("architecture", "(64,32)")
+    mlp_arch = tuple(int(x) for x in mlp_arch_str.strip("()").split(","))
     models["Neural Net"] = MLPClassifier(
-        hidden_layer_sizes=(64, 32),
+        hidden_layer_sizes=mlp_arch,
+        alpha=mlp_params.get("alpha", 0.0001),
+        learning_rate_init=mlp_params.get("learning_rate_init", 0.001),
+        batch_size=mlp_params.get("batch_size", 200),
         max_iter=500,
         random_state=RANDOM_STATE,
         early_stopping=True,
@@ -774,14 +966,25 @@ def run_walk_forward() -> None:
         y_train = train_df["solar_next_year"].astype(int).values
         y_test = test_df["solar_next_year"].astype(int).values
 
-        X_train_raw = prepare_features(train_df, feature_cols)
-        X_test_raw = prepare_features(test_df, feature_cols)
+        # Compute train medians for NaN fill consistency (no test leakage)
+        train_medians = {}
+        for c in feature_cols:
+            if train_df[c].dtype in (np.float64, np.int64, "float64", "int64", "Int64"):
+                med = train_df[c].median()
+                if pd.notna(med):
+                    train_medians[c] = float(med)
+
+        X_train_raw = prepare_features(train_df, feature_cols, train_medians=train_medians)
+        X_test_raw = prepare_features(test_df, feature_cols, train_medians=train_medians)
 
         # Fit preprocessor on this fold's training data only (no look-ahead leakage)
         numeric_fold, categorical_fold = get_feature_types(X_train_raw)
         preprocessor = fit_preprocessor(X_train_raw, numeric_fold, categorical_fold)
         X_train_full = preprocessor.transform(X_train_raw)
         X_test_full = preprocessor.transform(X_test_raw)
+        # Replace NaN from StandardScaler (constant cols -> 0/0) with 0
+        X_train_full = np.nan_to_num(X_train_full, nan=0.0)
+        X_test_full = np.nan_to_num(X_test_full, nan=0.0)
 
         # Get feature names (robust to sklearn version)
         feature_names_fold = get_preprocessor_feature_names(
@@ -820,7 +1023,7 @@ def run_walk_forward() -> None:
         if use_recent_for_fs:
             train_df_fs = train_df[train_df["year"] >= install_year - RECENT_FEATURE_SELECTION_YEARS]
             X_train_fs_raw = prepare_features(train_df_fs, feature_cols)
-            X_train_fs = preprocessor.transform(X_train_fs_raw)[:, keep_mask]
+            X_train_fs = np.nan_to_num(preprocessor.transform(X_train_fs_raw), nan=0.0)[:, keep_mask]
             y_train_fs = train_df_fs["solar_next_year"].astype(int).values
             n_pos_fs = int(y_train_fs.sum())
             log(f"  Feature selection on recent {RECENT_FEATURE_SELECTION_YEARS} years only ({len(y_train_fs)} rows, {n_pos_fs} positives)")
@@ -908,6 +1111,11 @@ def run_walk_forward() -> None:
             log(f"  Skipping: y_train has only one class")
             continue
 
+        # Compute sample weights: exponential decay by year recency
+        train_years_arr = train_df["year"].values
+        max_train_year = train_years_arr.max()
+        sample_weight = SAMPLE_WEIGHT_DECAY ** (max_train_year - train_years_arr)
+
         fold_results = []
         lr_y_prob = None
         model_probs = {}
@@ -922,6 +1130,7 @@ def run_walk_forward() -> None:
                 baseline_rate,
                 brier_baseline_zero,
                 brier_baseline_rate,
+                sample_weight=sample_weight,
             )
             metrics["install_year"] = install_year
             metrics["feature_year"] = feature_year
@@ -1003,11 +1212,180 @@ def run_walk_forward() -> None:
                 f"capture@20/10/5/2%={metrics_hybrid.get('capture_20pct', 0):.2%}/{metrics_hybrid.get('capture_10pct', 0):.2%}/{metrics_hybrid.get('capture_5pct', 0):.2%}/{metrics_hybrid.get('capture_2pct', 0):.2%}"
             )
 
+            # Inner strap split for stacking and lift-optimized ensembles
+            rng_stack = np.random.default_rng(RANDOM_STATE + install_year)
+            inner_straps = train_df["strap"].unique()
+            inner_shuf = rng_stack.permutation(inner_straps)
+            n_val_inner = max(1, int(len(inner_straps) * 0.2))
+            val_straps_inner = set(inner_shuf[:n_val_inner])
+            val_mask = train_df["strap"].isin(val_straps_inner).values
+
+            # Stacked generalization: learn optimal blend weights from inner validation
+            base_models_for_stack = ["Random Forest", "Gradient Boosting"]
+            if HAS_LIGHTGBM and "LightGBM" in model_probs:
+                base_models_for_stack.append("LightGBM")
+            if all(m in model_probs for m in base_models_for_stack) and len(base_models_for_stack) >= 2:
+                if val_mask.sum() > 10 and y_train[val_mask].sum() >= 3:
+                    X_tr_inner = X_train[~val_mask]
+                    y_tr_inner = y_train[~val_mask]
+                    X_val_inner = X_train[val_mask]
+                    y_val_inner = y_train[val_mask]
+                    sw_inner = sample_weight[~val_mask]
+
+                    # Get inner validation predictions from each base model
+                    val_preds = {}
+                    for mname in base_models_for_stack:
+                        m_clone = copy.deepcopy(models[mname])
+                        try:
+                            m_clone.fit(X_tr_inner, y_tr_inner, sample_weight=sw_inner)
+                        except TypeError:
+                            m_clone.fit(X_tr_inner, y_tr_inner)
+                        val_preds[mname] = m_clone.predict_proba(X_val_inner)[:, 1]
+
+                    # Train meta-learner on inner val predictions
+                    meta_X = np.column_stack([val_preds[m] for m in base_models_for_stack])
+                    meta_lr = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
+                    meta_lr.fit(meta_X, y_val_inner)
+
+                    # Apply meta-learner to test predictions
+                    test_meta_X = np.column_stack([model_probs[m] for m in base_models_for_stack])
+                    y_prob_stacked = meta_lr.predict_proba(test_meta_X)[:, 1]
+                    model_probs["Stacked Ensemble"] = y_prob_stacked
+
+                    metrics_stacked = metrics_from_proba(
+                        y_test, y_prob_stacked, "Stacked Ensemble",
+                        baseline_rate, brier_baseline_zero, brier_baseline_rate,
+                    )
+                    metrics_stacked["install_year"] = install_year
+                    metrics_stacked["feature_year"] = feature_year
+                    metrics_stacked["train_n"] = len(y_train)
+                    metrics_stacked["test_n"] = len(y_test)
+                    fold_results.append(metrics_stacked)
+                    all_results.append(metrics_stacked)
+                    for row in compute_decile_lift(y_test, y_prob_stacked, baseline_rate):
+                        all_decile_results.append({
+                            "model": "Stacked Ensemble",
+                            "install_year": install_year,
+                            "feature_year": feature_year,
+                            **row,
+                        })
+                    log(
+                        f"  Stacked Ensemble: ROC-AUC={metrics_stacked['roc_auc']:.4f}, PR-AUC={metrics_stacked['pr_auc']:.4f}, "
+                        f"Brier={metrics_stacked['brier_score']:.4f} (Δvs_rate={metrics_stacked['brier_improvement_vs_rate']:+.4f}) | "
+                        f"lift@20/10/5/2%={metrics_stacked.get('lift_20pct', 0):.2f}/{metrics_stacked.get('lift_10pct', 0):.2f}/{metrics_stacked.get('lift_5pct', 0):.2f}/{metrics_stacked.get('lift_2pct', 0):.2f}x | "
+                        f"capture@20/10/5/2%={metrics_stacked.get('capture_20pct', 0):.2%}/{metrics_stacked.get('capture_10pct', 0):.2%}/{metrics_stacked.get('capture_5pct', 0):.2%}/{metrics_stacked.get('capture_2pct', 0):.2%}"
+                    )
+
+            # --- Rank Fusion: percentile-rank average across all models ---
+            rank_models = [m for m in ["Random Forest", "Gradient Boosting", "LightGBM", "Neural Net"] if m in model_probs]
+            if len(rank_models) >= 2:
+                y_prob_rank = rank_fusion(model_probs, rank_models)
+                metrics_rank = metrics_from_proba(
+                    y_test, y_prob_rank, "Rank Fusion",
+                    baseline_rate, brier_baseline_zero, brier_baseline_rate,
+                )
+                metrics_rank["install_year"] = install_year
+                metrics_rank["feature_year"] = feature_year
+                metrics_rank["train_n"] = len(y_train)
+                metrics_rank["test_n"] = len(y_test)
+                fold_results.append(metrics_rank)
+                all_results.append(metrics_rank)
+                model_probs["Rank Fusion"] = y_prob_rank
+                for row in compute_decile_lift(y_test, y_prob_rank, baseline_rate):
+                    all_decile_results.append({
+                        "model": "Rank Fusion",
+                        "install_year": install_year,
+                        "feature_year": feature_year,
+                        **row,
+                    })
+                log(
+                    f"  Rank Fusion: ROC-AUC={metrics_rank['roc_auc']:.4f}, PR-AUC={metrics_rank['pr_auc']:.4f}, "
+                    f"Brier={metrics_rank['brier_score']:.4f} (Δvs_rate={metrics_rank['brier_improvement_vs_rate']:+.4f}) | "
+                    f"lift@20/10/5/2%={metrics_rank.get('lift_20pct', 0):.2f}/{metrics_rank.get('lift_10pct', 0):.2f}/{metrics_rank.get('lift_5pct', 0):.2f}/{metrics_rank.get('lift_2pct', 0):.2f}x | "
+                    f"capture@20/10/5/2%={metrics_rank.get('capture_20pct', 0):.2%}/{metrics_rank.get('capture_10pct', 0):.2%}/{metrics_rank.get('capture_5pct', 0):.2%}/{metrics_rank.get('capture_2pct', 0):.2%}"
+                )
+
+            # --- Lift-Optimized Ensemble: grid search weights to maximize top-K lift ---
+            # Use inner validation (same split as stacking) to find weights, apply to test
+            lift_blend_models = [m for m in ["Random Forest", "Gradient Boosting", "LightGBM"] if m in model_probs]
+            if len(lift_blend_models) >= 2 and val_mask is not None and val_mask.sum() > 10 and y_train[val_mask].sum() >= 3:
+                # Get inner val predictions for weight optimization
+                inner_val_probs = {}
+                for mname in lift_blend_models:
+                    m_clone = copy.deepcopy(models[mname])
+                    try:
+                        m_clone.fit(X_train[~val_mask], y_train[~val_mask], sample_weight=sample_weight[~val_mask])
+                    except TypeError:
+                        m_clone.fit(X_train[~val_mask], y_train[~val_mask])
+                    inner_val_probs[mname] = m_clone.predict_proba(X_train[val_mask])[:, 1]
+
+                inner_baseline = y_train[val_mask].mean()
+                if inner_baseline > 0:
+                    _, best_weights = lift_optimized_weights(
+                        y_train[val_mask], inner_val_probs, lift_blend_models, inner_baseline,
+                    )
+                    # Apply same weights to test predictions
+                    y_prob_liftopt = sum(best_weights[m] * model_probs[m] for m in lift_blend_models if m in best_weights)
+                    weight_str = ", ".join(f"{m}={best_weights.get(m, 0):.2f}" for m in lift_blend_models)
+                    metrics_liftopt = metrics_from_proba(
+                        y_test, y_prob_liftopt, "Lift-Optimized",
+                        baseline_rate, brier_baseline_zero, brier_baseline_rate,
+                    )
+                    metrics_liftopt["install_year"] = install_year
+                    metrics_liftopt["feature_year"] = feature_year
+                    metrics_liftopt["train_n"] = len(y_train)
+                    metrics_liftopt["test_n"] = len(y_test)
+                    fold_results.append(metrics_liftopt)
+                    all_results.append(metrics_liftopt)
+                    model_probs["Lift-Optimized"] = y_prob_liftopt
+                    for row in compute_decile_lift(y_test, y_prob_liftopt, baseline_rate):
+                        all_decile_results.append({
+                            "model": "Lift-Optimized",
+                            "install_year": install_year,
+                            "feature_year": feature_year,
+                            **row,
+                        })
+                    log(
+                        f"  Lift-Optimized [{weight_str}]: ROC-AUC={metrics_liftopt['roc_auc']:.4f}, PR-AUC={metrics_liftopt['pr_auc']:.4f}, "
+                        f"Brier={metrics_liftopt['brier_score']:.4f} (Δvs_rate={metrics_liftopt['brier_improvement_vs_rate']:+.4f}) | "
+                        f"lift@20/10/5/2%={metrics_liftopt.get('lift_20pct', 0):.2f}/{metrics_liftopt.get('lift_10pct', 0):.2f}/{metrics_liftopt.get('lift_5pct', 0):.2f}/{metrics_liftopt.get('lift_2pct', 0):.2f}x | "
+                        f"capture@20/10/5/2%={metrics_liftopt.get('capture_20pct', 0):.2%}/{metrics_liftopt.get('capture_10pct', 0):.2%}/{metrics_liftopt.get('capture_5pct', 0):.2%}/{metrics_liftopt.get('capture_2pct', 0):.2%}"
+                    )
+
+            # --- Rank Fusion + Lift-Optimized combined ---
+            rank_lift_models = [m for m in ["Rank Fusion", "Lift-Optimized", "Stacked Ensemble"] if m in model_probs]
+            if len(rank_lift_models) >= 2:
+                y_prob_topk = sum(model_probs[m] for m in rank_lift_models) / len(rank_lift_models)
+                metrics_topk = metrics_from_proba(
+                    y_test, y_prob_topk, "TopK Blend",
+                    baseline_rate, brier_baseline_zero, brier_baseline_rate,
+                )
+                metrics_topk["install_year"] = install_year
+                metrics_topk["feature_year"] = feature_year
+                metrics_topk["train_n"] = len(y_train)
+                metrics_topk["test_n"] = len(y_test)
+                fold_results.append(metrics_topk)
+                all_results.append(metrics_topk)
+                model_probs["TopK Blend"] = y_prob_topk
+                for row in compute_decile_lift(y_test, y_prob_topk, baseline_rate):
+                    all_decile_results.append({
+                        "model": "TopK Blend",
+                        "install_year": install_year,
+                        "feature_year": feature_year,
+                        **row,
+                    })
+                log(
+                    f"  TopK Blend: ROC-AUC={metrics_topk['roc_auc']:.4f}, PR-AUC={metrics_topk['pr_auc']:.4f}, "
+                    f"Brier={metrics_topk['brier_score']:.4f} (Δvs_rate={metrics_topk['brier_improvement_vs_rate']:+.4f}) | "
+                    f"lift@20/10/5/2%={metrics_topk.get('lift_20pct', 0):.2f}/{metrics_topk.get('lift_10pct', 0):.2f}/{metrics_topk.get('lift_5pct', 0):.2f}/{metrics_topk.get('lift_2pct', 0):.2f}x | "
+                    f"capture@20/10/5/2%={metrics_topk.get('capture_20pct', 0):.2%}/{metrics_topk.get('capture_10pct', 0):.2%}/{metrics_topk.get('capture_5pct', 0):.2%}/{metrics_topk.get('capture_2pct', 0):.2%}"
+                )
+
             # Output straps without solar as of install_year (for YEAR_END only)
             if install_year == YEAR_END:
                 full_df = df[(df["year"] == feature_year)]
                 X_full_raw = prepare_features(full_df, feature_cols)
-                X_full = preprocessor.transform(X_full_raw)[:, keep_mask][:, selected_idx]
+                X_full = np.nan_to_num(preprocessor.transform(X_full_raw), nan=0.0)[:, keep_mask][:, selected_idx]
                 y_prob_gb_full = models["Gradient Boosting"].predict_proba(X_full)[:, 1]
                 y_prob_rf_full = models["Random Forest"].predict_proba(X_full)[:, 1]
                 y_prob_ens_full = (y_prob_rf_full + y_prob_gb_full) / 2
@@ -1375,5 +1753,22 @@ def main() -> None:
     run_walk_forward()
 
 
+def run(config):
+    """Pipeline entry point: set config and run walk-forward modeling."""
+    set_config(config)
+    run_walk_forward()
+
+
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", help="County config name or path")
+    args = parser.parse_args()
+
+    if args.config:
+        import sys
+        sys.path.insert(0, str(PROJECT_ROOT / "src"))
+        from pipeline_config import load_config
+        run(load_config(args.config))
+    else:
+        main()

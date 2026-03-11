@@ -1,0 +1,49 @@
+{
+  "rf": {
+    "model_name": "Random Forest",
+    "best_lift": 3.175378993152549,
+    "params": {
+      "n_estimators": 100,
+      "max_depth": 16,
+      "min_samples_leaf": 33,
+      "max_features": 0.44238828649324957,
+      "class_weight": "balanced"
+    }
+  },
+  "gb": {
+    "model_name": "Gradient Boosting",
+    "best_lift": 3.586046951338538,
+    "params": {
+      "n_estimators": 200,
+      "max_depth": 7,
+      "learning_rate": 0.030410071368193792,
+      "subsample": 0.6986917019740992,
+      "min_samples_leaf": 38
+    }
+  },
+  "lgbm": {
+    "model_name": "LightGBM",
+    "best_lift": 3.025446204288221,
+    "params": {
+      "n_estimators": 900,
+      "max_depth": 4,
+      "learning_rate": 0.011846171693001619,
+      "num_leaves": 44,
+      "min_child_samples": 189,
+      "subsample": 0.9076560986373895,
+      "colsample_bytree": 0.7026426239994519,
+      "reg_alpha": 2.8275832327935735,
+      "reg_lambda": 2.3972380019847295
+    }
+  },
+  "mlp": {
+    "model_name": "Neural Net",
+    "best_lift": 2.8800003948847053,
+    "params": {
+      "architecture": "(128,64,32)",
+      "alpha": 3.038057582184959e-05,
+      "learning_rate_init": 0.0007899981943665211,
+      "batch_size": 256
+    }
+  }
+}
