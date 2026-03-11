@@ -66,10 +66,10 @@ CONFIG = {
             "MODULAR",
             "A-Frame",
         ],
-        "sales_cd": ["Q"],
+        # "sales_cd": ["Q"],
         "mainfloorsf_min": 800,
-        "saleprice_min": 250000,
+        "saleprice_min": 100000,
         "owner_occupied": True,
-        "calculated_build_year_min": 1960,
+        # "calculated_build_year_min": 1960,
     },
 }

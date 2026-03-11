@@ -10,7 +10,7 @@ file to recreate from scratch.
 
 import pandas as pd
 from datetime import datetime
-import SunroofBatchAPI_test
+import SunroofBatchAPI
 
 
 def apply_regrid_filters(df, filters):
@@ -59,14 +59,13 @@ def apply_regrid_filters(df, filters):
     return df
 
 
-def run(config, max_calls=None, chunk_size=50, start_row=0):
+def run(config, limit=None):
     """Filter Regrid data and call Sunroof API.
 
     Args:
         config: CountyConfig object
-        max_calls: Max API calls to make (None = all rows)
-        chunk_size: Rows per API batch
-        start_row: Row to start from (for resuming)
+        limit: Max NEW API calls to make (None = all). Existing rows are
+               skipped and don't count toward the limit.
     """
     config.ensure_dirs()
 
@@ -87,42 +86,25 @@ def run(config, max_calls=None, chunk_size=50, start_row=0):
 
     csv_output = str(config.sunroof_api_output_path)
 
-    if max_calls is None:
-        max_calls = len(df)
+    print(f"Starting Sunroof API calls: {len(df)} rows, limit={limit or 'none'}")
 
-    call_counter = 0
-    current_row = start_row
+    new_calls = SunroofBatchAPI.run(
+        df,
+        csv_output,
+        resume=True,
+        max_new_calls=limit,
+    )
 
-    print(f"Starting Sunroof API calls: start_row={start_row}, max_calls={max_calls}")
-
-    while call_counter < max_calls:
-        remaining = max_calls - call_counter
-        current_chunk = min(chunk_size, remaining)
-
-        subset = df.iloc[current_row : current_row + current_chunk]
-
-        if subset.empty:
-            break
-
-        SunroofBatchAPI_test.run(
-            subset,
-            csv_output,
-            resume=True
-        )
-
-        current_row += current_chunk
-        call_counter += len(subset)
-
-    print(f"Sunroof API complete. Output: {csv_output}")
+    print(f"Sunroof API complete. {new_calls} new calls made. Output: {csv_output}")
 
 
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="County config name or path")
-    parser.add_argument("--max-calls", type=int, default=None, help="Max API calls")
-    parser.add_argument("--start-row", type=int, default=0, help="Start row for resuming")
+    parser.add_argument("--limit", type=int, default=None,
+                        help="Max NEW API calls (skipped rows don't count)")
     args = parser.parse_args()
 
     from pipeline_config import load_config
-    run(load_config(args.config), max_calls=args.max_calls, start_row=args.start_row)
+    run(load_config(args.config), limit=args.limit)

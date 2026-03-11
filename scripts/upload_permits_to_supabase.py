@@ -161,11 +161,11 @@ def parse_permits(permits_csv: Path, strap_to_home: dict[str, str],
     df["issue_dt"] = pd.to_datetime(df["issue_dt"], format="mixed", dayfirst=False, errors="coerce")
     bad_dates = df["issue_dt"].isna().sum()
     if bad_dates:
-        print(f"  Warning: {bad_dates} rows with unparseable dates dropped")
-    df = df.dropna(subset=["issue_dt"])
+        print(f"  Warning: {bad_dates} rows with unparseable dates (filed_date will be null)")
 
     if since_year:
-        df = df[df["issue_dt"].dt.year >= since_year]
+        # Only filter rows that have a valid date; keep null-date rows
+        df = df[df["issue_dt"].isna() | (df["issue_dt"].dt.year >= since_year)]
 
     # Only keep permits that map to homes in our system
     df["home_index"] = df["strap"].map(strap_to_home)
@@ -187,7 +187,7 @@ def parse_permits(permits_csv: Path, strap_to_home: dict[str, str],
             "permit_number": str(row["permit_num"]).strip() if pd.notna(row.get("permit_num")) else None,
             "permit_type": ptype,
             "description": desc_text,
-            "filed_date": row["issue_dt"].strftime("%Y-%m-%d"),
+            "filed_date": row["issue_dt"].strftime("%Y-%m-%d") if pd.notna(row["issue_dt"]) else None,
             "valuation": valuation_num,
             "county": county_name,
         })

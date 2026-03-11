@@ -143,6 +143,14 @@ class CountyConfig:
     def output_dir(self) -> Path:
         return PROJECT_ROOT / "data_science" / "output" / self.county_id / "walk_forward"
 
+    @property
+    def image_dir(self) -> Path:
+        return PROJECT_ROOT / "data" / "images" / self.county_id
+
+    @property
+    def index_prefix(self) -> str:
+        return self.county_id.upper() + "_"
+
     def ensure_dirs(self):
         """Create all per-county directories if they don't exist."""
         for d in [self.working_dir, self.final_dir, self.output_dir]:

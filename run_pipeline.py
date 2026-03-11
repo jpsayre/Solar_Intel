@@ -83,7 +83,7 @@ def run_stage(stage_num, config, skip_api=False, limit=None):
             log(f"Saved filtered Regrid ({len(df)} rows) to {config.regrid_filtered_path}")
         else:
             import InitialScript
-            InitialScript.run(config, max_calls=limit)
+            InitialScript.run(config, limit=limit)
 
     elif stage_num == 4:
         import Analyze_ProjectSunroof_Data
