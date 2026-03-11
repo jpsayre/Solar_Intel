@@ -140,6 +140,7 @@ function HomesPageContent() {
   const [tagFilter, setTagFilter] = useState("");
   const [excludeTagFilter, setExcludeTagFilter] = useState("");
   const [excludeDoNotContact, setExcludeDoNotContact] = useState(true);
+  const [showSolarHomes, setShowSolarHomes] = useState(false);
 
   // Lightweight map points from RPC (scores pre-joined, no gray flash)
   type RpcMapPoint = { index: string; latitude: number; longitude: number; model_score: number | null; roof_score: number | null; hybrid_score: number | null };
@@ -149,7 +150,7 @@ function HomesPageContent() {
   // Load map points (no debounce here — caller is responsible for debouncing)
   const loadMapPoints = useCallback(async (bounds?: MapBounds | null) => {
     const reqId = ++rpcRequestRef.current;
-    const params: Record<string, unknown> = { p_limit: MAP_POINTS_LIMIT };
+    const params: Record<string, unknown> = { p_limit: MAP_POINTS_LIMIT, p_exclude_solar: !showSolarHomes };
     if (county) params.p_county = county;
     if (city) params.p_city = city;
     if (bounds) {
@@ -167,7 +168,7 @@ function HomesPageContent() {
     if (reqId === rpcRequestRef.current) {
       setRpcMapPoints((data ?? []) as RpcMapPoint[]);
     }
-  }, [county, city]);
+  }, [county, city, showSolarHomes]);
 
   // Re-fire RPC when filters change (loadMapPoints deps include county/city).
   // Only fire if mapBounds is already set — on initial mount, the debounce
@@ -358,6 +359,8 @@ function HomesPageContent() {
     }
     if (addressSearchApplied.trim()) {
       query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
+    } else if (!showSolarHomes) {
+      query = query.eq("has_solar", false);
     }
 
     const { data, error } = await query;
@@ -374,7 +377,7 @@ function HomesPageContent() {
     setHasMore(list.length === PAGE_SIZE);
     setMapBounds(null);
     setBoundsRows([]);
-  }, [router, county, city, subdivision, roofOrientations, addressSearchApplied]);
+  }, [router, county, city, subdivision, roofOrientations, addressSearchApplied, showSolarHomes]);
 
   const loadNextPage = useCallback(async () => {
     if (!rows || rows.length === 0) return;
@@ -396,6 +399,8 @@ function HomesPageContent() {
     }
     if (addressSearchApplied.trim()) {
       query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
+    } else if (!showSolarHomes) {
+      query = query.eq("has_solar", false);
     }
 
     const { data, error } = await query;
@@ -404,7 +409,7 @@ function HomesPageContent() {
     setRows((prev) => (prev ? [...prev, ...next] : next));
     setOffset((prev) => prev + NEXT_PAGE_SIZE);
     setHasMore(next.length === NEXT_PAGE_SIZE);
-  }, [rows?.length, offset, county, city, subdivision, roofOrientations, addressSearchApplied]);
+  }, [rows?.length, offset, county, city, subdivision, roofOrientations, addressSearchApplied, showSolarHomes]);
 
   useEffect(() => {
     let alive = true;
@@ -439,13 +444,15 @@ function HomesPageContent() {
       }
       if (addressSearchApplied.trim()) {
         query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
+      } else if (!showSolarHomes) {
+        query = query.eq("has_solar", false);
       }
 
       const { data, error } = await query;
       setBoundsLoading(false);
       if (!error && data) setBoundsRows((data ?? []) as HomeRow[]);
     },
-    [county, city, subdivision, roofOrientations, addressSearchApplied]
+    [county, city, subdivision, roofOrientations, addressSearchApplied, showSolarHomes]
   );
 
   useEffect(() => {
@@ -714,6 +721,7 @@ function HomesPageContent() {
     setMinRoofScore("");
     setMinSolarInterest("");
     setMinBatteryInterest("");
+    setShowSolarHomes(false);
   };
 
   const toggleRoofOrientation = (orientation: string) => {
@@ -740,7 +748,8 @@ function HomesPageContent() {
     minModelScore.trim() ||
     minRoofScore.trim() ||
     minSolarInterest ||
-    minBatteryInterest;
+    minBatteryInterest ||
+    showSolarHomes;
 
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
@@ -899,6 +908,15 @@ function HomesPageContent() {
                   className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
                 />
                 <span className="text-sm text-slate-600">Exclude do not contact</span>
+              </label>
+              <label className="flex cursor-pointer items-center gap-2 self-end py-2">
+                <input
+                  type="checkbox"
+                  checked={showSolarHomes}
+                  onChange={(e) => setShowSolarHomes(e.target.checked)}
+                  className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
+                />
+                <span className="text-sm text-slate-600">Include homes with solar</span>
               </label>
             </div>
           </div>
