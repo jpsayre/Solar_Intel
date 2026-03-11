@@ -62,7 +62,7 @@ export default function AboutPage() {
               Solar Intelligence
             </h1>
             <p className="mt-2 text-lg text-slate-600">
-              Smarter solar means less wasted time.
+              Smarter solar. More closed deals.
             </p>
           </div>
           <Link
