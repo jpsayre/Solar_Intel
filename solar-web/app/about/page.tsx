@@ -9,12 +9,12 @@ const FEATURES = [
   {
     title: "Roof-Level Solar Potential",
     description:
-      "Google Solar API data for every property — usable roof area, orientation, shade analysis, and an independent roof score so you know which homes have the best physical fit.",
+      "Our proprietary roof score let's you know which homes have the best layout for solar.",
   },
   {
     title: "Permit Monitoring",
     description:
-      "Real-time alerts when new solar, roof, battery, or EV charger permits are filed. A new roof means a solar-ready lead. A neighbor's solar install means social proof is working for you.",
+      "Alerts when new solar, roof, battery, or EV charger permits are filed.",
   },
   {
     title: "Built-In Workflow Tools",
@@ -38,18 +38,18 @@ const DIFFERENTIATORS = [
     heading: "Data science, not just data",
     body: "Most lead providers hand you a list filtered by home value and roof age. We build predictive models that learn which combinations of property attributes, neighborhood dynamics, permit history, and economic factors actually predict solar adoption. Our top 5% of homes capture 20% of sales.",
   },
-  {
-    heading: "Validated on real outcomes",
-    body: "We test our models the hard way: train on past years, predict the next year, check against actual permit filings. Every metric we share comes from out-of-sample validation across 13 years of data. We show you the range of performance, not a cherry-picked number.",
-  },
+  // {
+  //   heading: "Validated on real outcomes",
+  //   body: "We test our models the hard way: train on past years, predict the next year, check against actual permit filings. Every metric we share comes from out-of-sample validation across 13 years of data. We show you the range of performance, not a cherry-picked number.",
+  // },
   {
     heading: "One platform, not five tools",
     body: "Scored leads, roof analysis, permit alerts, workflow tools, and contact enrichment in one place. No stitching together a lead vendor, a CRM, a permit tracker, and an enrichment API. Less friction means your team actually uses the data.",
   },
-  {
-    heading: "Transparent methodology",
-    body: "We publish how our models work, what features drive predictions, and where the data comes from. If a score looks wrong, you can understand why. No black boxes, no \"proprietary algorithm\" hand-waving.",
-  },
+  // {
+  //   heading: "Transparent methodology",
+  //   body: "We publish how our models work, what features drive predictions, and where the data comes from. If a score looks wrong, you can understand why. No black boxes, no \"proprietary algorithm\" hand-waving.",
+  // },
 ];
 
 export default function AboutPage() {
