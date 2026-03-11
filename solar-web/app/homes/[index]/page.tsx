@@ -662,6 +662,7 @@ export default function HomeDetailPage() {
           }}
           priority
           unoptimized
+          badge={row.has_solar ? "Has Solar" : undefined}
         />
 
         <section className="mt-6 rounded-xl border border-neutral-200 bg-white">
