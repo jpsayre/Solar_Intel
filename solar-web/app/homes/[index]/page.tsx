@@ -164,10 +164,10 @@ export default function HomeDetailPage() {
   const skipNextAutoSaveRef = useRef(true);
   const orgHomeRef = useRef(orgHome);
   orgHomeRef.current = orgHome;
-  const lastSavedContactsRef = useRef<string | null>(null);
-  const lastSavedHomeInfoRef = useRef<string | null>(null);
-  const lastSavedTagsRef = useRef<string | null>(null);
-  const lastSavedActionItemsRef = useRef<string | null>(null);
+  const lastSavedContactsRef = useRef<string>(JSON.stringify([{ phone_number: "", email: "", preferred_name: "" }]));
+  const lastSavedHomeInfoRef = useRef<string>(JSON.stringify({}));
+  const lastSavedTagsRef = useRef<string>(JSON.stringify([]));
+  const lastSavedActionItemsRef = useRef<string>(JSON.stringify([]));
 
   useEffect(() => {
     let alive = true;
@@ -432,10 +432,10 @@ export default function HomeDetailPage() {
         setActionItems([]);
         setCustomTags({});
         setTags([]);
-        lastSavedContactsRef.current = null;
-        lastSavedHomeInfoRef.current = null;
-        lastSavedTagsRef.current = null;
-        lastSavedActionItemsRef.current = null;
+        lastSavedContactsRef.current = JSON.stringify([{ phone_number: "", email: "", preferred_name: "" }]);
+        lastSavedHomeInfoRef.current = JSON.stringify({});
+        lastSavedTagsRef.current = JSON.stringify([]);
+        lastSavedActionItemsRef.current = JSON.stringify([]);
       }
     }
 
