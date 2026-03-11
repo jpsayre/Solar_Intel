@@ -44,7 +44,7 @@ export default function SiteHeader() {
   if (!mounted) return null;
 
   return (
-    <header className="sticky top-0 z-50 flex items-center justify-between border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur sm:px-6">
+    <header className="sticky top-0 z-50 flex items-center justify-between border-b border-slate-200/80 bg-white px-4 py-3 sm:px-6">
       <Link
         href="/homes"
         className="text-lg font-bold tracking-tight text-slate-900 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 rounded"
@@ -53,20 +53,6 @@ export default function SiteHeader() {
       </Link>
 
       <div className="flex items-center gap-1">
-        {user && (
-          <Link
-            href="/alerts"
-            className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${
-              pathname === "/alerts" ? "bg-amber-50 text-amber-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-            } focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2`}
-            aria-label="Permit alerts"
-          >
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-amber-500 ring-2 ring-white" />
-          </Link>
-        )}
         <button
           ref={triggerRef}
           type="button"
@@ -115,6 +101,13 @@ export default function SiteHeader() {
                   className={`block px-4 py-3 text-sm font-medium ${pathname === "/following" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
                 >
                   Following
+                </Link>
+                <Link
+                  href="/alerts"
+                  onClick={() => setMenuOpen(false)}
+                  className={`block px-4 py-3 text-sm font-medium ${pathname === "/alerts" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
+                >
+                  Permit Alerts
                 </Link>
                 <div className="border-t border-slate-100 mt-1 pt-1">
                   <button

@@ -537,7 +537,8 @@ function HomesPageContent() {
   }, [mapBounds, loadRowsInBounds, loadMapPoints]);
 
   const displayedRows = useMemo(() => {
-    let list = mapBounds ? boundsRows : (rows ?? []);
+    // Use boundsRows only after they've loaded; fall back to rows during initial load
+    let list = (mapBounds && boundsRows.length > 0) ? boundsRows : (rows ?? []);
 
     // Merge scores onto rows
     list = list.map((r) => {
@@ -749,7 +750,7 @@ function HomesPageContent() {
         <div className="mb-6 rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
           <div className="mb-3 text-sm font-semibold text-slate-700">Filters</div>
           <div className="flex flex-col gap-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="flex flex-col gap-1">
                 <span className="text-xs font-medium text-slate-500">County</span>
                 <select
@@ -776,21 +777,6 @@ function HomesPageContent() {
                   {(filterOptions?.cities ?? []).map((c) => (
                     <option key={c} value={c}>
                       {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-500">Subdivision</span>
-                <select
-                  value={subdivision}
-                  onChange={(e) => setSubdivision(e.target.value)}
-                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                >
-                  <option value="">All</option>
-                  {(filterOptions?.subdivisions ?? []).map((s) => (
-                    <option key={s} value={s}>
-                      {s}
                     </option>
                   ))}
                 </select>
@@ -935,18 +921,16 @@ function HomesPageContent() {
           />
         </div>
 
-        {mapBounds != null && (
-          <p className="mb-4 text-sm text-slate-600">
-            {boundsLoading ? (
-              "Loading homes in map view…"
-            ) : (
-              <>
-                Showing {mapPoints.length.toLocaleString()} homes.
-                {mapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to load more."}
-              </>
-            )}
-          </p>
-        )}
+        <p className="mb-4 text-sm text-slate-600">
+          {boundsLoading ? (
+            "Loading homes in map view…"
+          ) : (
+            <>
+              Showing {mapPoints.length.toLocaleString()} homes.
+              {mapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to load more."}
+            </>
+          )}
+        </p>
 
         {((!mapBounds && hasMore) || displayedRows.length > offset) && (
           <div className="mb-6">
