@@ -25,6 +25,8 @@ type ListingCardProps = {
   priority?: boolean;
   /** Skip Vercel image optimization; load directly from URL (saves transformations, good for single-image pages). */
   unoptimized?: boolean;
+  /** Optional badge text shown in the top-left corner of the card. */
+  badge?: string;
 };
 
 function PillRow({
@@ -103,9 +105,15 @@ export default function ListingCard({
   stackedRows = false,
   priority = false,
   unoptimized = false,
+  badge,
 }: ListingCardProps) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
+      {badge && (
+        <div className="absolute left-3 top-3 z-10 rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white shadow-sm">
+          {badge}
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,42%)_1fr]">
         {/* Left: Image — sizes="600px" so Vercel serves one size per image (fewer transformations) */}
         <div className="relative aspect-[4/3] w-full overflow-hidden bg-neutral-100 md:aspect-auto md:h-full md:min-h-0 md:rounded-l-2xl">

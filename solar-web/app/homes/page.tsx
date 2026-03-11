@@ -52,6 +52,7 @@ type HomeRow = {
   original_index: number;
   model_score?: number | null;
   roof_score?: number | null;
+  has_solar?: boolean;
   [key: string]: unknown;
 };
 
@@ -963,6 +964,7 @@ function HomesPageContent() {
                     onToggle: (e) => toggleFollow(r.index, e),
                   }}
                   unoptimized
+                  badge={r.has_solar ? "Has Solar" : undefined}
                 />
               </Link>
             );

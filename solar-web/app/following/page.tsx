@@ -13,6 +13,7 @@ const BUCKET = "images";
 type HomeRow = {
   index: string;
   original_index: number;
+  has_solar?: boolean;
   [key: string]: unknown;
 };
 
@@ -370,6 +371,7 @@ export default function FollowingPage() {
                       onToggle: (ev) => toggleFollow(r.index, ev),
                     }}
                     unoptimized
+                    badge={r.has_solar ? "Has Solar" : undefined}
                   />
                 </Link>
               );
