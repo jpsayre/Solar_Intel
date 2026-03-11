@@ -658,6 +658,7 @@ function HomesPageContent() {
             address: r.index, // lightweight — no full address in RPC
             score: colorScore,
             roofScore: r.roof_score,
+            modelScore: r.model_score,
           };
         });
     }
@@ -689,6 +690,7 @@ function HomesPageContent() {
           address: `${addressLine1}, ${addressLine2}`,
           score: colorScore,
           roofScore: rs,
+          modelScore: ms,
         };
       });
   }, [rpcMapPoints, rows, mapBounds, boundsRows, scoresByIndex, sortBy, minModelScore, minRoofScore]);

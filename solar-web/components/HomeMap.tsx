@@ -15,6 +15,8 @@ export type MapPoint = {
   address: string;
   score: number | null;
   roofScore: number | null;
+  modelScore: number | null;
+  hasSolar?: boolean;
 };
 
 export type MapBounds = {
@@ -178,7 +180,7 @@ export default function HomeMap({
         ) : null}
         <MarkerClusterGroup chunkedLoading disableClusteringAtZoom={12} maxClusterRadius={80} iconCreateFunction={createGrayClusterIcon}>
           {pointsList.map((p) => {
-            const color = scoreToColor(p.score);
+            const color = p.hasSolar ? "#111827" : scoreToColor(p.score);
             return (
             <CircleMarker
               key={p.index}
@@ -200,7 +202,7 @@ export default function HomeMap({
                 <div>
                   <div>{p.address}</div>
                   <div style={{ fontSize: 11, opacity: 0.85 }}>
-                    Ranking: {p.score != null ? Number(p.score.toFixed(1)) : "—"} · Roof: {p.roofScore != null ? Number(p.roofScore.toFixed(1)) : "—"}
+                    Ranking: {p.modelScore != null ? Number(p.modelScore.toFixed(1)) : "—"} · Roof: {p.roofScore != null ? Number(p.roofScore.toFixed(1)) : "—"}
                   </div>
                 </div>
               </Tooltip>
