@@ -135,6 +135,7 @@ function HomesPageContent() {
   const [excludeTagFilter, setExcludeTagFilter] = useState("");
   const [excludeDoNotContact, setExcludeDoNotContact] = useState(true);
   const [showSolarHomes, setShowSolarHomes] = useState(false);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
 
   // Lightweight map points from RPC (scores pre-joined, no gray flash)
   type RpcMapPoint = { index: string; latitude: number; longitude: number; model_score: number | null; roof_score: number | null; hybrid_score: number | null };
@@ -324,6 +325,7 @@ function HomesPageContent() {
   const loadRows = useCallback(async () => {
     setErr(null);
     setRows(null);
+    setTotalCount(null);
 
     const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
     if (userErr) {
@@ -335,35 +337,42 @@ function HomesPageContent() {
       return;
     }
 
-    let query = supabaseBrowser
-      .from("homes")
-      .select("*")
-      .order("index", { ascending: true })
-      .limit(PAGE_SIZE);
+    // Build shared filter logic
+    const applyFilters = (q: typeof supabaseBrowser extends { from: (t: string) => infer R } ? any : any) => {
+      if (county) q = q.eq("county", county);
+      if (city) q = q.eq("city", city);
+      if (subdivision) q = q.eq("subdivision_formatted", subdivision);
+      if (addressSearchApplied.trim()) {
+        q = q.ilike("address", `%${addressSearchApplied.trim()}%`);
+      } else if (!showSolarHomes) {
+        q = q.eq("has_solar", false);
+      }
+      return q;
+    };
 
-    if (county) query = query.eq("county", county);
-    if (city) query = query.eq("city", city);
-    if (subdivision) query = query.eq("subdivision_formatted", subdivision);
-    if (addressSearchApplied.trim()) {
-      query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
-    } else if (!showSolarHomes) {
-      query = query.eq("has_solar", false);
-    }
+    // Fire row query and count query in parallel
+    let query = applyFilters(
+      supabaseBrowser.from("homes").select("*").order("index", { ascending: true }).limit(PAGE_SIZE)
+    );
+    let countQuery = applyFilters(
+      supabaseBrowser.from("homes").select("*", { count: "exact", head: true })
+    );
 
-    const { data, error } = await query;
+    const [rowResult, countResult] = await Promise.all([query, countQuery]);
 
-    if (error) {
-      setErr(error.message);
+    if (rowResult.error) {
+      setErr(rowResult.error.message);
       setRows([]);
       return;
     }
 
-    const list = (data ?? []) as HomeRow[];
+    const list = (rowResult.data ?? []) as HomeRow[];
     setRows(list);
     setOffset(PAGE_SIZE);
     setHasMore(list.length === PAGE_SIZE);
     setMapBounds(null);
     setBoundsRows([]);
+    setTotalCount(countResult.count ?? null);
   }, [router, county, city, subdivision, addressSearchApplied, showSolarHomes]);
 
   const loadNextPage = useCallback(async () => {
@@ -910,8 +919,9 @@ function HomesPageContent() {
             "Loading homes in map view…"
           ) : (
             <>
-              Showing {mapPoints.length.toLocaleString()} homes.
-              {mapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to load more."}
+              Showing {displayedRows.length.toLocaleString()} of{" "}
+              {totalCount != null ? totalCount.toLocaleString() : "…"} homes matching filters.
+              {mapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to see more on map."}
             </>
           )}
         </p>
