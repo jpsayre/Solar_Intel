@@ -1,0 +1,7 @@
+# For update_state_electricity_prices.py
+requests>=2.28
+supabase>=2.0
+python-dotenv>=1.0
+
+# For enrich_emails.py
+pandas>=2.0
