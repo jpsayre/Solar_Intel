@@ -10,21 +10,18 @@ import ListingCard from "@/components/ListingCard";
 
 const BUCKET = "images";
 
-const COMMON_TAGS = [
+const HOME_INFO_FIELDS = [
   { key: "roof_condition", label: "Roof Condition" },
   { key: "roofing_material", label: "Roofing Material" },
-  { key: "energy_bill", label: "Electricity Bill (kWh)" },
+  { key: "energy_bill_kwh", label: "Electricity Bill (kWh)" },
   { key: "interest_in_solar", label: "Interest in Solar" },
   { key: "interest_in_battery", label: "Interest in Battery" },
   { key: "ev_ownership", label: "EV Ownership" },
 ] as const;
 
 const ROOF_CONDITION_OPTIONS = ["Excellent", "Good", "Fair", "Poor"] as const;
-
 const INTEREST_OPTIONS = ["Unknown", "Cold", "Cool", "Warm", "Hot"] as const;
-
 const EV_OWNERSHIP_OPTIONS = ["Unknown", "Doesn't Want", "Interested", "Owns an EV", "Owns 2+ EVs"] as const;
-
 const ROOFING_MATERIAL_OPTIONS = [
   "Asphalt Shingles",
   "Ceramic Tile",
@@ -36,15 +33,17 @@ const ROOFING_MATERIAL_OPTIONS = [
 
 type ActionItem = {
   id: string;
-  text: string;
+  body: string;
   completed: boolean;
   created_at?: string;
+  completed_at?: string | null;
 };
 
 type ContactRow = {
+  id?: number;
+  preferred_name: string;
   phone_number: string;
   email: string;
-  preferred_name: string;
 };
 
 const EMPTY_CONTACT: ContactRow = {
@@ -63,9 +62,14 @@ type OrgHomeRow = {
   id: number;
   org_id: string;
   home_index: string;
-  custom: Record<string, unknown> | null;
-  updated_at?: string | null;
-  [key: string]: unknown;
+  tags: string[] | null;
+  roof_condition: string | null;
+  roofing_material: string | null;
+  energy_bill_kwh: number | null;
+  interest_in_solar: string | null;
+  interest_in_battery: string | null;
+  ev_ownership: string | null;
+  updated_at: string;
 };
 
 type HomeNote = {
@@ -143,17 +147,19 @@ export default function HomeDetailPage() {
   const [noteBody, setNoteBody] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const [userId, setUserId] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [orgHome, setOrgHome] = useState<OrgHomeRow | null | "none">(null);
+  const [orgHomeLoaded, setOrgHomeLoaded] = useState(false);
   const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const [newActionItemText, setNewActionItemText] = useState("");
   const [showCompletedActionItems, setShowCompletedActionItems] = useState(false);
   const [contacts, setContacts] = useState<ContactRow[]>([{ ...EMPTY_CONTACT }]);
-  const [customTags, setCustomTags] = useState<Record<string, string>>({});
+  const [homeInfo, setHomeInfo] = useState<Record<string, string>>({});
   const [tags, setTags] = useState<string[]>([]);
   const [newTagEntry, setNewTagEntry] = useState("");
   const [tagsErr, setTagsErr] = useState<string | null>(null);
   const [savingTags, setSavingTags] = useState(false);
+  const [orgHomeUpdatedAt, setOrgHomeUpdatedAt] = useState<string | null>(null);
   const [isFollowed, setIsFollowed] = useState(false);
   const [scores, setScores] = useState<{ model_score: number | null; roof_score: number | null } | null>(null);
   const [enrichCredits, setEnrichCredits] = useState(47);
@@ -162,13 +168,8 @@ export default function HomeDetailPage() {
   const [enrichedEmail, setEnrichedEmail] = useState<{ name: string; email: string } | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextAutoSaveRef = useRef(true);
-  const orgHomeRef = useRef(orgHome);
-  orgHomeRef.current = orgHome;
-  const lastSavedContactsRef = useRef<string>(JSON.stringify([{ phone_number: "", email: "", preferred_name: "" }]));
-  const lastSavedHomeInfoRef = useRef<string>(JSON.stringify({}));
-  const lastSavedTagsRef = useRef<string>(JSON.stringify([]));
-  const lastSavedActionItemsRef = useRef<string>(JSON.stringify([]));
 
+  // Load home row, scores, permits, image
   useEffect(() => {
     let alive = true;
 
@@ -178,7 +179,6 @@ export default function HomeDetailPage() {
       setImgUrl("");
       setRow(null);
 
-      // 1) Ensure logged in
       const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
       if (userErr) {
         if (alive) setErr(userErr.message);
@@ -188,8 +188,8 @@ export default function HomeDetailPage() {
         router.push("/login");
         return;
       }
+      setUserId(userData.user.id);
 
-      // 2) Fetch the row by string index (DO NOT Number(...) this)
       const idx = params.index;
 
       const { data, error } = await supabaseBrowser
@@ -206,7 +206,6 @@ export default function HomeDetailPage() {
 
       setRow(data as HomeRow);
 
-      // Fetch scores
       const { data: scoreData } = await supabaseBrowser
         .from("home_scores")
         .select("model_score, roof_score")
@@ -216,7 +215,6 @@ export default function HomeDetailPage() {
         setScores({ model_score: scoreData.model_score, roof_score: scoreData.roof_score });
       }
 
-      // 2b) Fetch permits for this home
       const { data: permitData } = await supabaseBrowser
         .from("permits")
         .select("id, permit_number, permit_type, description, filed_date, valuation")
@@ -226,12 +224,10 @@ export default function HomeDetailPage() {
         setPermits(permitData as PermitRow[]);
       }
 
-      // 3) Create a signed URL for the image (filename matches download_map_images: e.g. Boulder_CO_1014.png)
       const path = indexToImagePath((data as HomeRow).index);
-
       const signed = await supabaseBrowser.storage
         .from(BUCKET)
-        .createSignedUrl(path, 60 * 30); // 30 minutes
+        .createSignedUrl(path, 60 * 30);
 
       if (!alive) return;
 
@@ -245,12 +241,10 @@ export default function HomeDetailPage() {
     }
 
     load();
-
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [params.index, router]);
 
+  // Load follow state
   useEffect(() => {
     let alive = true;
     async function loadFollowState() {
@@ -270,9 +264,7 @@ export default function HomeDetailPage() {
       if (alive) setIsFollowed(!!data);
     }
     loadFollowState();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [params.index]);
 
   const toggleFollow = useCallback(
@@ -293,6 +285,7 @@ export default function HomeDetailPage() {
     [params.index, isFollowed]
   );
 
+  // Load notes
   const loadNotes = useCallback(async () => {
     const idx = params.index;
     if (!idx) return;
@@ -314,14 +307,11 @@ export default function HomeDetailPage() {
   useEffect(() => {
     let alive = true;
     if (!row || !params.index) return;
-    loadNotes().then(() => {
-      if (!alive) return;
-    });
-    return () => {
-      alive = false;
-    };
+    loadNotes().then(() => { if (!alive) return; });
+    return () => { alive = false; };
   }, [row, params.index, loadNotes]);
 
+  // Load org_home + contacts + action items from separate tables
   useEffect(() => {
     let alive = true;
 
@@ -337,114 +327,92 @@ export default function HomeDetailPage() {
 
       if (!alive || !profile?.org_id) {
         setOrgId(null);
-        setOrgHome("none");
+        setOrgHomeLoaded(true);
         return;
       }
 
-      setOrgId(profile.org_id as string);
+      const currentOrgId = profile.org_id as string;
+      setOrgId(currentOrgId);
 
-      const { data: orgHomeRow, error } = await supabaseBrowser
+      // Load org_home row (scalar fields + tags)
+      const { data: ohRow } = await supabaseBrowser
         .from("org_home")
-        .select("id, org_id, home_index, custom, updated_at")
-        .eq("org_id", profile.org_id)
+        .select("*")
+        .eq("org_id", currentOrgId)
         .eq("home_index", params.index)
         .maybeSingle();
 
       if (!alive) return;
-      if (error) {
-        setTagsErr(error.message);
-        setOrgHome("none");
-        return;
+
+      if (ohRow) {
+        const oh = ohRow as OrgHomeRow;
+        setTags(oh.tags ?? []);
+        setHomeInfo({
+          roof_condition: oh.roof_condition ?? "",
+          roofing_material: oh.roofing_material ?? "",
+          energy_bill_kwh: oh.energy_bill_kwh != null ? String(oh.energy_bill_kwh) : "",
+          interest_in_solar: oh.interest_in_solar ?? "",
+          interest_in_battery: oh.interest_in_battery ?? "",
+          ev_ownership: oh.ev_ownership ?? "",
+        });
+        setOrgHomeUpdatedAt(oh.updated_at);
+      } else {
+        setTags([]);
+        setHomeInfo({});
+        setOrgHomeUpdatedAt(null);
       }
 
-      setOrgHome(orgHomeRow ? (orgHomeRow as OrgHomeRow) : "none");
+      // Load contacts
+      const { data: contactsData } = await supabaseBrowser
+        .from("org_home_contacts")
+        .select("id, preferred_name, phone_number, email")
+        .eq("org_id", currentOrgId)
+        .eq("home_index", params.index)
+        .order("id");
 
-      const custom = (orgHomeRow as OrgHomeRow | null)?.custom;
-      if (custom && typeof custom === "object") {
-        const rawContacts = custom.contacts;
-        let parsedContacts: ContactRow[] = [{ ...EMPTY_CONTACT }];
-        if (Array.isArray(rawContacts) && rawContacts.length > 0) {
-          parsedContacts = rawContacts.map((c) => {
-            if (c && typeof c === "object") {
-              return {
-                phone_number: typeof c.phone_number === "string" ? c.phone_number : "",
-                email: typeof c.email === "string" ? c.email : "",
-                preferred_name: typeof c.preferred_name === "string" ? c.preferred_name : "",
-              };
-            }
-            return { ...EMPTY_CONTACT };
-          });
-          setContacts(parsedContacts);
-        } else {
-          setContacts(parsedContacts);
-        }
+      if (!alive) return;
 
-        const rawActionItems = custom.action_items;
-        if (Array.isArray(rawActionItems)) {
-          const parsed: ActionItem[] = rawActionItems
-            .filter((a): a is Record<string, unknown> => a != null && typeof a === "object")
-            .map((a) => ({
-              id: typeof a.id === "string" ? a.id : String(Date.now() + Math.random()),
-              text: typeof a.text === "string" ? a.text : "",
-              completed: Boolean(a.completed),
-              created_at: typeof a.created_at === "string" ? a.created_at : undefined,
-            }))
-            .filter((a) => a.text !== "" || a.completed);
-          setActionItems(parsed);
-          lastSavedActionItemsRef.current = JSON.stringify(parsed);
-        } else {
-          setActionItems([]);
-          lastSavedActionItemsRef.current = JSON.stringify([]);
-        }
-
-        const entries: Record<string, string> = {};
-        const knownKeys = new Set<string>(COMMON_TAGS.map((t) => t.key));
-        const skipKeys = new Set(["contacts", "action_items", "tags", "phone_number", "email", "contact_info_updated_at", "home_info_updated_at", "custom_tags_updated_at", "action_items_updated_at"]);
-        for (const [k, v] of Object.entries(custom)) {
-          if (skipKeys.has(k)) continue;
-          if (typeof k === "string" && knownKeys.has(k) && (v === null || typeof v === "string" || typeof v === "number")) {
-            entries[k] = String(v);
-          }
-        }
-        setCustomTags(entries);
-
-        const tagsArray: string[] = Array.isArray(custom.tags)
-          ? (custom.tags as unknown[]).filter((t): t is string => typeof t === "string" && t.trim() !== "").map((t) => t.trim())
-          : [];
-        setTags(tagsArray);
-
-        lastSavedContactsRef.current = JSON.stringify(
-          parsedContacts.map((c) => ({
-            phone_number: c.phone_number.trim(),
-            email: c.email.trim(),
-            preferred_name: c.preferred_name.trim(),
-          }))
-        );
-        const homeInfo: Record<string, string> = {};
-        for (const t of COMMON_TAGS) {
-          const val = entries[t.key];
-          if (val != null && val.trim() !== "") homeInfo[t.key] = val.trim();
-        }
-        lastSavedHomeInfoRef.current = JSON.stringify(homeInfo);
-        lastSavedTagsRef.current = JSON.stringify(tagsArray);
+      if (contactsData && contactsData.length > 0) {
+        setContacts(contactsData.map((c) => ({
+          id: c.id as number,
+          preferred_name: (c.preferred_name as string) ?? "",
+          phone_number: (c.phone_number as string) ?? "",
+          email: (c.email as string) ?? "",
+        })));
       } else {
         setContacts([{ ...EMPTY_CONTACT }]);
-        setActionItems([]);
-        setCustomTags({});
-        setTags([]);
-        lastSavedContactsRef.current = JSON.stringify([{ phone_number: "", email: "", preferred_name: "" }]);
-        lastSavedHomeInfoRef.current = JSON.stringify({});
-        lastSavedTagsRef.current = JSON.stringify([]);
-        lastSavedActionItemsRef.current = JSON.stringify([]);
       }
+
+      // Load action items
+      const { data: aiData } = await supabaseBrowser
+        .from("org_home_action_items")
+        .select("id, body, completed, created_by, created_at, completed_at")
+        .eq("org_id", currentOrgId)
+        .eq("home_index", params.index)
+        .order("created_at");
+
+      if (!alive) return;
+
+      if (aiData && aiData.length > 0) {
+        setActionItems(aiData.map((a) => ({
+          id: a.id as string,
+          body: (a.body as string) ?? "",
+          completed: Boolean(a.completed),
+          created_at: a.created_at as string | undefined,
+          completed_at: a.completed_at as string | null | undefined,
+        })));
+      } else {
+        setActionItems([]);
+      }
+
+      setOrgHomeLoaded(true);
     }
 
     loadOrgHome();
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [params.index]);
 
+  // Add note (includes org_id)
   async function handleAddNote(e: React.FormEvent) {
     e.preventDefault();
     const body = noteBody.trim();
@@ -456,6 +424,7 @@ export default function HomeDetailPage() {
     const { error } = await supabaseBrowser.from("home_notes").insert({
       home_index: params.index,
       author_id: userData.user.id,
+      org_id: orgId,
       body,
     });
     setSubmitting(false);
@@ -467,7 +436,7 @@ export default function HomeDetailPage() {
     await loadNotes();
   }
 
-  function setContactField(i: number, field: keyof ContactRow, value: string | boolean) {
+  function setContactField(i: number, field: keyof ContactRow, value: string) {
     setContacts((prev) => {
       const next = [...prev];
       if (i < 0 || i >= next.length) return prev;
@@ -488,7 +457,7 @@ export default function HomeDetailPage() {
     const text = newActionItemText.trim();
     if (!text) return;
     const id = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `item-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    setActionItems((prev) => [...prev, { id, text, completed: false, created_at: new Date().toISOString() }]);
+    setActionItems((prev) => [...prev, { id, body: text, completed: false, created_at: new Date().toISOString() }]);
     setNewActionItemText("");
   }
 
@@ -497,11 +466,15 @@ export default function HomeDetailPage() {
   }
 
   function toggleActionItem(id: string) {
-    setActionItems((prev) => prev.map((a) => (a.id === id ? { ...a, completed: !a.completed } : a)));
+    setActionItems((prev) => prev.map((a) => {
+      if (a.id !== id) return a;
+      const nowCompleted = !a.completed;
+      return { ...a, completed: nowCompleted, completed_at: nowCompleted ? new Date().toISOString() : null };
+    }));
   }
 
-  function setTagValue(key: string, value: string) {
-    setCustomTags((prev) => ({ ...prev, [key]: value }));
+  function setHomeInfoValue(key: string, value: string) {
+    setHomeInfo((prev) => ({ ...prev, [key]: value }));
   }
 
   function addTag() {
@@ -515,99 +488,108 @@ export default function HomeDetailPage() {
     setTags((prev) => prev.filter((t) => t !== tag));
   }
 
+  // Save to org_home (upsert), org_home_contacts (replace), org_home_action_items (replace)
   const saveOrgHomeInfo = useCallback(async () => {
-    if (!orgId || !params.index) return;
-    const { data: userData } = await supabaseBrowser.auth.getUser();
-    if (!userData.user) return;
+    if (!orgId || !params.index || !userId) return;
 
     setSavingTags(true);
     setTagsErr(null);
 
-    const contactsPayload = contacts.map((c) => ({
-      phone_number: c.phone_number.trim(),
-      email: c.email.trim(),
-      preferred_name: c.preferred_name.trim(),
-    }));
+    let saveError: string | null = null;
 
-    const actionItemsPayload = actionItems.map((a) => ({
-      id: a.id,
-      text: a.text,
-      completed: a.completed,
-      created_at: a.created_at,
-    }));
+    // 1. Upsert org_home scalar fields + tags
+    const orgHomePayload: Record<string, unknown> = {
+      org_id: orgId,
+      home_index: params.index,
+      tags,
+      roof_condition: homeInfo.roof_condition || null,
+      roofing_material: homeInfo.roofing_material || null,
+      energy_bill_kwh: homeInfo.energy_bill_kwh ? parseFloat(homeInfo.energy_bill_kwh) : null,
+      interest_in_solar: homeInfo.interest_in_solar || null,
+      interest_in_battery: homeInfo.interest_in_battery || null,
+      ev_ownership: homeInfo.ev_ownership || null,
+      created_by: userId,
+    };
 
-    const homeInfoPayload: Record<string, string> = {};
-    for (const t of COMMON_TAGS) {
-      const v = customTags[t.key];
-      if (v != null && String(v).trim() !== "") homeInfoPayload[t.key] = String(v).trim();
+    const { data: upsertedRow, error: ohErr } = await supabaseBrowser
+      .from("org_home")
+      .upsert(orgHomePayload, { onConflict: "org_id,home_index" })
+      .select("updated_at")
+      .single();
+
+    if (ohErr) {
+      setTagsErr(ohErr.message);
+      saveError = ohErr.message;
+    } else if (upsertedRow) {
+      setOrgHomeUpdatedAt(upsertedRow.updated_at as string);
     }
 
-    const contactsSerialized = JSON.stringify(contactsPayload);
-    const homeInfoSerialized = JSON.stringify(homeInfoPayload);
-    const tagsSerialized = JSON.stringify(tags);
-    const actionItemsSerialized = JSON.stringify(actionItemsPayload);
+    // 2. Replace contacts
+    if (!saveError) {
+      await supabaseBrowser
+        .from("org_home_contacts")
+        .delete()
+        .eq("org_id", orgId)
+        .eq("home_index", params.index);
 
-    const contactInfoChanged = lastSavedContactsRef.current !== contactsSerialized;
-    const homeInfoChanged = lastSavedHomeInfoRef.current !== homeInfoSerialized;
-    const tagsChanged = lastSavedTagsRef.current !== tagsSerialized;
-    const actionItemsChanged = lastSavedActionItemsRef.current !== actionItemsSerialized;
-
-    const now = new Date().toISOString();
-    const currentOrgHome = orgHomeRef.current;
-    const existingCustom =
-      currentOrgHome !== null && currentOrgHome !== "none" && typeof currentOrgHome === "object" && currentOrgHome.custom && typeof currentOrgHome.custom === "object"
-        ? { ...(currentOrgHome.custom as Record<string, unknown>) }
-        : {};
-
-    const customPayload: Record<string, unknown> = { ...existingCustom, contacts: contactsPayload, action_items: actionItemsPayload, tags };
-    for (const [k, v] of Object.entries(homeInfoPayload)) customPayload[k] = v;
-
-    if (contactInfoChanged) customPayload.contact_info_updated_at = now;
-    if (homeInfoChanged) customPayload.home_info_updated_at = now;
-    if (tagsChanged) customPayload.custom_tags_updated_at = now;
-    if (actionItemsChanged) customPayload.action_items_updated_at = now;
-
-    let saveError: string | null = null;
-    if (currentOrgHome !== null && currentOrgHome !== "none" && typeof currentOrgHome === "object") {
-      const { error } = await supabaseBrowser
-        .from("org_home")
-        .update({ custom: customPayload })
-        .eq("id", currentOrgHome.id);
-      if (error) {
-        setTagsErr(error.message);
-        saveError = error.message;
+      const nonEmpty = contacts.filter(
+        (c) => c.preferred_name.trim() || c.phone_number.trim() || c.email.trim()
+      );
+      if (nonEmpty.length > 0) {
+        const { error: cErr } = await supabaseBrowser
+          .from("org_home_contacts")
+          .insert(
+            nonEmpty.map((c) => ({
+              org_id: orgId,
+              home_index: params.index,
+              preferred_name: c.preferred_name.trim(),
+              phone_number: c.phone_number.trim(),
+              email: c.email.trim(),
+            }))
+          );
+        if (cErr) {
+          setTagsErr(cErr.message);
+          saveError = cErr.message;
+        }
       }
-    } else {
-      const { error } = await supabaseBrowser.from("org_home").insert({
-        org_id: orgId,
-        home_index: params.index,
-        created_by: userData.user.id,
-        custom: customPayload,
-      });
-      if (error) {
-        setTagsErr(error.message);
-        saveError = error.message;
+    }
+
+    // 3. Replace action items
+    if (!saveError) {
+      await supabaseBrowser
+        .from("org_home_action_items")
+        .delete()
+        .eq("org_id", orgId)
+        .eq("home_index", params.index);
+
+      if (actionItems.length > 0) {
+        const { error: aiErr } = await supabaseBrowser
+          .from("org_home_action_items")
+          .insert(
+            actionItems.map((a) => ({
+              id: a.id,
+              org_id: orgId,
+              home_index: params.index,
+              body: a.body,
+              completed: a.completed,
+              created_by: userId,
+              created_at: a.created_at || new Date().toISOString(),
+              completed_at: a.completed ? (a.completed_at || new Date().toISOString()) : null,
+            }))
+          );
+        if (aiErr) {
+          setTagsErr(aiErr.message);
+          saveError = aiErr.message;
+        }
       }
     }
 
     setSavingTags(false);
-    if (!saveError) {
-      lastSavedContactsRef.current = contactsSerialized;
-      lastSavedHomeInfoRef.current = homeInfoSerialized;
-      lastSavedTagsRef.current = tagsSerialized;
-      lastSavedActionItemsRef.current = actionItemsSerialized;
-      const { data } = await supabaseBrowser
-        .from("org_home")
-        .select("id, org_id, home_index, custom, updated_at")
-        .eq("org_id", orgId)
-        .eq("home_index", params.index)
-        .single();
-      if (data) setOrgHome(data as OrgHomeRow);
-    }
-  }, [contacts, actionItems, customTags, tags, orgId, params.index]);
+  }, [contacts, actionItems, homeInfo, tags, orgId, params.index, userId]);
 
+  // Debounced auto-save
   useEffect(() => {
-    if (!orgId || !params.index) return;
+    if (!orgId || !params.index || !orgHomeLoaded) return;
     if (skipNextAutoSaveRef.current) {
       skipNextAutoSaveRef.current = false;
       return;
@@ -623,7 +605,7 @@ export default function HomeDetailPage() {
         saveTimeoutRef.current = null;
       }
     };
-  }, [contacts, actionItems, customTags, tags, orgId, params.index, saveOrgHomeInfo]);
+  }, [contacts, actionItems, homeInfo, tags, orgId, params.index, orgHomeLoaded, saveOrgHomeInfo]);
 
   if (err) {
     return (
@@ -651,10 +633,7 @@ export default function HomeDetailPage() {
     : row;
   const { addressLine1, addressLine2, detailRows } = buildListingCardData(rowWithScores);
 
-  const custom = orgHome !== null && orgHome !== "none" && typeof orgHome === "object" && orgHome.custom && typeof orgHome.custom === "object" ? (orgHome.custom as Record<string, unknown>) : null;
-  const contactInfoUpdatedText = custom?.contact_info_updated_at && typeof custom.contact_info_updated_at === "string" ? formatNoteTimestamp(custom.contact_info_updated_at) : null;
-  const homeInfoUpdatedText = custom?.home_info_updated_at && typeof custom.home_info_updated_at === "string" ? formatNoteTimestamp(custom.home_info_updated_at) : null;
-  const customTagsUpdatedText = custom?.custom_tags_updated_at && typeof custom.custom_tags_updated_at === "string" ? formatNoteTimestamp(custom.custom_tags_updated_at) : null;
+  const updatedAtText = orgHomeUpdatedAt ? formatNoteTimestamp(orgHomeUpdatedAt) : null;
 
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
@@ -785,7 +764,12 @@ export default function HomeDetailPage() {
 
         {orgId != null && (<>
           <section className="mt-10">
-            <h2 className="mb-2 text-lg font-semibold text-slate-900">My Organization&apos;s Info</h2>
+            <div className="mb-2 flex items-start justify-between gap-2">
+              <h2 className="text-lg font-semibold text-slate-900">My Organization&apos;s Info</h2>
+              {updatedAtText && (
+                <span className="shrink-0 text-xs text-slate-500">Last updated: {updatedAtText}</span>
+              )}
+            </div>
             <p className="mb-4 text-sm text-slate-500">
               Action items, contact info, home info, and tags are private to your organization.
             </p>
@@ -806,14 +790,14 @@ export default function HomeDetailPage() {
                           checked={a.completed}
                           onChange={() => toggleActionItem(a.id)}
                           className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
-                          aria-label={`Mark "${a.text}" complete`}
+                          aria-label={`Mark "${a.body}" complete`}
                         />
-                        <span className="min-w-0 flex-1 text-sm text-slate-800">{a.text}</span>
+                        <span className="min-w-0 flex-1 text-sm text-slate-800">{a.body}</span>
                         <button
                           type="button"
                           onClick={() => removeActionItem(a.id)}
                           className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
-                          aria-label={`Remove "${a.text}"`}
+                          aria-label={`Remove "${a.body}"`}
                         >
                           ×
                         </button>
@@ -861,14 +845,14 @@ export default function HomeDetailPage() {
                                 checked={a.completed}
                                 onChange={() => toggleActionItem(a.id)}
                                 className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
-                                aria-label={`Mark "${a.text}" incomplete`}
+                                aria-label={`Mark "${a.body}" incomplete`}
                               />
-                              <span className="min-w-0 flex-1 text-sm text-slate-500 line-through">{a.text}</span>
+                              <span className="min-w-0 flex-1 text-sm text-slate-500 line-through">{a.body}</span>
                               <button
                                 type="button"
                                 onClick={() => removeActionItem(a.id)}
                                 className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-red-600"
-                                aria-label={`Remove "${a.text}"`}
+                                aria-label={`Remove "${a.body}"`}
                               >
                                 ×
                               </button>
@@ -881,12 +865,7 @@ export default function HomeDetailPage() {
               </div>
 
               <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <h3 className="text-sm font-medium text-slate-700">Contact Info</h3>
-                  {contactInfoUpdatedText && (
-                    <span className="shrink-0 text-xs text-slate-500">Last updated: {contactInfoUpdatedText}</span>
-                  )}
-                </div>
+                <h3 className="mb-3 text-sm font-medium text-slate-700">Contact Info</h3>
                 <div className="space-y-4">
                   {contacts.map((contact, i) => (
                     <div
@@ -966,20 +945,15 @@ export default function HomeDetailPage() {
               </div>
 
               <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <h3 className="text-sm font-medium text-slate-700">Home Info</h3>
-                  {homeInfoUpdatedText && (
-                    <span className="shrink-0 text-xs text-slate-500">Last updated: {homeInfoUpdatedText}</span>
-                  )}
-                </div>
+                <h3 className="mb-3 text-sm font-medium text-slate-700">Home Info</h3>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  {COMMON_TAGS.map(({ key, label }) => (
+                  {HOME_INFO_FIELDS.map(({ key, label }) => (
                     <label key={key} className="flex flex-col gap-1">
                       <span className="text-xs font-medium text-slate-500">{label}</span>
                       {key === "roof_condition" ? (
                         <select
-                          value={customTags[key] ?? ""}
-                          onChange={(e) => setTagValue(key, e.target.value)}
+                          value={homeInfo[key] ?? ""}
+                          onChange={(e) => setHomeInfoValue(key, e.target.value)}
                           className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                         >
                           <option value="">Select…</option>
@@ -991,8 +965,8 @@ export default function HomeDetailPage() {
                         </select>
                       ) : key === "roofing_material" ? (
                         <select
-                          value={customTags[key] ?? ""}
-                          onChange={(e) => setTagValue(key, e.target.value)}
+                          value={homeInfo[key] ?? ""}
+                          onChange={(e) => setHomeInfoValue(key, e.target.value)}
                           className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                         >
                           <option value="">Select…</option>
@@ -1004,8 +978,8 @@ export default function HomeDetailPage() {
                         </select>
                       ) : key === "interest_in_solar" || key === "interest_in_battery" ? (
                         <select
-                          value={customTags[key] ?? ""}
-                          onChange={(e) => setTagValue(key, e.target.value)}
+                          value={homeInfo[key] ?? ""}
+                          onChange={(e) => setHomeInfoValue(key, e.target.value)}
                           className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                         >
                           <option value="">Select…</option>
@@ -1017,8 +991,8 @@ export default function HomeDetailPage() {
                         </select>
                       ) : key === "ev_ownership" ? (
                         <select
-                          value={customTags[key] ?? ""}
-                          onChange={(e) => setTagValue(key, e.target.value)}
+                          value={homeInfo[key] ?? ""}
+                          onChange={(e) => setHomeInfoValue(key, e.target.value)}
                           className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                         >
                           <option value="">Select…</option>
@@ -1031,8 +1005,8 @@ export default function HomeDetailPage() {
                       ) : (
                         <input
                           type="text"
-                          value={customTags[key] ?? ""}
-                          onChange={(e) => setTagValue(key, e.target.value)}
+                          value={homeInfo[key] ?? ""}
+                          onChange={(e) => setHomeInfoValue(key, e.target.value)}
                           placeholder={label}
                           className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                         />
@@ -1043,12 +1017,7 @@ export default function HomeDetailPage() {
               </div>
 
               <div className="rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
-                <div className="mb-3 flex items-start justify-between gap-2">
-                  <h3 className="text-sm font-medium text-slate-700">Tags</h3>
-                  {customTagsUpdatedText && (
-                    <span className="shrink-0 text-xs text-slate-500">Last updated: {customTagsUpdatedText}</span>
-                  )}
-                </div>
+                <h3 className="mb-3 text-sm font-medium text-slate-700">Tags</h3>
                 {tags.length > 0 && (
                   <div className="mb-3 flex flex-wrap gap-2">
                     {tags.map((tag) => (
@@ -1109,7 +1078,7 @@ export default function HomeDetailPage() {
           </div>
         </>)}
 
-        {orgId === null && orgHome === "none" && (
+        {orgId === null && orgHomeLoaded && (
           <div className="mt-10 rounded-xl border border-amber-200 bg-amber-50/80 px-4 py-3 text-sm text-amber-900">
             <p className="font-medium">My Organization&apos;s Info is only shown for users in an organization.</p>
             <p className="mt-1 text-amber-800">

@@ -17,14 +17,14 @@ export async function middleware(request: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
+        getAll() {
+          return request.cookies.getAll();
         },
-        set(name: string, value: string, options: { path?: string; maxAge?: number; sameSite?: string; secure?: boolean }) {
-          response.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: { path?: string }) {
-          response.cookies.set({ name, value: "", maxAge: 0, ...options });
+        setAll(cookiesToSet) {
+          for (const { name, value, options } of cookiesToSet) {
+            request.cookies.set(name, value);
+            response.cookies.set(name, value, options);
+          }
         },
       },
     }

@@ -93,27 +93,26 @@ export function buildListingCardData(row: HomeRow): {
   return { addressLine1, addressLine2, detailRows };
 }
 
-/** Contact shape stored in org_home.custom.contacts */
-type ContactEntry = {
-  phone_number?: string;
-  email?: string;
-  preferred_name?: string;
+type FollowingContact = {
+  preferred_name?: string | null;
+  phone_number?: string | null;
+  email?: string | null;
 };
 
-/** Action item shape in org_home.custom.action_items */
-type ActionItemEntry = {
-  id?: string;
-  text?: string;
+type FollowingActionItem = {
+  body?: string | null;
   completed?: boolean;
-  created_at?: string;
 };
 
-/** Build detail rows for the Following page: owner, contact info, open action items, latest comment. */
+/** Build detail rows for the Following page. */
 export function buildFollowingCardRows(
   homeRow: HomeRow,
-  orgCustom: Record<string, unknown> | null | undefined,
+  orgData: {
+    contacts?: FollowingContact[];
+    actionItems?: FollowingActionItem[];
+    tags?: string[];
+  } | null | undefined,
   latestNote: { body: string } | null | undefined,
-  scores?: { model_score: number | null; roof_score: number | null } | null
 ): CardRow[] {
   const ownerName =
     homeRow.owner_1 != null && String(homeRow.owner_1).trim() !== ""
@@ -123,14 +122,12 @@ export function buildFollowingCardRows(
       : "—";
 
   let contactValue = "No contact information for home";
-  if (orgCustom && typeof orgCustom === "object" && Array.isArray(orgCustom.contacts)) {
-    const contacts = orgCustom.contacts as ContactEntry[];
+  if (orgData?.contacts && orgData.contacts.length > 0) {
     const parts: string[] = [];
-    for (const c of contacts) {
-      if (!c || typeof c !== "object") continue;
-      const name = typeof c.preferred_name === "string" ? c.preferred_name.trim() : "";
-      const phone = typeof c.phone_number === "string" ? c.phone_number.trim() : "";
-      const email = typeof c.email === "string" ? c.email.trim() : "";
+    for (const c of orgData.contacts) {
+      const name = (c.preferred_name ?? "").trim();
+      const phone = (c.phone_number ?? "").trim();
+      const email = (c.email ?? "").trim();
       if (name || phone || email) {
         parts.push([name, phone, email].filter(Boolean).join(" • "));
       }
@@ -139,12 +136,10 @@ export function buildFollowingCardRows(
   }
 
   let actionItemsValue = "No open action items";
-  if (orgCustom && typeof orgCustom === "object" && Array.isArray(orgCustom.action_items)) {
-    const items = (orgCustom.action_items as ActionItemEntry[]).filter(
-      (a): a is ActionItemEntry => a != null && typeof a === "object" && !a.completed && String(a.text ?? "").trim() !== ""
-    );
-    if (items.length > 0) {
-      actionItemsValue = items.map((a) => String(a.text).trim()).join("\n");
+  if (orgData?.actionItems) {
+    const open = orgData.actionItems.filter((a) => !a.completed && (a.body ?? "").trim() !== "");
+    if (open.length > 0) {
+      actionItemsValue = open.map((a) => (a.body ?? "").trim()).join("\n");
     }
   }
 
@@ -153,11 +148,9 @@ export function buildFollowingCardRows(
       ? latestNote.body.trim()
       : "No comments yet";
 
-  let tagsValue = "—";
-  if (orgCustom && typeof orgCustom === "object" && Array.isArray(orgCustom.tags)) {
-    const tagStrings = (orgCustom.tags as unknown[]).filter((t): t is string => typeof t === "string" && t.trim() !== "").map((t) => t.trim());
-    if (tagStrings.length > 0) tagsValue = tagStrings.join(", ");
-  }
+  const tagsValue = orgData?.tags && orgData.tags.length > 0
+    ? orgData.tags.join(", ")
+    : "—";
 
   const rows: CardRow[] = [
     { label: "Owner name", value: ownerName },

@@ -18,8 +18,23 @@ type HomeRow = {
 
 type OrgHomeRow = {
   home_index: string;
-  custom: Record<string, unknown> | null;
+  tags: string[] | null;
+  interest_in_solar: string | null;
+  interest_in_battery: string | null;
   [key: string]: unknown;
+};
+
+type ContactRow = {
+  home_index: string;
+  preferred_name: string | null;
+  phone_number: string | null;
+  email: string | null;
+};
+
+type ActionItemRow = {
+  home_index: string;
+  body: string | null;
+  completed: boolean;
 };
 
 type HomeNoteRow = {
@@ -38,9 +53,8 @@ export default function FollowingPage() {
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
   const [followedSet, setFollowedSet] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
-  const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { custom: Record<string, unknown> | null }>>({});
+  const [orgDataByIndex, setOrgDataByIndex] = useState<Record<string, { tags: string[]; contacts: ContactRow[]; actionItems: ActionItemRow[] }>>({});
   const [latestNoteByIndex, setLatestNoteByIndex] = useState<Record<string, { body: string }>>({});
-  const [scoresByIndex, setScoresByIndex] = useState<Record<string, { model_score: number | null; roof_score: number | null }>>({});
   const [searchText, setSearchText] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [excludeTagFilter, setExcludeTagFilter] = useState("");
@@ -73,7 +87,7 @@ export default function FollowingPage() {
 
     if (indices.length === 0) {
       setRows([]);
-      setOrgHomeByIndex({});
+      setOrgDataByIndex({});
       setLatestNoteByIndex({});
       setLoading(false);
       return;
@@ -100,18 +114,42 @@ export default function FollowingPage() {
       .maybeSingle();
 
     const orgId = profile?.org_id as string | undefined;
-    const orgByIndex: Record<string, { custom: Record<string, unknown> | null }> = {};
+    const orgByIndex: Record<string, { tags: string[]; contacts: ContactRow[]; actionItems: ActionItemRow[] }> = {};
     if (orgId && indices.length > 0) {
-      const { data: orgHomeData } = await supabaseBrowser
-        .from("org_home")
-        .select("home_index, custom")
-        .eq("org_id", orgId)
-        .in("home_index", indices);
-      for (const row of (orgHomeData ?? []) as OrgHomeRow[]) {
-        orgByIndex[row.home_index] = { custom: row.custom ?? null };
+      const [orgHomeRes, contactsRes, actionItemsRes] = await Promise.all([
+        supabaseBrowser
+          .from("org_home")
+          .select("home_index, tags")
+          .eq("org_id", orgId)
+          .in("home_index", indices),
+        supabaseBrowser
+          .from("org_home_contacts")
+          .select("home_index, preferred_name, phone_number, email")
+          .eq("org_id", orgId)
+          .in("home_index", indices),
+        supabaseBrowser
+          .from("org_home_action_items")
+          .select("home_index, body, completed")
+          .eq("org_id", orgId)
+          .in("home_index", indices),
+      ]);
+
+      // Initialize entries from org_home tags
+      for (const row of (orgHomeRes.data ?? []) as OrgHomeRow[]) {
+        orgByIndex[row.home_index] = { tags: row.tags ?? [], contacts: [], actionItems: [] };
+      }
+      // Attach contacts
+      for (const c of (contactsRes.data ?? []) as ContactRow[]) {
+        if (!orgByIndex[c.home_index]) orgByIndex[c.home_index] = { tags: [], contacts: [], actionItems: [] };
+        orgByIndex[c.home_index].contacts.push(c);
+      }
+      // Attach action items
+      for (const a of (actionItemsRes.data ?? []) as ActionItemRow[]) {
+        if (!orgByIndex[a.home_index]) orgByIndex[a.home_index] = { tags: [], contacts: [], actionItems: [] };
+        orgByIndex[a.home_index].actionItems.push(a);
       }
     }
-    setOrgHomeByIndex(orgByIndex);
+    setOrgDataByIndex(orgByIndex);
 
     const latestByIndex: Record<string, { body: string }> = {};
     if (indices.length > 0) {
@@ -128,18 +166,6 @@ export default function FollowingPage() {
       }
     }
     setLatestNoteByIndex(latestByIndex);
-
-    const scoreByIndex: Record<string, { model_score: number | null; roof_score: number | null }> = {};
-    if (indices.length > 0) {
-      const { data: scoresData } = await supabaseBrowser
-        .from("home_scores")
-        .select("home_index, model_score, roof_score")
-        .in("home_index", indices);
-      for (const row of (scoresData ?? []) as { home_index: string; model_score: number | null; roof_score: number | null }[]) {
-        scoreByIndex[row.home_index] = { model_score: row.model_score, roof_score: row.roof_score };
-      }
-    }
-    setScoresByIndex(scoreByIndex);
 
     setLoading(false);
   }, [router]);
@@ -286,10 +312,8 @@ export default function FollowingPage() {
               const tagLower = tagFilter.trim().toLowerCase();
               const excludeLower = excludeTagFilter.trim().toLowerCase();
               const filtered = rows.filter((r) => {
-                const custom = orgHomeByIndex[r.index]?.custom;
-                const tags: string[] = custom && typeof custom === "object" && Array.isArray(custom.tags)
-                  ? (custom.tags as unknown[]).filter((t): t is string => typeof t === "string").map((t) => t.trim().toLowerCase())
-                  : [];
+                const orgData = orgDataByIndex[r.index];
+                const tags: string[] = (orgData?.tags ?? []).map((t) => t.trim().toLowerCase());
                 if (tagLower) {
                   if (!tags.some((tag) => tag.startsWith(tagLower))) return false;
                 }
@@ -299,9 +323,8 @@ export default function FollowingPage() {
                 if (excludeDoNotContact && tags.some((tag) => tag.startsWith("do not contact"))) return false;
                 if (!searchLower) return true;
                 const { addressLine1, addressLine2 } = buildListingCardData(r);
-                const orgCustom = orgHomeByIndex[r.index]?.custom;
                 const latestNote = latestNoteByIndex[r.index];
-                const detailRows = buildFollowingCardRows(r, orgCustom, latestNote, scoresByIndex[r.index]);
+                const detailRows = buildFollowingCardRows(r, orgData ?? null, latestNote);
                 const cardText = [
                   addressLine1,
                   addressLine2,
@@ -323,9 +346,9 @@ export default function FollowingPage() {
               const imageUrl = url || "/window.svg";
               const imageAlt = url ? `Home ${r.original_index}` : e ? "No access / not found" : "Loading…";
               const { addressLine1, addressLine2 } = buildListingCardData(r);
-              const orgCustom = orgHomeByIndex[r.index]?.custom;
+              const orgData = orgDataByIndex[r.index];
               const latestNote = latestNoteByIndex[r.index];
-              const detailRows = buildFollowingCardRows(r, orgCustom, latestNote, scoresByIndex[r.index]);
+              const detailRows = buildFollowingCardRows(r, orgData ?? null, latestNote);
               return (
                 <Link
                   key={r.index}

@@ -136,7 +136,7 @@ function HomesPageContent() {
   const [followedHomeIndices, setFollowedHomeIndices] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { custom: Record<string, unknown> | null }>>({});
+  const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { tags: string[]; interest_in_solar: string | null; interest_in_battery: string | null }>>({});
   const [tagFilter, setTagFilter] = useState("");
   const [excludeTagFilter, setExcludeTagFilter] = useState("");
   const [excludeDoNotContact, setExcludeDoNotContact] = useState(true);
@@ -241,14 +241,14 @@ function HomesPageContent() {
     const indices = list.map((r) => r.index);
     supabaseBrowser
       .from("org_home")
-      .select("home_index, custom")
+      .select("home_index, tags, interest_in_solar, interest_in_battery")
       .eq("org_id", orgId)
       .in("home_index", indices)
       .then(({ data }) => {
         if (!alive) return;
-        const byIndex: Record<string, { custom: Record<string, unknown> | null }> = {};
-        for (const row of (data ?? []) as { home_index: string; custom: Record<string, unknown> | null }[]) {
-          byIndex[row.home_index] = { custom: row.custom ?? null };
+        const byIndex: Record<string, { tags: string[]; interest_in_solar: string | null; interest_in_battery: string | null }> = {};
+        for (const row of (data ?? []) as { home_index: string; tags: string[] | null; interest_in_solar: string | null; interest_in_battery: string | null }[]) {
+          byIndex[row.home_index] = { tags: row.tags ?? [], interest_in_solar: row.interest_in_solar, interest_in_battery: row.interest_in_battery };
         }
         setOrgHomeByIndex(byIndex);
       });
@@ -559,10 +559,8 @@ function HomesPageContent() {
     const excludeLower = excludeTagFilter.trim().toLowerCase();
     if (tagLower || excludeLower || excludeDoNotContact) {
       list = list.filter((r) => {
-        const custom = orgHomeByIndex[r.index]?.custom;
-        const tags: string[] = custom && typeof custom === "object" && Array.isArray(custom.tags)
-          ? (custom.tags as unknown[]).filter((t): t is string => typeof t === "string").map((t) => t.trim().toLowerCase())
-          : [];
+        const orgRow = orgHomeByIndex[r.index];
+        const tags: string[] = (orgRow?.tags ?? []).map((t) => t.trim().toLowerCase());
         if (tagLower && !tags.some((tag) => tag.startsWith(tagLower))) return false;
         if (excludeLower && tags.some((tag) => tag.startsWith(excludeLower))) return false;
         if (excludeDoNotContact && tags.some((tag) => tag.startsWith("do not contact"))) return false;
@@ -580,20 +578,18 @@ function HomesPageContent() {
       list = list.filter((r) => (r.roof_score as number | null | undefined) != null && (r.roof_score as number) >= minRoof);
     }
 
-    // Interest filters (from org_home custom data)
+    // Interest filters (from org_home real columns)
     if (minSolarInterest && INTEREST_RANK[minSolarInterest]) {
       const minRank = INTEREST_RANK[minSolarInterest];
       list = list.filter((r) => {
-        const custom = orgHomeByIndex[r.index]?.custom;
-        const val = custom && typeof custom === "object" ? (custom.interest_in_solar as string) : "";
+        const val = orgHomeByIndex[r.index]?.interest_in_solar ?? "";
         return (INTEREST_RANK[val] ?? 0) >= minRank;
       });
     }
     if (minBatteryInterest && INTEREST_RANK[minBatteryInterest]) {
       const minRank = INTEREST_RANK[minBatteryInterest];
       list = list.filter((r) => {
-        const custom = orgHomeByIndex[r.index]?.custom;
-        const val = custom && typeof custom === "object" ? (custom.interest_in_battery as string) : "";
+        const val = orgHomeByIndex[r.index]?.interest_in_battery ?? "";
         return (INTEREST_RANK[val] ?? 0) >= minRank;
       });
     }
@@ -965,11 +961,7 @@ function HomesPageContent() {
             const imageUrl = url || "/window.svg";
             const imageAlt = url ? `Home ${r.original_index}` : e ? "No access / not found" : "Loading…";
             const { addressLine1, addressLine2, detailRows } = buildListingCardData(r);
-            const orgCustom = orgHomeByIndex[r.index]?.custom;
-            const tagsArray =
-              orgCustom && typeof orgCustom === "object" && Array.isArray(orgCustom.tags)
-                ? (orgCustom.tags as unknown[]).filter((t): t is string => typeof t === "string" && t.trim() !== "").map((t) => t.trim())
-                : [];
+            const tagsArray = (orgHomeByIndex[r.index]?.tags ?? []).filter((t) => t.trim() !== "");
             const cardRows =
               tagsArray.length > 0
                 ? [...detailRows, { label: "Tags", value: tagsArray.join(", ") }]
