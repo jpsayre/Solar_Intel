@@ -394,7 +394,7 @@ export default function HomeDetailPage() {
           lastSavedActionItemsRef.current = JSON.stringify(parsed);
         } else {
           setActionItems([]);
-          lastSavedActionItemsRef.current = null;
+          lastSavedActionItemsRef.current = JSON.stringify([]);
         }
 
         const entries: Record<string, string> = {};
