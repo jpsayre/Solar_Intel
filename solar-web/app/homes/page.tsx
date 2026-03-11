@@ -22,7 +22,6 @@ function buildHomesSearchParams(params: {
   county?: string;
   city?: string;
   subdivision?: string;
-  roof?: string[];
   address?: string;
   lat?: number | null;
   lng?: number | null;
@@ -32,7 +31,6 @@ function buildHomesSearchParams(params: {
   if (params.county?.trim()) sp.set("county", params.county.trim());
   if (params.city?.trim()) sp.set("city", params.city.trim());
   if (params.subdivision?.trim()) sp.set("subdivision", params.subdivision.trim());
-  if (params.roof?.length) sp.set("roof", params.roof.join(","));
   if (params.address?.trim()) sp.set("address", params.address.trim());
   if (params.lat != null && Number.isFinite(params.lat)) sp.set("lat", String(params.lat));
   if (params.lng != null && Number.isFinite(params.lng)) sp.set("lng", String(params.lng));
@@ -64,7 +62,6 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "hybrid", label: "Hybrid" },
 ];
 
-const ROOF_ORIENTATION_OPTIONS = ["East", "South", "West"] as const;
 const INTEREST_OPTIONS = ["", "Cold", "Cool", "Warm", "Hot"] as const;
 const INTEREST_RANK: Record<string, number> = { "Cold": 1, "Cool": 2, "Warm": 3, "Hot": 4 };
 
@@ -93,10 +90,6 @@ function HomesPageContent() {
   const [county, setCounty] = useState(() => searchParams.get("county") ?? "");
   const [city, setCity] = useState(() => searchParams.get("city") ?? "");
   const [subdivision, setSubdivision] = useState(() => searchParams.get("subdivision") ?? "");
-  const [roofOrientations, setRoofOrientations] = useState<string[]>(() => {
-    const r = searchParams.get("roof");
-    return r ? r.split(",").map((s) => s.trim()).filter(Boolean) : ["East", "South", "West"];
-  });
   const [addressSearchInput, setAddressSearchInput] = useState(() => searchParams.get("address") ?? "");
   const [addressSearchApplied, setAddressSearchApplied] = useState(() => searchParams.get("address") ?? "");
   const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
@@ -278,7 +271,6 @@ function HomesPageContent() {
       county,
       city,
       subdivision,
-      roof: roofOrientations.length ? roofOrientations : undefined,
       address: addressSearchApplied || undefined,
       lat: mapCenter?.[0] ?? null,
       lng: mapCenter?.[1] ?? null,
@@ -289,7 +281,7 @@ function HomesPageContent() {
     if (nextStr !== currentStr) {
       router.replace(nextStr ? `${HOMES_PATH}?${nextStr}` : HOMES_PATH, { scroll: false });
     }
-  }, [county, city, subdivision, roofOrientations, addressSearchApplied, mapCenter, mapZoom, router]);
+  }, [county, city, subdivision, addressSearchApplied, mapCenter, mapZoom, router]);
 
   useEffect(() => {
     let alive = true;
@@ -351,12 +343,6 @@ function HomesPageContent() {
     if (county) query = query.eq("county", county);
     if (city) query = query.eq("city", city);
     if (subdivision) query = query.eq("subdivision_formatted", subdivision);
-    if (roofOrientations.length > 0) {
-      const orClause = roofOrientations
-        .map((o) => `qualified_orientations.ilike.%${o}%`)
-        .join(",");
-      query = query.or(orClause);
-    }
     if (addressSearchApplied.trim()) {
       query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
     } else if (!showSolarHomes) {
@@ -377,7 +363,7 @@ function HomesPageContent() {
     setHasMore(list.length === PAGE_SIZE);
     setMapBounds(null);
     setBoundsRows([]);
-  }, [router, county, city, subdivision, roofOrientations, addressSearchApplied, showSolarHomes]);
+  }, [router, county, city, subdivision, addressSearchApplied, showSolarHomes]);
 
   const loadNextPage = useCallback(async () => {
     if (!rows || rows.length === 0) return;
@@ -391,12 +377,6 @@ function HomesPageContent() {
     if (county) query = query.eq("county", county);
     if (city) query = query.eq("city", city);
     if (subdivision) query = query.eq("subdivision_formatted", subdivision);
-    if (roofOrientations.length > 0) {
-      const orClause = roofOrientations
-        .map((o) => `qualified_orientations.ilike.%${o}%`)
-        .join(",");
-      query = query.or(orClause);
-    }
     if (addressSearchApplied.trim()) {
       query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
     } else if (!showSolarHomes) {
@@ -409,7 +389,7 @@ function HomesPageContent() {
     setRows((prev) => (prev ? [...prev, ...next] : next));
     setOffset((prev) => prev + NEXT_PAGE_SIZE);
     setHasMore(next.length === NEXT_PAGE_SIZE);
-  }, [rows?.length, offset, county, city, subdivision, roofOrientations, addressSearchApplied, showSolarHomes]);
+  }, [rows?.length, offset, county, city, subdivision, addressSearchApplied, showSolarHomes]);
 
   useEffect(() => {
     let alive = true;
@@ -436,12 +416,6 @@ function HomesPageContent() {
       if (county) query = query.eq("county", county);
       if (city) query = query.eq("city", city);
       if (subdivision) query = query.eq("subdivision_formatted", subdivision);
-      if (roofOrientations.length > 0) {
-        const orClause = roofOrientations
-          .map((o) => `qualified_orientations.ilike.%${o}%`)
-          .join(",");
-        query = query.or(orClause);
-      }
       if (addressSearchApplied.trim()) {
         query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
       } else if (!showSolarHomes) {
@@ -452,7 +426,7 @@ function HomesPageContent() {
       setBoundsLoading(false);
       if (!error && data) setBoundsRows((data ?? []) as HomeRow[]);
     },
-    [county, city, subdivision, roofOrientations, addressSearchApplied, showSolarHomes]
+    [county, city, subdivision, addressSearchApplied, showSolarHomes]
   );
 
   useEffect(() => {
@@ -711,7 +685,6 @@ function HomesPageContent() {
     setCounty("");
     setCity("");
     setSubdivision("");
-    setRoofOrientations(["East", "South", "West"]);
     setAddressSearchInput("");
     setAddressSearchApplied("");
     setTagFilter("");
@@ -724,22 +697,10 @@ function HomesPageContent() {
     setShowSolarHomes(false);
   };
 
-  const toggleRoofOrientation = (orientation: string) => {
-    setRoofOrientations((prev) =>
-      prev.includes(orientation) ? prev.filter((o) => o !== orientation) : [...prev, orientation]
-    );
-  };
-
-  const roofOrientationDefault = ["East", "South", "West"];
-  const roofIsDefault =
-    roofOrientations.length === roofOrientationDefault.length &&
-    roofOrientationDefault.every((o) => roofOrientations.includes(o));
-
   const hasActiveFilters =
     county ||
     city ||
     subdivision ||
-    (roofOrientations.length > 0 && !roofIsDefault) ||
     addressSearchInput.trim() ||
     addressSearchApplied ||
     tagFilter.trim() ||
