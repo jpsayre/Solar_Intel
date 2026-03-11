@@ -235,19 +235,19 @@ export default function FollowingPage() {
           <>
             <div className="mb-6 rounded-xl border border-neutral-200 bg-neutral-50/80 p-4">
               <h2 className="mb-3 text-sm font-medium text-slate-700">Filter cards</h2>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
-                <label className="flex flex-1 flex-col gap-1">
-                  <span className="text-xs font-medium text-slate-500">Search (address, owner, comment, tags)</span>
-                  <input
-                    type="text"
-                    value={searchText}
-                    onChange={(e) => setSearchText(e.target.value)}
-                    placeholder="Type to search…"
-                    className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                  />
-                </label>
-                <div className="flex flex-wrap items-end gap-4">
-                  <label className="flex flex-col gap-1 sm:w-48">
+              <div className="flex flex-col gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <label className="flex flex-col gap-1 sm:col-span-1">
+                    <span className="text-xs font-medium text-slate-500">Search (address, owner, comment, tags)</span>
+                    <input
+                      type="text"
+                      value={searchText}
+                      onChange={(e) => setSearchText(e.target.value)}
+                      placeholder="Type to search…"
+                      className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-slate-500">Filter by tag</span>
                     <input
                       type="text"
@@ -257,7 +257,7 @@ export default function FollowingPage() {
                       className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
                   </label>
-                  <label className="flex flex-col gap-1 sm:w-48">
+                  <label className="flex flex-col gap-1">
                     <span className="text-xs font-medium text-slate-500">Exclude tags</span>
                     <input
                       type="text"
@@ -267,16 +267,16 @@ export default function FollowingPage() {
                       className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                     />
                   </label>
-                  <label className="flex cursor-pointer items-center gap-2 py-2">
-                    <input
-                      type="checkbox"
-                      checked={excludeDoNotContact}
-                      onChange={(e) => setExcludeDoNotContact(e.target.checked)}
-                      className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
-                    />
-                    <span className="text-sm text-slate-600">Exclude do not contact homes</span>
-                  </label>
                 </div>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={excludeDoNotContact}
+                    onChange={(e) => setExcludeDoNotContact(e.target.checked)}
+                    className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
+                  />
+                  <span className="text-sm text-slate-600">Exclude do not contact homes</span>
+                </label>
               </div>
             </div>
 
