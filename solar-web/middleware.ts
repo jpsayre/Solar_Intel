@@ -37,11 +37,20 @@ export async function middleware(request: NextRequest) {
   if (isProtectedPath(request.nextUrl.pathname) && !user) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("redirect", request.nextUrl.pathname);
-    return NextResponse.redirect(loginUrl);
+    const redirectResponse = NextResponse.redirect(loginUrl);
+    // Carry over auth cookies from the supabase client
+    for (const cookie of response.cookies.getAll()) {
+      redirectResponse.cookies.set(cookie);
+    }
+    return redirectResponse;
   }
 
   if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")) {
-    return NextResponse.redirect(new URL("/homes", request.url));
+    const redirectResponse = NextResponse.redirect(new URL("/homes", request.url));
+    for (const cookie of response.cookies.getAll()) {
+      redirectResponse.cookies.set(cookie);
+    }
+    return redirectResponse;
   }
 
   return response;
