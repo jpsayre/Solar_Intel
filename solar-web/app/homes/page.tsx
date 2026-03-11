@@ -169,9 +169,14 @@ function HomesPageContent() {
     }
   }, [county, city]);
 
-  // Re-fire RPC when filters change (loadMapPoints deps include county/city)
+  // Re-fire RPC when filters change (loadMapPoints deps include county/city).
+  // Only fire if mapBounds is already set — on initial mount, the debounce
+  // effect handles the first load after MapBoundsReporter reports bounds.
+  // Without this guard, two concurrent RPCs race and the stale-response
+  // rejection discards the first result, leaving the map empty until the
+  // debounced call completes.
   useEffect(() => {
-    loadMapPoints(mapBounds);
+    if (mapBounds) loadMapPoints(mapBounds);
   }, [loadMapPoints]);
 
   useEffect(() => {
@@ -523,14 +528,17 @@ function HomesPageContent() {
     if (lastBoundsRef.current && boundsEqual(mapBounds, lastBoundsRef.current)) {
       return;
     }
+    const isFirstBounds = lastBoundsRef.current === null;
     lastBoundsRef.current = mapBounds;
     if (boundsDebounceRef.current) clearTimeout(boundsDebounceRef.current);
+    // Fire immediately on first bounds report (initial load) — no delay
+    const delay = isFirstBounds ? 0 : 400;
     boundsDebounceRef.current = setTimeout(() => {
       boundsDebounceRef.current = null;
       // Fire both RPC (map dots) and card query together after debounce
       loadMapPoints(mapBounds);
       loadRowsInBounds(mapBounds);
-    }, 400);
+    }, delay);
     return () => {
       if (boundsDebounceRef.current) clearTimeout(boundsDebounceRef.current);
     };
