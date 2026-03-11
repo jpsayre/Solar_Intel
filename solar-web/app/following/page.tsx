@@ -19,6 +19,7 @@ type HomeRow = {
 type OrgHomeRow = {
   home_index: string;
   tags: string[] | null;
+  do_not_contact: boolean;
   interest_in_solar: string | null;
   interest_in_battery: string | null;
   [key: string]: unknown;
@@ -53,7 +54,7 @@ export default function FollowingPage() {
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
   const [followedSet, setFollowedSet] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
-  const [orgDataByIndex, setOrgDataByIndex] = useState<Record<string, { tags: string[]; contacts: ContactRow[]; actionItems: ActionItemRow[] }>>({});
+  const [orgDataByIndex, setOrgDataByIndex] = useState<Record<string, { tags: string[]; do_not_contact: boolean; contacts: ContactRow[]; actionItems: ActionItemRow[] }>>({});
   const [latestNoteByIndex, setLatestNoteByIndex] = useState<Record<string, { body: string }>>({});
   const [searchText, setSearchText] = useState("");
   const [tagFilter, setTagFilter] = useState("");
@@ -114,12 +115,12 @@ export default function FollowingPage() {
       .maybeSingle();
 
     const orgId = profile?.org_id as string | undefined;
-    const orgByIndex: Record<string, { tags: string[]; contacts: ContactRow[]; actionItems: ActionItemRow[] }> = {};
+    const orgByIndex: Record<string, { tags: string[]; do_not_contact: boolean; contacts: ContactRow[]; actionItems: ActionItemRow[] }> = {};
     if (orgId && indices.length > 0) {
       const [orgHomeRes, contactsRes, actionItemsRes] = await Promise.all([
         supabaseBrowser
           .from("org_home")
-          .select("home_index, tags")
+          .select("home_index, tags, do_not_contact")
           .eq("org_id", orgId)
           .in("home_index", indices),
         supabaseBrowser
@@ -136,16 +137,16 @@ export default function FollowingPage() {
 
       // Initialize entries from org_home tags
       for (const row of (orgHomeRes.data ?? []) as OrgHomeRow[]) {
-        orgByIndex[row.home_index] = { tags: row.tags ?? [], contacts: [], actionItems: [] };
+        orgByIndex[row.home_index] = { tags: row.tags ?? [], do_not_contact: row.do_not_contact ?? false, contacts: [], actionItems: [] };
       }
       // Attach contacts
       for (const c of (contactsRes.data ?? []) as ContactRow[]) {
-        if (!orgByIndex[c.home_index]) orgByIndex[c.home_index] = { tags: [], contacts: [], actionItems: [] };
+        if (!orgByIndex[c.home_index]) orgByIndex[c.home_index] = { tags: [], do_not_contact: false, contacts: [], actionItems: [] };
         orgByIndex[c.home_index].contacts.push(c);
       }
       // Attach action items
       for (const a of (actionItemsRes.data ?? []) as ActionItemRow[]) {
-        if (!orgByIndex[a.home_index]) orgByIndex[a.home_index] = { tags: [], contacts: [], actionItems: [] };
+        if (!orgByIndex[a.home_index]) orgByIndex[a.home_index] = { tags: [], do_not_contact: false, contacts: [], actionItems: [] };
         orgByIndex[a.home_index].actionItems.push(a);
       }
     }
@@ -320,7 +321,7 @@ export default function FollowingPage() {
                 if (excludeLower) {
                   if (tags.some((tag) => tag.startsWith(excludeLower))) return false;
                 }
-                if (excludeDoNotContact && tags.some((tag) => tag.startsWith("do not contact"))) return false;
+                if (excludeDoNotContact && orgData?.do_not_contact) return false;
                 if (!searchLower) return true;
                 const { addressLine1, addressLine2 } = buildListingCardData(r);
                 const latestNote = latestNoteByIndex[r.index];

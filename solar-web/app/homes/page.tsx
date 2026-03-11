@@ -136,7 +136,7 @@ function HomesPageContent() {
   const [followedHomeIndices, setFollowedHomeIndices] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { tags: string[]; interest_in_solar: string | null; interest_in_battery: string | null }>>({});
+  const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { tags: string[]; interest_in_solar: string | null; interest_in_battery: string | null; do_not_contact: boolean }>>({});
   const [tagFilter, setTagFilter] = useState("");
   const [excludeTagFilter, setExcludeTagFilter] = useState("");
   const [excludeDoNotContact, setExcludeDoNotContact] = useState(true);
@@ -241,14 +241,14 @@ function HomesPageContent() {
     const indices = list.map((r) => r.index);
     supabaseBrowser
       .from("org_home")
-      .select("home_index, tags, interest_in_solar, interest_in_battery")
+      .select("home_index, tags, interest_in_solar, interest_in_battery, do_not_contact")
       .eq("org_id", orgId)
       .in("home_index", indices)
       .then(({ data }) => {
         if (!alive) return;
-        const byIndex: Record<string, { tags: string[]; interest_in_solar: string | null; interest_in_battery: string | null }> = {};
-        for (const row of (data ?? []) as { home_index: string; tags: string[] | null; interest_in_solar: string | null; interest_in_battery: string | null }[]) {
-          byIndex[row.home_index] = { tags: row.tags ?? [], interest_in_solar: row.interest_in_solar, interest_in_battery: row.interest_in_battery };
+        const byIndex: Record<string, { tags: string[]; interest_in_solar: string | null; interest_in_battery: string | null; do_not_contact: boolean }> = {};
+        for (const row of (data ?? []) as { home_index: string; tags: string[] | null; interest_in_solar: string | null; interest_in_battery: string | null; do_not_contact: boolean }[]) {
+          byIndex[row.home_index] = { tags: row.tags ?? [], interest_in_solar: row.interest_in_solar, interest_in_battery: row.interest_in_battery, do_not_contact: row.do_not_contact ?? false };
         }
         setOrgHomeByIndex(byIndex);
       });
@@ -563,7 +563,7 @@ function HomesPageContent() {
         const tags: string[] = (orgRow?.tags ?? []).map((t) => t.trim().toLowerCase());
         if (tagLower && !tags.some((tag) => tag.startsWith(tagLower))) return false;
         if (excludeLower && tags.some((tag) => tag.startsWith(excludeLower))) return false;
-        if (excludeDoNotContact && tags.some((tag) => tag.startsWith("do not contact"))) return false;
+        if (excludeDoNotContact && orgRow?.do_not_contact) return false;
         return true;
       });
     }

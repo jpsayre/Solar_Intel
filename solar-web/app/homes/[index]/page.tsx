@@ -69,6 +69,7 @@ type OrgHomeRow = {
   interest_in_solar: string | null;
   interest_in_battery: string | null;
   ev_ownership: string | null;
+  do_not_contact: boolean;
   updated_at: string;
 };
 
@@ -156,6 +157,7 @@ export default function HomeDetailPage() {
   const [contacts, setContacts] = useState<ContactRow[]>([{ ...EMPTY_CONTACT }]);
   const [homeInfo, setHomeInfo] = useState<Record<string, string>>({});
   const [tags, setTags] = useState<string[]>([]);
+  const [doNotContact, setDoNotContact] = useState(false);
   const [newTagEntry, setNewTagEntry] = useState("");
   const [tagsErr, setTagsErr] = useState<string | null>(null);
   const [savingTags, setSavingTags] = useState(false);
@@ -347,6 +349,7 @@ export default function HomeDetailPage() {
       if (ohRow) {
         const oh = ohRow as OrgHomeRow;
         setTags(oh.tags ?? []);
+        setDoNotContact(oh.do_not_contact ?? false);
         setHomeInfo({
           roof_condition: oh.roof_condition ?? "",
           roofing_material: oh.roofing_material ?? "",
@@ -358,6 +361,7 @@ export default function HomeDetailPage() {
         setOrgHomeUpdatedAt(oh.updated_at);
       } else {
         setTags([]);
+        setDoNotContact(false);
         setHomeInfo({});
         setOrgHomeUpdatedAt(null);
       }
@@ -502,6 +506,7 @@ export default function HomeDetailPage() {
       org_id: orgId,
       home_index: params.index,
       tags,
+      do_not_contact: doNotContact,
       roof_condition: homeInfo.roof_condition || null,
       roofing_material: homeInfo.roofing_material || null,
       energy_bill_kwh: homeInfo.energy_bill_kwh ? parseFloat(homeInfo.energy_bill_kwh) : null,
@@ -585,7 +590,7 @@ export default function HomeDetailPage() {
     }
 
     setSavingTags(false);
-  }, [contacts, actionItems, homeInfo, tags, orgId, params.index, userId]);
+  }, [contacts, actionItems, homeInfo, tags, doNotContact, orgId, params.index, userId]);
 
   // Debounced auto-save
   useEffect(() => {
@@ -605,7 +610,7 @@ export default function HomeDetailPage() {
         saveTimeoutRef.current = null;
       }
     };
-  }, [contacts, actionItems, homeInfo, tags, orgId, params.index, orgHomeLoaded, saveOrgHomeInfo]);
+  }, [contacts, actionItems, homeInfo, tags, doNotContact, orgId, params.index, orgHomeLoaded, saveOrgHomeInfo]);
 
   if (err) {
     return (
@@ -923,20 +928,12 @@ export default function HomeDetailPage() {
                 </button>
                 <div className="mt-3 flex justify-end">
                   <label
-                    className={`flex cursor-pointer items-center gap-2 py-2 ${tags.some((t) => t.toLowerCase() === "do not contact") ? "text-red-600" : "text-slate-500"}`}
+                    className={`flex cursor-pointer items-center gap-2 py-2 ${doNotContact ? "text-red-600" : "text-slate-500"}`}
                   >
                     <input
                       type="checkbox"
-                      checked={tags.some((t) => t.toLowerCase() === "do not contact")}
-                      onChange={(e) => {
-                        const checked = e.target.checked;
-                        if (checked) {
-                          const hasTag = tags.some((t) => t.toLowerCase() === "do not contact");
-                          if (!hasTag) setTags((prev) => [...prev, "Do Not Contact"].sort((a, b) => a.localeCompare(b)));
-                        } else {
-                          setTags((prev) => prev.filter((t) => t.toLowerCase() !== "do not contact"));
-                        }
-                      }}
+                      checked={doNotContact}
+                      onChange={(e) => setDoNotContact(e.target.checked)}
                       className="h-4 w-4 rounded border-neutral-300 accent-slate-500 focus:ring-slate-400"
                     />
                     <span className="text-sm font-medium">Do not contact home</span>
