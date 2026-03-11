@@ -154,7 +154,7 @@ export default function FollowingPage() {
     const latestByIndex: Record<string, { body: string }> = {};
     if (indices.length > 0) {
       const { data: notesData } = await supabaseBrowser
-        .from("home_notes")
+        .from("org_home_comments")
         .select("home_index, body, created_at")
         .in("home_index", indices)
         .order("created_at", { ascending: false });

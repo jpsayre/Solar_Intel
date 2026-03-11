@@ -292,7 +292,7 @@ export default function HomeDetailPage() {
     setNotesErr(null);
     setNotes(null);
     const { data, error } = await supabaseBrowser
-      .from("home_notes")
+      .from("org_home_comments")
       .select("id, home_index, author_id, body, created_at, updated_at")
       .eq("home_index", idx)
       .order("created_at", { ascending: false });
@@ -421,7 +421,7 @@ export default function HomeDetailPage() {
     if (!userData.user) return;
     setSubmitting(true);
     setNotesErr(null);
-    const { error } = await supabaseBrowser.from("home_notes").insert({
+    const { error } = await supabaseBrowser.from("org_home_comments").insert({
       home_index: params.index,
       author_id: userData.user.id,
       org_id: orgId,
