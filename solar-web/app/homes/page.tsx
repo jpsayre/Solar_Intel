@@ -891,8 +891,11 @@ function HomesPageContent() {
               </label>
             </div>
           </div>
-          {hasActiveFilters && (
-            <div className="mt-3 flex justify-end">
+          <div className="mt-3 flex items-center justify-between">
+            <span className="text-xs text-neutral-400">
+              {totalCount != null ? `${totalCount.toLocaleString()} homes match` : ""}
+            </span>
+            {hasActiveFilters && (
               <button
                 type="button"
                 onClick={clearFilters}
@@ -900,8 +903,8 @@ function HomesPageContent() {
               >
                 Clear all filters
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         <div className="mb-8">
@@ -919,8 +922,7 @@ function HomesPageContent() {
             "Loading homes in map view…"
           ) : (
             <>
-              Showing {displayedRows.length.toLocaleString()} of{" "}
-              {totalCount != null ? totalCount.toLocaleString() : "…"} homes matching filters.
+              Showing {displayedRows.length.toLocaleString()} homes.
               {mapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to see more on map."}
             </>
           )}
