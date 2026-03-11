@@ -26,6 +26,15 @@ function buildHomesSearchParams(params: {
   lat?: number | null;
   lng?: number | null;
   zoom?: number | null;
+  sortBy?: string;
+  minModel?: string;
+  minRoof?: string;
+  minSolar?: string;
+  minBattery?: string;
+  tag?: string;
+  excludeTag?: string;
+  excludeDnc?: boolean;
+  showSolar?: boolean;
 }): URLSearchParams {
   const sp = new URLSearchParams();
   if (params.county?.trim()) sp.set("county", params.county.trim());
@@ -33,8 +42,17 @@ function buildHomesSearchParams(params: {
   if (params.subdivision?.trim()) sp.set("subdivision", params.subdivision.trim());
   if (params.address?.trim()) sp.set("address", params.address.trim());
   if (params.lat != null && Number.isFinite(params.lat)) sp.set("lat", String(params.lat));
-  if (params.lng != null && Number.isFinite(params.lng)) sp.set("lng", String(params.lng));
+  if (params.lng != null && Number.isFinite(params.lng)) sp.set("lng", String(Math.round(params.lng)));
   if (params.zoom != null && Number.isFinite(params.zoom)) sp.set("zoom", String(Math.round(params.zoom)));
+  if (params.sortBy && params.sortBy !== "hybrid") sp.set("sort", params.sortBy);
+  if (params.minModel?.trim()) sp.set("minModel", params.minModel.trim());
+  if (params.minRoof?.trim()) sp.set("minRoof", params.minRoof.trim());
+  if (params.minSolar?.trim()) sp.set("minSolar", params.minSolar.trim());
+  if (params.minBattery?.trim()) sp.set("minBattery", params.minBattery.trim());
+  if (params.tag?.trim()) sp.set("tag", params.tag.trim());
+  if (params.excludeTag?.trim()) sp.set("excludeTag", params.excludeTag.trim());
+  if (params.excludeDnc === false) sp.set("dnc", "0");
+  if (params.showSolar) sp.set("solar", "1");
   return sp;
 }
 
@@ -120,21 +138,21 @@ function HomesPageContent() {
   const [imgUrls, setImgUrls] = useState<Record<number, string>>({});
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
 
-  const [sortBy, setSortBy] = useState<SortOption>("hybrid");
+  const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption) || "hybrid");
   const [scoresByIndex, setScoresByIndex] = useState<Record<string, { model_score: number | null; roof_score: number | null }>>({});
-  const [minModelScore, setMinModelScore] = useState("");
-  const [minRoofScore, setMinRoofScore] = useState("");
-  const [minSolarInterest, setMinSolarInterest] = useState("");
-  const [minBatteryInterest, setMinBatteryInterest] = useState("");
+  const [minModelScore, setMinModelScore] = useState(() => searchParams.get("minModel") ?? "");
+  const [minRoofScore, setMinRoofScore] = useState(() => searchParams.get("minRoof") ?? "");
+  const [minSolarInterest, setMinSolarInterest] = useState(() => searchParams.get("minSolar") ?? "");
+  const [minBatteryInterest, setMinBatteryInterest] = useState(() => searchParams.get("minBattery") ?? "");
 
   const [followedHomeIndices, setFollowedHomeIndices] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { tags: string[]; interest_in_solar: string | null; interest_in_battery: string | null; do_not_contact: boolean }>>({});
-  const [tagFilter, setTagFilter] = useState("");
-  const [excludeTagFilter, setExcludeTagFilter] = useState("");
-  const [excludeDoNotContact, setExcludeDoNotContact] = useState(true);
-  const [showSolarHomes, setShowSolarHomes] = useState(false);
+  const [tagFilter, setTagFilter] = useState(() => searchParams.get("tag") ?? "");
+  const [excludeTagFilter, setExcludeTagFilter] = useState(() => searchParams.get("excludeTag") ?? "");
+  const [excludeDoNotContact, setExcludeDoNotContact] = useState(() => searchParams.get("dnc") !== "0");
+  const [showSolarHomes, setShowSolarHomes] = useState(() => searchParams.get("solar") === "1");
   const [totalCount, setTotalCount] = useState<number | null>(null);
 
   // Lightweight map points from RPC (scores pre-joined, no gray flash)
@@ -277,13 +295,22 @@ function HomesPageContent() {
       lat: mapCenter?.[0] ?? null,
       lng: mapCenter?.[1] ?? null,
       zoom: mapZoom,
+      sortBy,
+      minModel: minModelScore,
+      minRoof: minRoofScore,
+      minSolar: minSolarInterest,
+      minBattery: minBatteryInterest,
+      tag: tagFilter,
+      excludeTag: excludeTagFilter,
+      excludeDnc: excludeDoNotContact,
+      showSolar: showSolarHomes,
     });
     const nextStr = next.toString();
     const currentStr = typeof window !== "undefined" ? window.location.search.slice(1) : "";
     if (nextStr !== currentStr) {
       router.replace(nextStr ? `${HOMES_PATH}?${nextStr}` : HOMES_PATH, { scroll: false });
     }
-  }, [county, city, subdivision, addressSearchApplied, mapCenter, mapZoom, router]);
+  }, [county, city, subdivision, addressSearchApplied, mapCenter, mapZoom, sortBy, minModelScore, minRoofScore, minSolarInterest, minBatteryInterest, tagFilter, excludeTagFilter, excludeDoNotContact, showSolarHomes, router]);
 
   useEffect(() => {
     let alive = true;
