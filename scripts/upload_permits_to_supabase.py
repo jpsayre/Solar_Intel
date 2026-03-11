@@ -112,6 +112,9 @@ DESCRIPTION_OVERRIDES = [
     ("solar", "solar"),
     ("photovoltaic", "solar"),
     (" pv ", "solar"),
+    ("grid-tied", "solar"),
+    ("grid tied", "solar"),
+    (" kw sola", "solar"),
     # Other
     ("heat pump", "heat_pump"),
     ("mini-split", "heat_pump"),
