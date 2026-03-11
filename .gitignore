@@ -10,3 +10,8 @@ test*
 local_app/*
 *.sql
 SpanishLearning/
+data/
+.claude/
+~$*
+Projects/
+pricing.xlsx
