@@ -127,8 +127,8 @@ def build_strap_lookup(regrid_csv: Path, index_prefix: str) -> dict[str, str]:
     return dict(zip(df["strap"], df["home_index"]))
 
 
-def classify_permit(category: str, description: str) -> str:
-    """Classify permit type from category and description text."""
+def classify_permit(category: str, description: str, valuation: float | None = None) -> str:
+    """Classify permit type from category, description, and valuation."""
     desc_lower = description.lower() if isinstance(description, str) else ""
 
     # Description keywords override category (more specific)
@@ -138,7 +138,17 @@ def classify_permit(category: str, description: str) -> str:
 
     # Fall back to category mapping
     cat = str(category).strip().upper()
-    return CATEGORY_TO_TYPE.get(cat, "other")
+    ptype = CATEGORY_TO_TYPE.get(cat, "other")
+
+    # Valuation sanity check: solar permits are typically $10k+.
+    # If category says solar but valuation is very low and description
+    # has no solar keywords, it's likely misclassified (e.g. EV charger
+    # filed under "ENERGY EFFICIENT SYSTEM").
+    if ptype == "solar" and valuation is not None and valuation < 2000:
+        if not any(kw in desc_lower for kw in ["solar", "photovoltaic", " pv "]):
+            return "electrical"
+
+    return ptype
 
 
 def parse_permits(permits_csv: Path, strap_to_home: dict[str, str],
@@ -162,14 +172,12 @@ def parse_permits(permits_csv: Path, strap_to_home: dict[str, str],
     for _, row in df.iterrows():
         category = row.get("permit_category", "OTHER")
         description = row.get("description", None)
-        ptype = classify_permit(category, description)
+        val = row.get("estimated_value", None)
+        valuation_num = float(val) if pd.notna(val) else None
+        ptype = classify_permit(category, description, valuation_num)
 
         # Clean up description
         desc_text = str(description).strip() if pd.notna(description) else None
-
-        # Valuation
-        val = row.get("estimated_value", None)
-        valuation = float(val) if pd.notna(val) else None
 
         records.append({
             "home_index": row["home_index"],
@@ -177,7 +185,7 @@ def parse_permits(permits_csv: Path, strap_to_home: dict[str, str],
             "permit_type": ptype,
             "description": desc_text,
             "filed_date": row["issue_dt"].strftime("%Y-%m-%d"),
-            "valuation": valuation,
+            "valuation": valuation_num,
             "county": county_name,
         })
 
