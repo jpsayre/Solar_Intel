@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
 import { indexToImagePath } from "@/lib/imagePath";
@@ -643,12 +642,19 @@ export default function HomeDetailPage() {
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-4xl">
-        <Link
-          href={backHref}
+        <button
+          type="button"
+          onClick={() => {
+            if (window.history.length > 1) {
+              router.back();
+            } else {
+              router.push(backHref);
+            }
+          }}
           className="mb-6 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
         >
           ← {backLabel}
-        </Link>
+        </button>
 
         <ListingCard
           addressLine1={addressLine1}
