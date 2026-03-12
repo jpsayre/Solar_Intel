@@ -483,16 +483,11 @@ function HomesPageContent() {
         missingRows.map(async (r) => {
           const path = indexToImagePath(r.index);
 
-          const { data, error } = await supabaseBrowser.storage
+          const { data } = supabaseBrowser.storage
             .from(BUCKET)
-            .createSignedUrl(path, 60 * 30); // 30 minutes
+            .getPublicUrl(path);
 
-          if (error) {
-            console.error("SIGNED URL ERROR (list)", { bucket: BUCKET, path, error });
-            return { oi: r.original_index, url: "", errorMsg: error.message ?? "storage error" };
-          }
-
-          return { oi: r.original_index, url: data?.signedUrl ?? "", errorMsg: "" };
+          return { oi: r.original_index, url: data?.publicUrl ?? "", errorMsg: "" };
         })
       );
 

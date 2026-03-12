@@ -226,19 +226,13 @@ export default function HomeDetailPage() {
       }
 
       const path = indexToImagePath((data as HomeRow).index);
-      const signed = await supabaseBrowser.storage
+      const { data: urlData } = supabaseBrowser.storage
         .from(BUCKET)
-        .createSignedUrl(path, 60 * 30);
+        .getPublicUrl(path);
 
       if (!alive) return;
 
-      if (signed.error) {
-        console.error("SIGNED URL ERROR (detail)", { bucket: BUCKET, path, error: signed.error });
-        setImgErr(signed.error.message ?? "Image error");
-        setImgUrl("");
-      } else {
-        setImgUrl(signed.data?.signedUrl ?? "");
-      }
+      setImgUrl(urlData?.publicUrl ?? "");
     }
 
     load();
