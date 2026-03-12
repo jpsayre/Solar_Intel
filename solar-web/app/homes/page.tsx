@@ -151,6 +151,7 @@ function HomesPageContent() {
   const [excludeDoNotContact, setExcludeDoNotContact] = useState(() => searchParams.get("dnc") !== "0");
   const [showSolarHomes, setShowSolarHomes] = useState(() => searchParams.get("solar") === "1");
   const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [filterCount, setFilterCount] = useState<number | null>(null);
 
   // Lightweight map points from RPC (scores pre-joined, no gray flash)
   type RpcMapPoint = { index: string; latitude: number; longitude: number; model_score: number | null; roof_score: number | null; hybrid_score: number | null };
@@ -379,6 +380,33 @@ function HomesPageContent() {
     if (!rows || rows.length === 0) return;
     fetchHomesPage({ bounds: mapBounds, pageOffset: offset, append: true });
   }, [rows?.length, offset, mapBounds, fetchHomesPage]);
+
+  // Load filter-only count (no bounds) whenever filters change
+  const loadFilterCount = useCallback(async () => {
+    const params: Record<string, unknown> = {
+      p_sort_by: sortBy,
+      p_show_solar: showSolarHomes,
+      p_limit: 1,
+      p_offset: 0,
+    };
+    if (county) params.p_county = county;
+    if (city) params.p_city = city;
+    if (subdivision) params.p_subdivision = subdivision;
+    if (addressSearchApplied.trim()) params.p_address_search = addressSearchApplied.trim();
+    const minModel = parseFloat(minModelScore);
+    const minRoof = parseFloat(minRoofScore);
+    if (Number.isFinite(minModel)) params.p_min_model = minModel;
+    if (Number.isFinite(minRoof)) params.p_min_roof = minRoof;
+
+    const { data } = await supabaseBrowser.rpc("get_homes_page", params);
+    const results = (data ?? []) as { total_count: number }[];
+    setFilterCount(results.length > 0 ? results[0].total_count : 0);
+  }, [county, city, subdivision, addressSearchApplied, sortBy,
+      showSolarHomes, minModelScore, minRoofScore]);
+
+  useEffect(() => {
+    loadFilterCount();
+  }, [loadFilterCount]);
 
   // Initial load (no bounds yet)
   useEffect(() => {
@@ -807,7 +835,7 @@ function HomesPageContent() {
           </div>
           <div className="mt-3 flex items-center justify-between">
             <span className="text-xs text-neutral-400">
-              {totalCount != null ? `${totalCount.toLocaleString()} homes match` : ""}
+              {filterCount != null ? `${filterCount.toLocaleString()} homes match` : ""}
             </span>
             {hasActiveFilters && (
               <button
@@ -836,8 +864,8 @@ function HomesPageContent() {
             "Loading homes in map view…"
           ) : (
             <>
-              Showing {displayedRows.length.toLocaleString()} homes.
-              {mapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to see more on map."}
+              Showing {mapPoints.length.toLocaleString()} homes.
+              {mapPoints.length >= MAP_POINTS_LIMIT && " Zoom in to load more."}
             </>
           )}
         </p>
