@@ -638,19 +638,28 @@ export default function HomeDetailPage() {
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
       <div className="mx-auto max-w-4xl">
-        <button
-          type="button"
-          onClick={() => {
-            if (window.history.length > 1) {
-              router.back();
-            } else {
-              router.push(backHref);
-            }
-          }}
-          className="mb-6 inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
-        >
-          ← {backLabel}
-        </button>
+        <div className="mb-6 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => {
+              if (window.history.length > 1) {
+                router.back();
+              } else {
+                router.push(backHref);
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900"
+          >
+            ← {backLabel}
+          </button>
+          <button
+            type="button"
+            onClick={() => setReportIssueOpen(true)}
+            className="text-xs text-slate-400 underline hover:text-slate-600"
+          >
+            Report an issue
+          </button>
+        </div>
 
         <ListingCard
           addressLine1={addressLine1}
@@ -665,7 +674,6 @@ export default function HomeDetailPage() {
           priority
           unoptimized
           badge={row.has_solar ? "Has Solar" : undefined}
-          onReportIssue={() => setReportIssueOpen(true)}
         />
 
         {reportIssueOpen && (
