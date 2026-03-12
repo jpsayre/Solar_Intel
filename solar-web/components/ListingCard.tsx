@@ -27,6 +27,8 @@ type ListingCardProps = {
   unoptimized?: boolean;
   /** Optional badge text shown in the top-left corner of the card. */
   badge?: string;
+  /** When provided, shows a "Report an issue" link at the bottom. */
+  onReportIssue?: (e: React.MouseEvent) => void;
 };
 
 function PillRow({
@@ -106,6 +108,7 @@ export default function ListingCard({
   priority = false,
   unoptimized = false,
   badge,
+  onReportIssue,
 }: ListingCardProps) {
   return (
     <section className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]">
@@ -179,6 +182,16 @@ export default function ListingCard({
               />
             ))}
           </div>
+
+          {onReportIssue && (
+            <button
+              type="button"
+              onClick={onReportIssue}
+              className="mt-3 self-start text-xs text-slate-400 underline hover:text-slate-600"
+            >
+              Report an issue
+            </button>
+          )}
         </div>
       </div>
     </section>

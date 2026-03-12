@@ -39,17 +39,8 @@ except ImportError:
 COUNTY_CONFIGS = {
     "boulder_co": {
         "permits_csv": PROJECT_ROOT / "data" / "raw" / "Boulder_CO_Permits_3_11_26.csv",
-        "regrid_csv": PROJECT_ROOT / "data" / "working" / "Boulder_CO_Regrid_joined_with_API.csv",
-        "index_prefix": "BOULDER_CO_",
         "county_name": "Boulder",
     },
-    # Add more counties here as needed:
-    # "san_diego_ca": {
-    #     "permits_csv": PROJECT_ROOT / "data" / "raw" / "SanDiegoCA" / "permits.csv",
-    #     "regrid_csv": PROJECT_ROOT / "data" / "SanDiego_CA" / "working" / "...",
-    #     "index_prefix": "SANDIEGO_CA_",
-    #     "county_name": "San Diego",
-    # },
 }
 
 # permit_category → standardized permit_type
@@ -60,7 +51,7 @@ CATEGORY_TO_TYPE = {
     "AIR CONDITIONER": "hvac",
     "HEATING SYSTEM": "hvac",
     "EVAPORATIVE COOLER": "hvac",
-    "ENERGY EFFICIENT SYSTEM": "solar",  # majority are solar in Boulder data
+    "ENERGY EFFICIENT SYSTEM": "other",  # description keywords will catch actual solar
     "ELECTRICAL/MECHANICAL": "electrical",
     "WATER HEATER": "water_heater",
     "REMODEL": "remodel",
@@ -108,13 +99,17 @@ DESCRIPTION_OVERRIDES = [
     ("battery", "battery"),
     ("powerwall", "battery"),
     ("energy storage", "battery"),
-    # Solar
+    # Solar — description must contain solar-specific terms
     ("solar", "solar"),
     ("photovoltaic", "solar"),
     (" pv ", "solar"),
+    ("pv system", "solar"),
+    ("pv array", "solar"),
+    ("pv install", "solar"),
     ("grid-tied", "solar"),
     ("grid tied", "solar"),
-    (" kw sola", "solar"),
+    ("grid-tie", "solar"),
+    ("grid tie", "solar"),
     # Other
     ("heat pump", "heat_pump"),
     ("mini-split", "heat_pump"),
@@ -123,11 +118,33 @@ DESCRIPTION_OVERRIDES = [
 ]
 
 
-def build_strap_lookup(regrid_csv: Path, index_prefix: str) -> dict[str, str]:
-    """Build strap → home_index lookup from Regrid joined data."""
-    df = pd.read_csv(regrid_csv, usecols=["strap", "original_index"], low_memory=False)
-    df["home_index"] = index_prefix + df["original_index"].astype(str)
-    return dict(zip(df["strap"], df["home_index"]))
+def build_strap_lookup(county: str) -> dict[str, str]:
+    """Build strap → home_index lookup from Supabase homes table."""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(PROJECT_ROOT / ".env")
+    except ImportError:
+        pass
+    from supabase import create_client
+
+    url = os.environ["SUPABASE_URL"]
+    key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+    client = create_client(url, key)
+
+    lookup = {}
+    page_size = 1000
+    offset = 0
+    while True:
+        result = client.table("homes").select("strap, index").eq("county", county.upper()).range(offset, offset + page_size - 1).execute()
+        rows = result.data or []
+        for row in rows:
+            if row.get("strap"):
+                lookup[row["strap"]] = row["index"]
+        if len(rows) < page_size:
+            break
+        offset += page_size
+
+    return lookup
 
 
 def classify_permit(category: str, description: str, valuation: float | None = None) -> str:
@@ -137,21 +154,19 @@ def classify_permit(category: str, description: str, valuation: float | None = N
     # Description keywords override category (more specific)
     for keyword, ptype in DESCRIPTION_OVERRIDES:
         if keyword in desc_lower:
+            # Valuation sanity check: solar installs are typically $3k+.
+            # Low-valuation permits matching generic keywords (e.g. "roof mounted"
+            # for an antenna) are likely not solar.
+            if ptype == "solar" and valuation is not None and valuation < 3000:
+                # Only trust strong solar keywords at low valuations
+                strong = ["solar", "photovoltaic", "pv system", "pv array", "pv install"]
+                if not any(kw in desc_lower for kw in strong):
+                    continue  # skip this keyword match, try next
             return ptype
 
     # Fall back to category mapping
     cat = str(category).strip().upper()
-    ptype = CATEGORY_TO_TYPE.get(cat, "other")
-
-    # Valuation sanity check: solar permits are typically $10k+.
-    # If category says solar but valuation is very low and description
-    # has no solar keywords, it's likely misclassified (e.g. EV charger
-    # filed under "ENERGY EFFICIENT SYSTEM").
-    if ptype == "solar" and valuation is not None and valuation < 2000:
-        if not any(kw in desc_lower for kw in ["solar", "photovoltaic", " pv "]):
-            return "electrical"
-
-    return ptype
+    return CATEGORY_TO_TYPE.get(cat, "other")
 
 
 def parse_permits(permits_csv: Path, strap_to_home: dict[str, str],
@@ -192,7 +207,15 @@ def parse_permits(permits_csv: Path, strap_to_home: dict[str, str],
             "county": county_name,
         })
 
-    return records
+    # Deduplicate by conflict key (keep last occurrence — typically has more info)
+    seen = {}
+    for r in records:
+        key = (r["home_index"], r["permit_number"], r["permit_type"])
+        seen[key] = r
+    deduped = list(seen.values())
+    if len(deduped) < len(records):
+        print(f"  Deduplicated: {len(records)} → {len(deduped)} ({len(records) - len(deduped)} duplicates removed)")
+    return deduped
 
 
 def upload_to_supabase(records: list[dict], batch_size: int = 500) -> None:
@@ -231,17 +254,17 @@ def main():
     config = COUNTY_CONFIGS[args.county]
     print(f"County: {config['county_name']}")
     print(f"Permits CSV: {config['permits_csv']}")
-    print(f"Regrid CSV: {config['regrid_csv']}")
 
     if not config["permits_csv"].exists():
         print(f"ERROR: Permits file not found: {config['permits_csv']}")
         sys.exit(1)
-    if not config["regrid_csv"].exists():
-        print(f"ERROR: Regrid file not found: {config['regrid_csv']}")
+
+    if not os.environ.get("SUPABASE_URL") or not os.environ.get("SUPABASE_SERVICE_ROLE_KEY"):
+        print("\nERROR: Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables")
         sys.exit(1)
 
-    print("Building strap → home_index lookup...")
-    strap_to_home = build_strap_lookup(config["regrid_csv"], config["index_prefix"])
+    print("Building strap → home_index lookup from Supabase...")
+    strap_to_home = build_strap_lookup(config["county_name"])
     print(f"  {len(strap_to_home)} straps mapped")
 
     print("Parsing permits...")

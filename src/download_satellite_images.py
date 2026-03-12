@@ -147,7 +147,7 @@ def run(config, limit: int | None = None) -> None:
         if download_image(url, out_dir / fname, session):
             saved += 1
             existing.add(fname.lower())
-            if saved <= 5 or saved % 100 == 0:
+            if saved <= 5 or saved % 25 == 0:
                 method = "address" if has_address.loc[row.name] else "lat/lon"
                 print(f"  [{saved}] {fname} ({method})")
 

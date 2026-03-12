@@ -8,6 +8,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
 import { indexToImagePath } from "@/lib/imagePath";
 import ListingCard from "@/components/ListingCard";
+import ReportIssueModal from "@/components/ReportIssueModal";
 import type { MapBounds } from "@/components/HomeMap";
 
 const HOMES_PATH = "/homes";
@@ -143,6 +144,7 @@ function HomesPageContent() {
   const [minBatteryInterest, setMinBatteryInterest] = useState(() => searchParams.get("minBattery") ?? "");
 
   const [followedHomeIndices, setFollowedHomeIndices] = useState<Set<string>>(new Set());
+  const [reportIssueIndex, setReportIssueIndex] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [orgHomeByIndex, setOrgHomeByIndex] = useState<Record<string, { tags: string[]; interest_in_solar: string | null; interest_in_battery: string | null; do_not_contact: boolean }>>({});
@@ -843,7 +845,10 @@ function HomesPageContent() {
           )}
         </p>
 
-
+        <hr className="border-slate-200 mb-4" />
+        <p className="mb-6 text-xs text-slate-400 italic">
+          Satellite imagery may not match the current condition of the home.
+        </p>
 
         <div className="flex flex-col gap-8">
           {displayedRows.slice(0, offset).map((r) => {
@@ -876,11 +881,23 @@ function HomesPageContent() {
                   }}
                   unoptimized
                   badge={r.has_solar ? "Has Solar" : undefined}
+                  onReportIssue={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setReportIssueIndex(r.index);
+                  }}
                 />
               </Link>
             );
           })}
         </div>
+
+        {reportIssueIndex && (
+          <ReportIssueModal
+            homeIndex={reportIssueIndex}
+            onClose={() => setReportIssueIndex(null)}
+          />
+        )}
       </div>
     </main>
   );

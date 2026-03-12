@@ -235,7 +235,7 @@ def fetch_with_retries(
 def run(
     subset: pd.DataFrame,
     csv_output: str,
-    checkpoint_every: int = 100,
+    checkpoint_every: int = 10,
     resume: bool = True,
     max_segments: int = 25,
     max_distance_m = 15,

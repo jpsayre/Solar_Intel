@@ -46,7 +46,7 @@ def _col(row: dict, base: str, i: int):
 
 
 def find_matching_segments(row: dict, min_az: float, max_az: float) -> list[dict]:
-    """Find roof segments matching azimuth and area criteria. Uses 1-based segment indices 1..25."""
+    """Find roof segments matching azimuth criteria (any area, E/S/W facing). Uses 1-based segment indices 1..25."""
     matches = []
     for i in range(1, MAX_INDEX + 1):
         az_val = _col(row, "azimuth", i)
@@ -63,7 +63,7 @@ def find_matching_segments(row: dict, min_az: float, max_az: float) -> list[dict
         except (TypeError, ValueError):
             continue
 
-        if min_az <= az <= max_az and area >= MIN_AREA:
+        if min_az <= az <= max_az:
             matches.append({
                 "segment": i,
                 f"azimuth{i}": az,
@@ -125,13 +125,20 @@ def get_segment_count(row: dict) -> int:
         return 0
 
 
+FLOOR_SCORE = 10.0
+
+
 def compute_roof_score(row: dict, matching_segments: list[dict]) -> float | None:
     """
-    Compute roof score from matching segments using the algorithm from Analyze_ProjectSunroof_Data.
-    Returns None if no qualifying segments.
+    Compute roof score from matching segments.
+
+    Tier 1: E/S/W segments >= MIN_AREA → full score
+    Tier 2: E/S/W segments < MIN_AREA → score scaled by area/MIN_AREA
+    Tier 3: No E/S/W segments (ok=True) → floor value of 10
+    Tier 4: No Sunroof data (ok!=True) → None
     """
     if not matching_segments:
-        return None
+        return FLOOR_SCORE
 
     segment_count = get_segment_count(row)
     score_sum = []
@@ -154,12 +161,14 @@ def compute_roof_score(row: dict, matching_segments: list[dict]) -> float | None
         else:  # west
             modified_azimuth_score = 1 - abs(azimuth_score * 0.8)
 
-        score_sum.append(
-            (quant_avg / 1800) * 100 + modified_azimuth_score * 150 - (segment_count ** 2) / 15
-        )
+        base_score = (quant_avg / 1800) * 100 + modified_azimuth_score * 150 - (segment_count ** 2) / 15
+
+        # Area scaling: full credit at MIN_AREA, proportionally less below
+        area_factor = min(1.0, segment_area / MIN_AREA)
+        score_sum.append(base_score * area_factor)
 
     if not score_sum:
-        return None
+        return FLOOR_SCORE
 
     return round(max(score_sum), 2)
 
@@ -171,15 +180,17 @@ def run(output_csv: str | None = None, sql_limit: int | None = None, config=None
     else:
         out_path = output_csv or DEFAULT_OUTPUT_CSV
 
+    # Try CSV first (preferred — no DB dependency)
+    csv_path = config.sunroof_api_output_path if config else None
+    if csv_path and os.path.exists(csv_path):
+        print(f"Computing roof scores from {csv_path}")
+        df = pd.read_csv(csv_path)
+        return _compute_from_dataframe(df, out_path)
+
+    # Fall back to Postgres
     db_url = os.getenv("DATABASE_SOLAR_INTEL_URL")
     if not db_url:
-        # Fallback: compute roof scores from the Sunroof API output CSV
-        csv_path = config.sunroof_api_output_path if config else None
-        if csv_path and os.path.exists(csv_path):
-            print(f"DATABASE_SOLAR_INTEL_URL not set. Computing roof scores from {csv_path}")
-            df = pd.read_csv(csv_path)
-            return _compute_from_dataframe(df, out_path)
-        raise RuntimeError("DATABASE_SOLAR_INTEL_URL is not set and no Sunroof API CSV found")
+        raise RuntimeError("No Sunroof API CSV found and DATABASE_SOLAR_INTEL_URL is not set")
     conn = psycopg2.connect(db_url)
 
     try:

@@ -1,8 +1,9 @@
 """
-Step 2: Merge Regrid property data with filtered Sunroof API output.
+Step 2: Merge Regrid property data with Sunroof API output.
 
-Inner join on original_index. Supports incremental appends to
-preserve downstream-filled columns from previous runs.
+Left join on original_index — all Regrid homes are kept, even those
+without Sunroof data. Supports incremental appends to preserve
+downstream-filled columns from previous runs.
 """
 
 import os
@@ -30,8 +31,8 @@ def run(config=None):
     A = pd.read_csv(regrid_path)
     B = pd.read_csv(api_path)
 
-    # Inner join (only matched rows kept)
-    merged = A.merge(B, how="inner", on="original_index")
+    # Left join — keep all Regrid homes, attach Sunroof data where available
+    merged = A.merge(B, how="left", on="original_index")
 
     # Incremental append: preserve downstream-filled columns
     if os.path.exists(output_path):
