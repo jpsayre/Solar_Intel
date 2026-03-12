@@ -194,7 +194,7 @@ export default function HomeMap({
               }}
               eventHandlers={{
                 click: () => {
-                  window.location.href = `/homes/${encodeURIComponent(p.index)}`;
+                  window.location.href = `/homes/${encodeURIComponent(p.index)}?from=explorer`;
                 },
               }}
             >

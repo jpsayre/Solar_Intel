@@ -41,8 +41,8 @@ function buildHomesSearchParams(params: {
   if (params.city?.trim()) sp.set("city", params.city.trim());
   if (params.subdivision?.trim()) sp.set("subdivision", params.subdivision.trim());
   if (params.address?.trim()) sp.set("address", params.address.trim());
-  if (params.lat != null && Number.isFinite(params.lat)) sp.set("lat", String(params.lat));
-  if (params.lng != null && Number.isFinite(params.lng)) sp.set("lng", String(Math.round(params.lng)));
+  if (params.lat != null && Number.isFinite(params.lat)) sp.set("lat", params.lat.toFixed(5));
+  if (params.lng != null && Number.isFinite(params.lng)) sp.set("lng", params.lng.toFixed(5));
   if (params.zoom != null && Number.isFinite(params.zoom)) sp.set("zoom", String(Math.round(params.zoom)));
   if (params.sortBy && params.sortBy !== "hybrid") sp.set("sort", params.sortBy);
   if (params.minModel?.trim()) sp.set("minModel", params.minModel.trim());
