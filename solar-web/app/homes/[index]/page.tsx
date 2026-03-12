@@ -6,6 +6,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
 import { indexToImagePath } from "@/lib/imagePath";
 import ListingCard from "@/components/ListingCard";
+import ReportIssueModal from "@/components/ReportIssueModal";
 
 const BUCKET = "images";
 
@@ -162,6 +163,7 @@ export default function HomeDetailPage() {
   const [savingTags, setSavingTags] = useState(false);
   const [orgHomeUpdatedAt, setOrgHomeUpdatedAt] = useState<string | null>(null);
   const [isFollowed, setIsFollowed] = useState(false);
+  const [reportIssueOpen, setReportIssueOpen] = useState(false);
   const [scores, setScores] = useState<{ model_score: number | null; roof_score: number | null } | null>(null);
   const [enrichCredits, setEnrichCredits] = useState(47);
   const [permitsOpen, setPermitsOpen] = useState(false);
@@ -663,7 +665,15 @@ export default function HomeDetailPage() {
           priority
           unoptimized
           badge={row.has_solar ? "Has Solar" : undefined}
+          onReportIssue={() => setReportIssueOpen(true)}
         />
+
+        {reportIssueOpen && (
+          <ReportIssueModal
+            homeIndex={row.index}
+            onClose={() => setReportIssueOpen(false)}
+          />
+        )}
 
         <section className="mt-6 rounded-xl border border-neutral-200 bg-white">
           <button

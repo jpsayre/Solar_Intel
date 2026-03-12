@@ -7,7 +7,6 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData, buildFollowingCardRows } from "@/lib/cardData";
 import { indexToImagePath } from "@/lib/imagePath";
 import ListingCard from "@/components/ListingCard";
-import ReportIssueModal from "@/components/ReportIssueModal";
 
 const BUCKET = "images";
 
@@ -58,7 +57,6 @@ export default function FollowingPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [orgDataByIndex, setOrgDataByIndex] = useState<Record<string, { tags: string[]; do_not_contact: boolean; contacts: ContactRow[]; actionItems: ActionItemRow[] }>>({});
   const [latestNoteByIndex, setLatestNoteByIndex] = useState<Record<string, { body: string }>>({});
-  const [reportIssueIndex, setReportIssueIndex] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [excludeTagFilter, setExcludeTagFilter] = useState("");
@@ -374,24 +372,12 @@ export default function FollowingPage() {
                     }}
                     unoptimized
                     badge={r.has_solar ? "Has Solar" : undefined}
-                    onReportIssue={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setReportIssueIndex(r.index);
-                    }}
                   />
                 </Link>
               );
             });
             })()}
           </div>
-
-          {reportIssueIndex && (
-            <ReportIssueModal
-              homeIndex={reportIssueIndex}
-              onClose={() => setReportIssueIndex(null)}
-            />
-          )}
           </>
         )}
       </div>
