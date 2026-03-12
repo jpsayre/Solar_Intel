@@ -324,8 +324,7 @@ function HomesPageContent() {
     const { bounds, pageOffset = 0, append = false } = opts;
     if (!append) {
       setErr(null);
-      setRows(null);
-      setTotalCount(null);
+      // Don't null out rows — keep showing current results while loading
     }
     setBoundsLoading(true);
 
