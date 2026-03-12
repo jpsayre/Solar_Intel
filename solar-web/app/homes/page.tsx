@@ -61,7 +61,6 @@ const HomeMap = dynamic(() => import("@/components/HomeMap"), { ssr: false });
 const BUCKET = "images";
 const PAGE_SIZE = 100;
 const NEXT_PAGE_SIZE = 100;
-const BOUNDS_QUERY_LIMIT = 1000;
 const FILTER_OPTIONS_LIMIT = 2000;
 const MAP_POINTS_LIMIT = 1000;
 
@@ -132,14 +131,12 @@ function HomesPageContent() {
 
   const [offset, setOffset] = useState(PAGE_SIZE);
   const [hasMore, setHasMore] = useState(false);
-  const [boundsRows, setBoundsRows] = useState<HomeRow[]>([]);
   const [boundsLoading, setBoundsLoading] = useState(false);
 
   const [imgUrls, setImgUrls] = useState<Record<number, string>>({});
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
 
   const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption) || "hybrid");
-  const [scoresByIndex, setScoresByIndex] = useState<Record<string, { model_score: number | null; roof_score: number | null }>>({});
   const [minModelScore, setMinModelScore] = useState(() => searchParams.get("minModel") ?? "");
   const [minRoofScore, setMinRoofScore] = useState(() => searchParams.get("minRoof") ?? "");
   const [minSolarInterest, setMinSolarInterest] = useState(() => searchParams.get("minSolar") ?? "");
@@ -215,39 +212,9 @@ function HomesPageContent() {
     return () => { alive = false; };
   }, []);
 
-  // Fetch home_scores for card rows (skip if RPC already provides scores for map dots)
   useEffect(() => {
     let alive = true;
-    const list = mapBounds ? boundsRows : (rows ?? []);
-    if (list.length === 0) return;
-    // Build scores from RPC data if available (avoids extra network request)
-    if (rpcMapPoints && rpcMapPoints.length > 0) {
-      const byIndex: Record<string, { model_score: number | null; roof_score: number | null }> = {};
-      for (const rp of rpcMapPoints) {
-        byIndex[rp.index] = { model_score: rp.model_score, roof_score: rp.roof_score };
-      }
-      setScoresByIndex(byIndex);
-      return;
-    }
-    const indices = list.map((r) => r.index);
-    supabaseBrowser
-      .from("home_scores")
-      .select("home_index, model_score, roof_score")
-      .in("home_index", indices)
-      .then(({ data }) => {
-        if (!alive) return;
-        const byIndex: Record<string, { model_score: number | null; roof_score: number | null }> = {};
-        for (const row of (data ?? []) as { home_index: string; model_score: number | null; roof_score: number | null }[]) {
-          byIndex[row.home_index] = { model_score: row.model_score, roof_score: row.roof_score };
-        }
-        setScoresByIndex(byIndex);
-      });
-    return () => { alive = false; };
-  }, [mapBounds, boundsRows, rows, rpcMapPoints]);
-
-  useEffect(() => {
-    let alive = true;
-    const list = mapBounds ? boundsRows : (rows ?? []);
+    const list = rows ?? [];
     if (list.length === 0 || !orgId) {
       setOrgHomeByIndex({});
       return;
@@ -267,7 +234,7 @@ function HomesPageContent() {
         setOrgHomeByIndex(byIndex);
       });
     return () => { alive = false; };
-  }, [orgId, mapBounds, boundsRows, rows]);
+  }, [orgId, rows]);
 
   const toggleFollow = useCallback(
     async (homeIndex: string, e: React.MouseEvent) => {
@@ -349,126 +316,79 @@ function HomesPageContent() {
     };
   }, []);
 
-  const loadRows = useCallback(async () => {
-    setErr(null);
-    setRows(null);
-    setTotalCount(null);
+  const fetchHomesPage = useCallback(async (opts: {
+    bounds?: MapBounds | null;
+    pageOffset?: number;
+    append?: boolean;
+  } = {}) => {
+    const { bounds, pageOffset = 0, append = false } = opts;
+    if (!append) {
+      setErr(null);
+      setRows(null);
+      setTotalCount(null);
+    }
+    setBoundsLoading(true);
 
     const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
-    if (userErr) {
-      setErr(userErr.message);
-      return;
-    }
-    if (!userData.user) {
-      router.push("/login");
-      return;
-    }
+    if (userErr) { setErr(userErr.message); setBoundsLoading(false); return; }
+    if (!userData.user) { router.push("/login"); setBoundsLoading(false); return; }
 
-    // Build shared filter logic
-    const applyFilters = (q: typeof supabaseBrowser extends { from: (t: string) => infer R } ? any : any) => {
-      if (county) q = q.eq("county", county);
-      if (city) q = q.eq("city", city);
-      if (subdivision) q = q.eq("subdivision_formatted", subdivision);
-      if (addressSearchApplied.trim()) {
-        q = q.ilike("address", `%${addressSearchApplied.trim()}%`);
-      } else if (!showSolarHomes) {
-        q = q.eq("has_solar", false);
-      }
-      return q;
+    const params: Record<string, unknown> = {
+      p_sort_by: sortBy,
+      p_show_solar: showSolarHomes,
+      p_limit: PAGE_SIZE,
+      p_offset: pageOffset,
     };
 
-    // Fire row query and count query in parallel
-    let query = applyFilters(
-      supabaseBrowser.from("homes").select("*").order("index", { ascending: true }).limit(PAGE_SIZE)
-    );
-    let countQuery = applyFilters(
-      supabaseBrowser.from("homes").select("*", { count: "exact", head: true })
-    );
+    if (county) params.p_county = county;
+    if (city) params.p_city = city;
+    if (subdivision) params.p_subdivision = subdivision;
+    if (addressSearchApplied.trim()) params.p_address_search = addressSearchApplied.trim();
 
-    const [rowResult, countResult] = await Promise.all([query, countQuery]);
+    const minModel = parseFloat(minModelScore);
+    const minRoof = parseFloat(minRoofScore);
+    if (Number.isFinite(minModel)) params.p_min_model = minModel;
+    if (Number.isFinite(minRoof)) params.p_min_roof = minRoof;
 
-    if (rowResult.error) {
-      setErr(rowResult.error.message);
-      setRows([]);
-      return;
+    if (bounds) {
+      params.p_south = bounds.south;
+      params.p_north = bounds.north;
+      params.p_west = bounds.west;
+      params.p_east = bounds.east;
     }
 
-    const list = (rowResult.data ?? []) as HomeRow[];
-    setRows(list);
-    setOffset(PAGE_SIZE);
-    setHasMore(list.length === PAGE_SIZE);
-    setMapBounds(null);
-    setBoundsRows([]);
-    setTotalCount(countResult.count ?? null);
-  }, [router, county, city, subdivision, addressSearchApplied, showSolarHomes]);
+    const { data, error } = await supabaseBrowser.rpc("get_homes_page", params);
+    setBoundsLoading(false);
+
+    if (error) { setErr(error.message); setRows([]); return; }
+
+    const results = (data ?? []) as (HomeRow & { total_count: number })[];
+    const count = results.length > 0 ? results[0].total_count : 0;
+
+    if (append) {
+      setRows(prev => prev ? [...prev, ...results] : results);
+    } else {
+      setRows(results);
+    }
+    setTotalCount(count);
+    setOffset(pageOffset + PAGE_SIZE);
+    setHasMore(results.length === PAGE_SIZE);
+  }, [router, county, city, subdivision, addressSearchApplied, sortBy,
+      showSolarHomes, minModelScore, minRoofScore]);
 
   const loadNextPage = useCallback(async () => {
     if (!rows || rows.length === 0) return;
+    fetchHomesPage({ bounds: mapBounds, pageOffset: offset, append: true });
+  }, [rows?.length, offset, mapBounds, fetchHomesPage]);
 
-    let query = supabaseBrowser
-      .from("homes")
-      .select("*")
-      .order("index", { ascending: true })
-      .range(offset, offset + NEXT_PAGE_SIZE - 1);
-
-    if (county) query = query.eq("county", county);
-    if (city) query = query.eq("city", city);
-    if (subdivision) query = query.eq("subdivision_formatted", subdivision);
-    if (addressSearchApplied.trim()) {
-      query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
-    } else if (!showSolarHomes) {
-      query = query.eq("has_solar", false);
-    }
-
-    const { data, error } = await query;
-    if (error) return;
-    const next = (data ?? []) as HomeRow[];
-    setRows((prev) => (prev ? [...prev, ...next] : next));
-    setOffset((prev) => prev + NEXT_PAGE_SIZE);
-    setHasMore(next.length === NEXT_PAGE_SIZE);
-  }, [rows?.length, offset, county, city, subdivision, addressSearchApplied, showSolarHomes]);
+  // Initial load (no bounds yet)
+  useEffect(() => {
+    fetchHomesPage();
+  }, [fetchHomesPage]);
 
   useEffect(() => {
     let alive = true;
-    loadRows();
-    return () => {
-      alive = false;
-    };
-  }, [loadRows]);
-
-  const loadRowsInBounds = useCallback(
-    async (bounds: MapBounds) => {
-      setBoundsLoading(true);
-
-      let query = supabaseBrowser
-        .from("homes")
-        .select("*")
-        .order("index", { ascending: true })
-        .gte("latitude", bounds.south)
-        .lte("latitude", bounds.north)
-        .gte("longitude", bounds.west)
-        .lte("longitude", bounds.east)
-        .limit(BOUNDS_QUERY_LIMIT);
-
-      if (county) query = query.eq("county", county);
-      if (city) query = query.eq("city", city);
-      if (subdivision) query = query.eq("subdivision_formatted", subdivision);
-      if (addressSearchApplied.trim()) {
-        query = query.ilike("address", `%${addressSearchApplied.trim()}%`);
-      } else if (!showSolarHomes) {
-        query = query.eq("has_solar", false);
-      }
-
-      const { data, error } = await query;
-      setBoundsLoading(false);
-      if (!error && data) setBoundsRows((data ?? []) as HomeRow[]);
-    },
-    [county, city, subdivision, addressSearchApplied, showSolarHomes]
-  );
-
-  useEffect(() => {
-    let alive = true;
-    const list = mapBounds ? boundsRows : (rows ?? []);
+    const list = rows ?? [];
 
     async function signImages() {
       if (!list.length) return;
@@ -510,7 +430,7 @@ function HomesPageContent() {
     return () => {
       alive = false;
     };
-  }, [rows, mapBounds, boundsRows, imgUrls, imgErrors]);
+  }, [rows, imgUrls, imgErrors]);
 
   const handleBoundsChange = useCallback((b: MapBounds | null) => {
     setMapBounds(b);
@@ -535,7 +455,6 @@ function HomesPageContent() {
   useEffect(() => {
     if (!mapBounds) {
       lastBoundsRef.current = null;
-      setBoundsRows([]);
       return;
     }
     if (lastBoundsRef.current && boundsEqual(mapBounds, lastBoundsRef.current)) {
@@ -548,26 +467,19 @@ function HomesPageContent() {
     const delay = isFirstBounds ? 0 : 400;
     boundsDebounceRef.current = setTimeout(() => {
       boundsDebounceRef.current = null;
-      // Fire both RPC (map dots) and card query together after debounce
       loadMapPoints(mapBounds);
-      loadRowsInBounds(mapBounds);
+      fetchHomesPage({ bounds: mapBounds });
     }, delay);
     return () => {
       if (boundsDebounceRef.current) clearTimeout(boundsDebounceRef.current);
     };
-  }, [mapBounds, loadRowsInBounds, loadMapPoints]);
+  }, [mapBounds, fetchHomesPage, loadMapPoints]);
 
   const displayedRows = useMemo(() => {
-    // Use boundsRows only after they've loaded; fall back to rows during initial load
-    let list = (mapBounds && boundsRows.length > 0) ? boundsRows : (rows ?? []);
+    // Rows are already sorted and score-filtered by the RPC
+    let list = rows ?? [];
 
-    // Merge scores onto rows
-    list = list.map((r) => {
-      const scores = scoresByIndex[r.index];
-      if (!scores) return r;
-      return { ...r, model_score: scores.model_score, roof_score: scores.roof_score };
-    });
-
+    // Org-specific filters (client-side, since org_home is fetched separately with RLS)
     const tagLower = tagFilter.trim().toLowerCase();
     const excludeLower = excludeTagFilter.trim().toLowerCase();
     if (tagLower || excludeLower || excludeDoNotContact) {
@@ -579,16 +491,6 @@ function HomesPageContent() {
         if (excludeDoNotContact && orgRow?.do_not_contact) return false;
         return true;
       });
-    }
-
-    // Score minimum filters
-    const minModel = parseInt(minModelScore, 10);
-    const minRoof = parseInt(minRoofScore, 10);
-    if (Number.isFinite(minModel)) {
-      list = list.filter((r) => (r.model_score as number | null | undefined) != null && (r.model_score as number) >= minModel);
-    }
-    if (Number.isFinite(minRoof)) {
-      list = list.filter((r) => (r.roof_score as number | null | undefined) != null && (r.roof_score as number) >= minRoof);
     }
 
     // Interest filters (from org_home real columns)
@@ -607,26 +509,8 @@ function HomesPageContent() {
       });
     }
 
-    // Sort
-    list = [...list].sort((a, b) => {
-      if (sortBy === "model_score") {
-        const sa = (a.model_score as number | null | undefined) ?? -1;
-        const sb = (b.model_score as number | null | undefined) ?? -1;
-        return sb - sa;
-      }
-      if (sortBy === "roof_score") {
-        const sa = (a.roof_score as number | null | undefined) ?? -1;
-        const sb = (b.roof_score as number | null | undefined) ?? -1;
-        return sb - sa;
-      }
-      // hybrid: 0.6 * ranking + 0.4 * roof
-      const ha = ((a.model_score as number | null | undefined) ?? 0) * 0.6 + ((a.roof_score as number | null | undefined) ?? 0) * 0.4;
-      const hb = ((b.model_score as number | null | undefined) ?? 0) * 0.6 + ((b.roof_score as number | null | undefined) ?? 0) * 0.4;
-      return hb - ha;
-    });
-
     return list;
-  }, [mapBounds, boundsRows, rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex, scoresByIndex, sortBy, minModelScore, minRoofScore, minSolarInterest, minBatteryInterest]);
+  }, [rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex, minSolarInterest, minBatteryInterest]);
 
   const mapPoints = useMemo(() => {
     const minModel = parseInt(minModelScore, 10);
@@ -657,8 +541,8 @@ function HomesPageContent() {
           };
         });
     }
-    // Fallback: derive from full rows + separate scores (legacy path)
-    const list = mapBounds ? boundsRows : (rows ?? []);
+    // Fallback: derive from full rows (scores already included from RPC)
+    const list = rows ?? [];
     if (!list.length) return [];
     return list
       .filter(
@@ -670,9 +554,8 @@ function HomesPageContent() {
       )
       .map((r) => {
         const { addressLine1, addressLine2 } = buildListingCardData(r);
-        const scores = scoresByIndex[r.index];
-        const ms = scores?.model_score ?? null;
-        const rs = scores?.roof_score ?? null;
+        const ms = (r.model_score as number | null) ?? null;
+        const rs = (r.roof_score as number | null) ?? null;
         let colorScore: number | null = null;
         if (sortBy === "model_score") colorScore = ms;
         else if (sortBy === "roof_score") colorScore = rs;
@@ -688,7 +571,7 @@ function HomesPageContent() {
           modelScore: ms,
         };
       });
-  }, [rpcMapPoints, rows, mapBounds, boundsRows, scoresByIndex, sortBy, minModelScore, minRoofScore]);
+  }, [rpcMapPoints, rows, sortBy, minModelScore, minRoofScore]);
 
   if (err) {
     return (
