@@ -154,7 +154,7 @@ function HomesPageContent() {
   const [filterCount, setFilterCount] = useState<number | null>(null);
 
   // Lightweight map points from RPC (scores pre-joined, no gray flash)
-  type RpcMapPoint = { index: string; latitude: number; longitude: number; model_score: number | null; roof_score: number | null; hybrid_score: number | null };
+  type RpcMapPoint = { index: string; latitude: number; longitude: number; model_score: number | null; roof_score: number | null; hybrid_score: number | null; address: string | null; city: string | null; has_solar: boolean | null };
   const [rpcMapPoints, setRpcMapPoints] = useState<RpcMapPoint[] | null>(null);
   const rpcRequestRef = useRef(0); // track latest RPC request to ignore stale responses
 
@@ -561,10 +561,11 @@ function HomesPageContent() {
             lat: r.latitude,
             lng: r.longitude,
             index: r.index,
-            address: r.index, // lightweight — no full address in RPC
+            address: [r.address, r.city].filter(Boolean).join(", ") || r.index,
             score: colorScore,
             roofScore: r.roof_score,
             modelScore: r.model_score,
+            hasSolar: r.has_solar ?? false,
           };
         });
     }

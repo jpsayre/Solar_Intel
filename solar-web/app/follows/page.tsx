@@ -89,11 +89,11 @@ export default function FollowsPage() {
     Promise.all(
       missingRows.map(async (r) => {
         const path = indexToImagePath(r.index);
-        const { data, error } = await supabaseBrowser.storage
+        const { data } = supabaseBrowser.storage
           .from(BUCKET)
-          .createSignedUrl(path, 60 * 30);
-        if (error) return { oi: r.original_index, url: "", err: error.message };
-        return { oi: r.original_index, url: data?.signedUrl ?? "", err: "" };
+          .getPublicUrl(path);
+        const url = data?.publicUrl ?? "";
+        return { oi: r.original_index, url, err: url ? "" : "no public url" };
       })
     ).then((results) => {
       if (!alive) return;
