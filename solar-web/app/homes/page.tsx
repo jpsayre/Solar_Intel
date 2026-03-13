@@ -873,7 +873,7 @@ function HomesPageContent() {
 
         <hr className="border-slate-200 mb-4" />
         <p className="mb-6 text-center text-xs text-slate-400 italic">
-          Satellite imagery may not match the current condition of the home.
+          Satellite imagery may not match the current condition of the home. Solar status determined by permits.
         </p>
 
         <div className="flex flex-col gap-8">
