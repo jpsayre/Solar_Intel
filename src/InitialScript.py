@@ -80,7 +80,7 @@ def run(config, limit=None):
     if "original_index" not in df.columns:
         df = df.reset_index(names="original_index")
 
-    # Save the filtered Regrid data (used later by create_parsed_permits_by_year)
+    # Save the filtered Regrid data (used later by create_data_science_input)
     df.to_csv(str(config.regrid_filtered_path), index=False)
     print(f"Saved filtered Regrid to {config.regrid_filtered_path}")
 

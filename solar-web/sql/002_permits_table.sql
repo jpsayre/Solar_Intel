@@ -10,9 +10,9 @@ CREATE TABLE IF NOT EXISTS permits (
   permit_number text,
   permit_type text NOT NULL,          -- solar, roof, battery, ev_charger, electrical, heat_pump, other
   description text,                   -- human-readable description
-  filed_date date NOT NULL,
+  filed_date date,
   valuation numeric,
-  county text NOT NULL,
+  location text NOT NULL,
   created_at timestamptz DEFAULT now(),
   UNIQUE(home_index, permit_number, permit_type)
 );
@@ -50,7 +50,7 @@ RETURNS TABLE(
   description text,
   filed_date date,
   valuation numeric,
-  county text,
+  location text,
   address text,
   city text
 ) AS $$
@@ -62,7 +62,7 @@ RETURNS TABLE(
     p.description,
     p.filed_date,
     p.valuation,
-    p.county,
+    p.location,
     h.address,
     h.city
   FROM permits p

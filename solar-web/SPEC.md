@@ -110,7 +110,7 @@ This document defines all user-facing behaviors. All code changes must be verifi
 - Shows: owner, contacts, open action items (bulleted), latest comment, tags
 - Follow toggle
 - "Has Solar" badge
-- **Images**: signed URLs (30-min expiry) — TODO: should use `getPublicUrl()` like explorer
+- **Images**: `getPublicUrl()` — permanent public URLs, same as explorer
 - Click → `/homes/{index}?from=following`
 
 ---
@@ -181,5 +181,5 @@ This document defines all user-facing behaviors. All code changes must be verifi
 |------|--------|-------|
 | Explorer | `getPublicUrl()` | Permanent public URLs |
 | Home Detail | `getPublicUrl()` | Permanent public URLs |
-| Following | `createSignedUrl()` | **Should be `getPublicUrl()`** |
-| Follows | `createSignedUrl()` | **Should be `getPublicUrl()`** |
+| Following | `getPublicUrl()` | Permanent public URLs |
+| Follows | `getPublicUrl()` | Permanent public URLs |

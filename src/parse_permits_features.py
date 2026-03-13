@@ -18,7 +18,7 @@ CATEGORY_MATCHES = {
     "roof_new_or_replace": ["re-roof", "reroof", "residential re-roof", "commercial re-roof"],
     "ac": ["air conditioner"],
     "water_heater": ["water heater"],  # Base category; subtype from description
-    "windows_doors": ["windows or doors", "windows", "doors"],
+    "windows_doors": ["windows or doors", "windows", "doors", "siding"],
     "evaporative_cooler": ["evaporative cooler"],
     "pool_hot_tub": ["pool", "hot tub", "spa"],
     "electrical_mechanical": ["electrical/mechanical", "electrical"],
@@ -44,7 +44,7 @@ DESC_PATTERNS = {
     "solar_pv_requires_pv": r"\b(?:pv|photovoltaic|photo\-voltaic)\b",
 
     # Battery / storage
-    "battery": r"\b(?:powerwall|battery\s*storage|energy\s*storage|ess|bms)\b",
+    "battery": r"\b(?:powerwall|battery|energy\s*storage|ess|bms)\b",
 
     # EV charging
     "ev_charger": (
@@ -61,7 +61,8 @@ DESC_PATTERNS = {
     # Electrical
     "electrical_service_upgrade": (
         r"\b(?:service\s*upgrade|panel\s*upgrade|main\s*panel|meter\s*main|"
-        r"new\s*panel|electrical\s*service|200\s*amp|solar\s*ready)\b"
+        r"new\s*panel|electrical\s*service|200\s*a(?:mp)?|solar\s*ready|"
+        r"meter\s*socket|(?:replace|relocate)\s*(?:\w+\s+){0,3}panel)\b"
     ),
 
     # HVAC - separated
@@ -82,10 +83,10 @@ DESC_PATTERNS = {
     "water_heater_solar_thermal": (
         r"\b(?:solar\s*water\s*heater|solar\s*hot\s*water|solar\s*thermal)\b"
     ),
-    "water_heater": r"\b(?:water\s*heater|tankless|on\-demand)\b",  # Generic fallback
+    "water_heater": r"\b(?:water\s*heater|tankless|on\-demand|h/?w\s*h(?:ea)?t(?:e)?r)\b",  # Generic fallback
 
     # Envelope
-    "windows_doors": r"\b(window(?:s)?|door(?:s)?|patio\s*door|sliding\s*door)\b",
+    "windows_doors": r"\b(window(?:s)?|door(?:s)?|patio\s*door|sliding\s*door|siding)\b",
     "insulation_airseal": (
         r"\b(?:insulation|air\s*seal|air\-seal|weatherization|attic\s*insulation)\b"
     ),
@@ -93,9 +94,14 @@ DESC_PATTERNS = {
     # Other solar-relevant
     "generator": r"\b(?:generator|genset)\b",
     "addition_new_build": (
-        r"\b(?:addition|new\s*construction|new\s*build|adu|accessory\s*dwelling)\b"
+        r"\b(?:addition|adding\s+\d+|new\s*construction|new\s*build|"
+        r"new\s*(?:single\s*family|residence|home|house|sfr|sfd)|"
+        r"adu|accessory\s*dwelling)\b"
     ),
-    "kitchen_bath_remodel": r"\b(?:kitchen|bath(?:room)?|remodel|renovation|basement\s*finish)\b",
+    "kitchen_bath_remodel": (
+        r"\b(?:kitchen|bath(?:room)?|remodel|renovation|basement\s*finish|"
+        r"finish\w*\s+(?:\S+\s+){0,3}basement)\b"
+    ),
     "pool_hot_tub": r"\b(pool|hot\s*tub|spa)\b",
     "evaporative_cooler": r"\b(?:evaporative\s*cooler|swamp\s*cooler)\b",
 }
@@ -153,15 +159,24 @@ def compute_features(df: pd.DataFrame, estimated_value: pd.Series | None = None)
     has_pv_or_photovoltaic = text.str.contains(
         DESC_PATTERNS["solar_pv_requires_pv"], regex=True, na=False
     )
+    # kW (power rating) = solar; kWh (energy capacity) = battery.
+    # Many Boulder descriptions are truncated before "solar"/"pv" appears,
+    # but ENERGY EFFICIENT SYSTEM + kW rating is a strong solar signal.
+    has_kw_not_kwh = text.str.contains(r"\d+\.?\d*\s*kw(?!h)\b", regex=True, na=False)
     solar_pv_raw = (
-        _cat_matches(cat, ["energy efficient system"]) & text.str.contains("solar|pv|photovoltaic", regex=True, na=False)
+        _cat_matches(cat, ["energy efficient system"]) & (
+            text.str.contains("solar|pv|photovoltaic", regex=True, na=False)
+            | has_kw_not_kwh
+        )
     ) | _desc_matches(text, DESC_PATTERNS["solar_pv"])
     features["solar_pv"] = solar_pv_raw & (
         ~solar_thermal_suspected | has_pv_or_photovoltaic
     )
 
-    # --- Battery
-    features["battery"] = _desc_matches(text, DESC_PATTERNS["battery"])
+    # --- Battery (exclude "no battery" / "NO battery backup" mentions)
+    features["battery"] = _desc_matches(
+        text, DESC_PATTERNS["battery"], exclude=r"no\s*battery"
+    )
 
     # --- EV charger
     features["ev_charger"] = _desc_matches(text, DESC_PATTERNS["ev_charger"])
@@ -200,9 +215,13 @@ def compute_features(df: pd.DataFrame, estimated_value: pd.Series | None = None)
         text, DESC_PATTERNS["ac"]
     )
 
-    # --- Furnace
+    # --- Furnace: HEATING SYSTEM category defaults to furnace when description
+    # is empty or matches furnace patterns. When description matches water heater
+    # or heat pump, those features handle it separately (no conflict).
+    empty_desc = df["description"].str.strip() == ""
+    is_heating_cat = _cat_matches(cat, ["heating system"])
     features["furnace"] = (
-        _cat_matches(cat, ["heating system"]) & _desc_matches(text, DESC_PATTERNS["furnace"])
+        is_heating_cat & (_desc_matches(text, DESC_PATTERNS["furnace"]) | empty_desc)
     ) | (_desc_matches(text, DESC_PATTERNS["furnace"]) & ~features["heat_pump"])
 
     # --- Water heater types
@@ -233,8 +252,10 @@ def compute_features(df: pd.DataFrame, estimated_value: pd.Series | None = None)
         _cat_matches(cat, ["addition", "new construction"]) | _desc_matches(text, DESC_PATTERNS["addition_new_build"])
     )
     features["kitchen_bath_remodel"] = _desc_matches(text, DESC_PATTERNS["kitchen_bath_remodel"])
+    pool_exclude = r"gas\s*line|gasline|wiring|wire\s|outlet|demolition|deconstruct|fill\s*in"
     features["pool_hot_tub"] = (
-        _cat_matches(cat, ["pool", "hot tub", "spa"]) | _desc_matches(text, DESC_PATTERNS["pool_hot_tub"])
+        _cat_matches(cat, ["pool", "hot tub", "spa"])
+        | _desc_matches(text, DESC_PATTERNS["pool_hot_tub"], exclude=pool_exclude)
     )
     features["evaporative_cooler"] = (
         _cat_matches(cat, ["evaporative cooler"]) | _desc_matches(text, DESC_PATTERNS["evaporative_cooler"])

@@ -57,7 +57,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 N_FEATURES_SELECT = 25
 
 # ============================================================
-# CURATED FEATURE LIST — matches Boulder County parsed_permits_by_year.csv
+# CURATED FEATURE LIST — matches Boulder County data_science_input.csv
 # No IDs, no addresses, no owner names. Consistent across counties.
 # ============================================================
 

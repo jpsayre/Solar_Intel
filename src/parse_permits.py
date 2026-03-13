@@ -108,6 +108,20 @@ def run(config=None):
         output[feat] = flags_df[feat].values
     output["permit_type"] = permit_types.values
 
+    # Clean dates: parse, clamp to valid range, null out junk
+    if "issue_dt" in output.columns:
+        output["issue_dt"] = pd.to_datetime(output["issue_dt"], format="mixed", errors="coerce")
+        # 1899-12-30 is Excel's epoch for zero/null — treat as missing
+        excel_epoch = output["issue_dt"] == pd.Timestamp("1899-12-30")
+        # Future dates beyond current year are likely typos (e.g. 2098 → 1998)
+        too_far_future = output["issue_dt"].dt.year > pd.Timestamp.now().year
+        n_bad = (excel_epoch | too_far_future).sum()
+        if n_bad:
+            print(f"  Nulled {n_bad:,} bad dates (Excel epoch or future year)")
+        output.loc[excel_epoch | too_far_future, "issue_dt"] = pd.NaT
+        # Format as YYYY-MM-DD string for CSV output
+        output["issue_dt"] = output["issue_dt"].dt.strftime("%Y-%m-%d")
+
     output = output.sort_values("strap")
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)

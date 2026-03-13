@@ -17,21 +17,7 @@ python run_pipeline.py boulder_co --limit 10 --skip-api
 
 ## Pipeline Stages
 
-| # | Stage | Script | Description |
-|---|-------|--------|-------------|
-| 1 | validate | `run_pipeline.py` | Check input files exist, create output directories |
-| 2 | interest_rates | `src/interest_rates.py` | Compute average yearly mortgage interest rates |
-| 3 | filter_regrid_api | `src/InitialScript.py` | Filter Regrid parcel data, call Google Sunroof API |
-| 4 | filter_solar | `src/Analyze_ProjectSunroof_Data.py` | Filter API output by solar potential and roof orientation |
-| 5 | merge_regrid_api | `src/Combine_Regrid_ProjectSunroof_Data.py` | Merge Regrid property data with Sunroof API output |
-| 6 | roof_score | `src/roof_score.py` | Compute roof quality scores from Sunroof segment data |
-| 7 | parse_permits | `src/parse_permits.py` | Parse and classify permits into 19 binary features + permit_type |
-| 8 | census_enrichment | `src/enrich_census.py` | Geocode parcels, pull Census ACS demographics |
-| 9 | data_science_input | `src/create_data_science_input.py` | Build strap-year panel with all features and derived columns |
-| 10 | walk_forward_model | `data_science/walk_forward_modeling.py` | Walk-forward ML modeling (expanding window, multiple models) |
-| 11 | combine_ranks | `data_science/combine_regrid_model_rank.py` | Combine model scores with property data for final ranked output |
-
-## Pipeline Runner Options
+All stages are run via the pipeline runner:
 
 ```bash
 python run_pipeline.py <config_name> [options]
@@ -43,6 +29,216 @@ Options:
   --step N         Run only stage N
   --dry-run        Print stages without executing
 ```
+
+---
+
+### Stage 1) Validate
+
+Check that input files exist and create output directories.
+
+**Script:** `run_pipeline.py` (built-in)
+
+```bash
+python run_pipeline.py boulder_co --step 1
+```
+
+- **Inputs:** County config file (e.g. `configs/boulder_co.py`)
+- **Outputs:** Creates `data/{county_id}/working/` and `data/{county_id}/final/` directories
+
+---
+
+### Stage 2) Interest Rates
+
+Compute average yearly 30-year mortgage interest rates from FRED data.
+
+**Script:** `src/interest_rates.py`
+
+```bash
+python run_pipeline.py boulder_co --step 2
+```
+
+- **Inputs:** `config.mortgage_csv` (FRED MORTGAGE30US data, e.g. `data/raw/MORTGAGE30US.csv`)
+- **Outputs:** `data/{county_id}/final/avg_yearly_interest.csv` — one row per year with average rate
+- **Config:** `config.year_min`, `config.year_max` control the year range (typically 2012–2026)
+
+---
+
+### Stage 3) Filter Regrid + Sunroof API
+
+Filter Regrid parcel export to eligible homes (SFR, owner-occupied, etc.) and call Google Sunroof API for roof segment data.
+
+**Scripts:** `src/InitialScript.py`
+
+```bash
+python run_pipeline.py boulder_co --step 3
+python run_pipeline.py boulder_co --step 3 --limit 10    # limit API calls
+python run_pipeline.py boulder_co --step 3 --skip-api    # skip API, use existing data
+```
+
+- **Inputs:** `config.regrid_csv` (raw Regrid parcel export)
+- **Outputs:**
+  - `data/{county_id}/final/regrid_filtered.csv` — filtered parcels with `original_index`, one row per home
+  - `data/{county_id}/working/sunroof_api_output.csv` — raw Google Sunroof API responses (roof segments, azimuth, area, sunshine quantiles)
+- **Config:** `config.regrid_filters` (dict of filter rules: usedesc, zoning, sales_cd, mainfloorsf_min, saleprice_min, owner_occupied, calculated_build_year_min)
+- **Env:** `GOOGLE_SUNROOF_API_KEY`
+
+---
+
+### Stage 4) Filter Solar
+
+Filter Sunroof API output to homes with qualifying south/east/west-facing roof segments.
+
+**Script:** `src/Analyze_ProjectSunroof_Data.py`
+
+```bash
+python run_pipeline.py boulder_co --step 4
+```
+
+- **Inputs:** `data/{county_id}/working/sunroof_api_output.csv` (from stage 3)
+- **Outputs:** `data/{county_id}/working/filtered_api_output.csv` — homes passing solar potential thresholds, with `roof_orientation` and `solar_score`
+
+---
+
+### Stage 5) Merge Regrid + API
+
+Left join filtered Regrid property data with filtered Sunroof API output.
+
+**Script:** `src/Combine_Regrid_ProjectSunroof_Data.py`
+
+```bash
+python run_pipeline.py boulder_co --step 5
+```
+
+- **Inputs:**
+  - `data/{county_id}/final/regrid_filtered.csv` (from stage 3)
+  - `data/{county_id}/working/filtered_api_output.csv` (from stage 4)
+- **Outputs:** `data/{county_id}/working/regrid_joined_with_api.csv` — merged on `original_index`
+
+---
+
+### Stage 6) Roof Score
+
+Compute roof quality scores from Sunroof segment data (orientation, area, sunshine hours).
+
+**Script:** `src/roof_score.py`
+
+```bash
+python run_pipeline.py boulder_co --step 6
+```
+
+- **Inputs:** `data/{county_id}/working/sunroof_api_output.csv` (from stage 3)
+- **Outputs:** `data/{county_id}/final/roof_score.csv` — one row per home with `original_index` and `roof_score`
+- **Env:** `DATABASE_SOLAR_INTEL_URL` (optional, for Postgres fallback)
+
+---
+
+### Stage 7) Parse Permits
+
+Parse raw permit CSVs, normalize columns, classify each permit into 19 binary feature flags and a `permit_type` label. All classification logic lives in `src/parse_permits_features.py`.
+
+**Scripts:** `src/parse_permits.py`, `src/parse_permits_features.py`
+
+```bash
+python run_pipeline.py boulder_co --step 7
+```
+
+- **Inputs:** Raw permit CSVs from `config.permit_sources` (one or more per county, each with its own column mappings for strap, date, category, description, permit_num, valuation)
+- **Outputs:** `data/{county_id}/final/parsed_permits.csv` — one row per permit with normalized columns (`strap`, `permit_num`, `issue_dt`, `permit_category`, `description`, `estimated_value`), 19 binary feature flags, and `permit_type`
+
+**Supabase upload** (run separately after stage 7):
+
+```bash
+python scripts/upload_permits_to_supabase.py --config boulder_co --dry-run   # preview
+python scripts/upload_permits_to_supabase.py --config boulder_co --since 2024 # upload recent
+```
+
+Reads `parsed_permits.csv`, maps straps to the Supabase `homes` table, and upserts to the `permits` table. Multi-type permits (e.g. `permit_type="solar,battery"`) are expanded into separate rows with conflict key `(home_index, permit_number, permit_type)`. The Supabase table stores only `permit_type` (not the 19 binary feature columns).
+
+- **Script:** `scripts/upload_permits_to_supabase.py`
+- **Inputs:** `data/{county_id}/final/parsed_permits.csv` (from this stage)
+- **Outputs:** Upserts to Supabase `permits` table (`home_index`, `permit_number`, `permit_type`, `description`, `filed_date`, `valuation`, `location`)
+- **Env:** `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+
+---
+
+### Stage 8) Census Enrichment
+
+Geocode parcels to Census block groups via FCC API, then pull ACS 5-year demographics.
+
+**Script:** `src/enrich_census.py`
+
+```bash
+python run_pipeline.py boulder_co --step 8
+```
+
+- **Inputs:** `data/{county_id}/final/regrid_model_rank.csv` (property records with lat/lon)
+- **Outputs:**
+  - `data/{county_id}/final/strap_block_group_geocoded.csv` — parcel-to-block-group FIPS mapping
+  - `data/{county_id}/final/strap_census_lookup.csv` — Census ACS demographics per parcel (income, home value, education, housing age, etc.)
+  - `data/{county_id}/final/regrid_model_rank_census.csv` — property data merged with census
+- **Env:** `CENSUS_API_KEY` (optional but recommended; rate-limited without it)
+
+---
+
+### Stage 9) Data Science Input
+
+Build the strap-year panel: one row per home per year with 180+ features including permit flags with persistence, neighbor solar counts at multiple radii, roof age, electricity proxy, mortgage rates, and census data.
+
+**Script:** `src/create_data_science_input.py`
+
+```bash
+python run_pipeline.py boulder_co --step 9
+```
+
+- **Inputs:**
+  - `data/{county_id}/final/parsed_permits.csv` (from stage 7)
+  - `data/{county_id}/final/regrid_filtered.csv` (from stage 3)
+  - `data/{county_id}/final/roof_score.csv` (from stage 6)
+  - `data/{county_id}/final/strap_census_lookup.csv` (from stage 8)
+  - `config.electricity_csv` (electricity price by year)
+  - `data/{county_id}/final/avg_yearly_interest.csv` (from stage 2)
+- **Outputs:** `data/{county_id}/working/data_science_input.csv` — strap × year panel for ML
+- **Config:** `config.year_min`, `config.year_max`, `config.strap_column`
+
+---
+
+### Stage 10) Walk-Forward Modeling
+
+Train Lasso, Random Forest, and Gradient Boosting models using expanding-window temporal validation. Each year's model trains on all prior years and predicts the next.
+
+**Script:** `data_science/walk_forward_modeling.py`
+
+```bash
+python run_pipeline.py boulder_co --step 10
+```
+
+- **Inputs:** `data/{county_id}/working/data_science_input.csv` (from stage 9)
+- **Outputs:** Files in `data_science/output/{county_id}/walk_forward/`:
+  - `walk_forward_results.csv` — per-model, per-year predictions and metrics
+  - `straps_no_solar_as_of_{year}.csv` — homes without solar and their predicted adoption probability (the prediction target list)
+- **Config:** `config.year_min`, `config.year_max`, `config.output_dir`
+
+---
+
+### Stage 11) Combine Ranks
+
+Combine ML model scores with Regrid property data and roof scores for the final ranked output.
+
+**Script:** `data_science/combine_regrid_model_rank.py`
+
+```bash
+python run_pipeline.py boulder_co --step 11
+```
+
+- **Inputs:**
+  - `data_science/output/{county_id}/walk_forward/straps_no_solar_as_of_{year}.csv` (from stage 10)
+  - `config.regrid_csv` (raw Regrid)
+  - `data/{county_id}/final/regrid_filtered.csv` (from stage 3)
+  - `data/{county_id}/final/roof_score.csv` (from stage 6)
+- **Outputs:**
+  - `data/{county_id}/final/regrid_model_rank.csv` — every home with ML-predicted solar adoption probability and rank
+  - `data/{county_id}/final/regrid_model_rank_census.csv` — final output enriched with census demographics
+- **Config:** `config.strap_column`
 
 ## Adding a New County
 
@@ -230,23 +426,6 @@ Results saved to `data/{county_id}/validation/ai_review.csv`.
 ```bash
 python -m pytest tests/test_golden_permits.py -v
 ```
-
-## Supabase Upload
-
-Upload classified permits to Supabase (separate from the ML pipeline):
-
-```bash
-# Dry run — show stats without uploading
-python scripts/upload_permits_to_supabase.py --config boulder_co --dry-run
-
-# Upload permits from 2024 onward
-python scripts/upload_permits_to_supabase.py --config boulder_co --since 2024
-
-# List available configs
-python scripts/upload_permits_to_supabase.py --help
-```
-
-Reads `parsed_permits.csv` (output of stage 7), maps straps to Supabase `homes` table, and upserts to `permits` table. Requires `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
 
 ## Environment Variables
 

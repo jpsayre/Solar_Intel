@@ -72,7 +72,7 @@ from walk_forward_modeling import (
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_PATH = PROJECT_ROOT / "data" / "working" / "parsed_permits_by_year.csv"
+DATA_PATH = PROJECT_ROOT / "data" / "working" / "data_science_input.csv"
 AVG_YEARLY_INTEREST_PATH = PROJECT_ROOT / "data" / "final" / "avg_yearly_interest.csv"
 OUTPUT_DIR = PROJECT_ROOT / "data_science" / "output" / "tuning"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)

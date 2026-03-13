@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { buildListingCardData } from "@/lib/cardData";
@@ -108,6 +108,10 @@ const PERMIT_TAG_COLORS: Record<string, string> = {
   electrical: "bg-indigo-100 text-indigo-700",
   heat_pump: "bg-purple-100 text-purple-700",
   hvac: "bg-purple-100 text-purple-700",
+  water_heater: "bg-cyan-100 text-cyan-700",
+  generator: "bg-orange-100 text-orange-700",
+  envelope: "bg-teal-100 text-teal-700",
+  pool: "bg-sky-100 text-sky-700",
   remodel: "bg-amber-100 text-amber-700",
   construction: "bg-amber-100 text-amber-700",
   other: "bg-slate-100 text-slate-700",
@@ -123,6 +127,8 @@ const PERMIT_TYPE_LABELS: Record<string, string> = {
   hvac: "HVAC",
   water_heater: "Water Heater",
   generator: "Generator",
+  envelope: "Energy Efficiency",
+  pool: "Pool",
   remodel: "Remodel",
   construction: "Construction",
   other: "Other",
@@ -168,6 +174,20 @@ export default function HomeDetailPage() {
   const [enrichCredits, setEnrichCredits] = useState(47);
   const [permitsOpen, setPermitsOpen] = useState(false);
   const [permits, setPermits] = useState<PermitRow[]>([]);
+  const groupedPermits = useMemo(() => {
+    const groups = new Map<string, { ids: number[]; permit_number: string | null; types: string[]; description: string | null; filed_date: string; valuation: number | null }>();
+    for (const p of permits) {
+      const key = p.permit_number ?? `__id_${p.id}`;
+      const existing = groups.get(key);
+      if (existing) {
+        if (!existing.types.includes(p.permit_type)) existing.types.push(p.permit_type);
+        existing.ids.push(p.id);
+      } else {
+        groups.set(key, { ids: [p.id], permit_number: p.permit_number, types: [p.permit_type], description: p.description, filed_date: p.filed_date, valuation: p.valuation });
+      }
+    }
+    return Array.from(groups.values());
+  }, [permits]);
   const [enrichedEmail, setEnrichedEmail] = useState<{ name: string; email: string } | null>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextAutoSaveRef = useRef(true);
@@ -692,7 +712,7 @@ export default function HomeDetailPage() {
             <div className="flex items-center gap-2">
               <h2 className="text-lg font-semibold text-slate-900">Permit History</h2>
               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                {permits.length}
+                {groupedPermits.length}
               </span>
             </div>
             <svg
@@ -716,25 +736,29 @@ export default function HomeDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {permits.length === 0 ? (
+                    {groupedPermits.length === 0 ? (
                       <tr>
                         <td colSpan={5} className="py-4 text-center text-sm text-slate-400">No permits on file</td>
                       </tr>
-                    ) : permits.map((p) => {
-                      const [y, m, d] = p.filed_date.split("-");
+                    ) : groupedPermits.map((g) => {
+                      const [y, m, d] = g.filed_date.split("-");
                       const dateFormatted = `${parseInt(m)}/${parseInt(d)}/${y}`;
                       return (
-                      <tr key={p.id} className="border-b border-neutral-50">
+                      <tr key={g.ids[0]} className="border-b border-neutral-50">
                         <td className="whitespace-nowrap py-2 pr-4 text-slate-600">{dateFormatted}</td>
-                        <td className="whitespace-nowrap py-2 pr-4 text-slate-500 text-xs">{p.permit_number ?? "—"}</td>
+                        <td className="whitespace-nowrap py-2 pr-4 text-slate-500 text-xs">{g.permit_number ?? "—"}</td>
                         <td className="py-2 pr-4">
-                          <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PERMIT_TAG_COLORS[p.permit_type] ?? PERMIT_TAG_COLORS.other}`}>
-                            {PERMIT_TYPE_LABELS[p.permit_type] ?? p.permit_type}
-                          </span>
+                          <div className="flex flex-wrap gap-1">
+                            {g.types.map((t) => (
+                              <span key={t} className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${PERMIT_TAG_COLORS[t] ?? PERMIT_TAG_COLORS.other}`}>
+                                {PERMIT_TYPE_LABELS[t] ?? t}
+                              </span>
+                            ))}
+                          </div>
                         </td>
-                        <td className="py-2 pr-4 text-slate-700">{p.description ?? "—"}</td>
+                        <td className="py-2 pr-4 text-slate-700">{g.description ?? "—"}</td>
                         <td className="whitespace-nowrap py-2 text-right text-slate-600">
-                          {p.valuation != null ? `$${p.valuation.toLocaleString()}` : "—"}
+                          {g.valuation != null ? `$${g.valuation.toLocaleString()}` : "—"}
                         </td>
                       </tr>
                       );

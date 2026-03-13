@@ -44,8 +44,12 @@ def _list_available_configs() -> list[str]:
     return sorted(p.stem for p in configs_dir.glob("*.py") if not p.name.startswith("_"))
 
 
-def build_strap_lookup(location: str) -> dict[str, str]:
-    """Build strap → home_index lookup from Supabase homes table."""
+def build_strap_lookup(index_prefix: str) -> dict[str, str]:
+    """Build strap → home_index lookup from Supabase homes table.
+
+    Filters homes by index prefix (e.g. 'BOULDER_CO_') which matches the
+    config.index_prefix used when creating home records.
+    """
     from supabase import create_client
 
     url = os.environ["SUPABASE_URL"]
@@ -56,7 +60,13 @@ def build_strap_lookup(location: str) -> dict[str, str]:
     page_size = 1000
     offset = 0
     while True:
-        result = client.table("homes").select("strap, index").eq("location", location).range(offset, offset + page_size - 1).execute()
+        result = (
+            client.table("homes")
+            .select("strap, index")
+            .like("index", f"{index_prefix}%")
+            .range(offset, offset + page_size - 1)
+            .execute()
+        )
         rows = result.data or []
         for row in rows:
             if row.get("strap"):
@@ -73,11 +83,14 @@ def load_permits(permits_csv: Path, strap_to_home: dict[str, str],
     """Load parsed permits and prepare records for Supabase upsert."""
     df = pd.read_csv(permits_csv, low_memory=False)
 
-    # Parse dates
+    # Parse dates and reject out-of-range values
     df["issue_dt"] = pd.to_datetime(df["issue_dt"], format="mixed", dayfirst=False, errors="coerce")
+    current_year = pd.Timestamp.now().year
+    out_of_range = (df["issue_dt"].dt.year < 1990) | (df["issue_dt"].dt.year > current_year)
+    df.loc[out_of_range & df["issue_dt"].notna(), "issue_dt"] = pd.NaT
     bad_dates = df["issue_dt"].isna().sum()
     if bad_dates:
-        print(f"  Warning: {bad_dates} rows with unparseable dates (filed_date will be null)")
+        print(f"  Warning: {bad_dates} rows with missing/invalid dates (filed_date will be null)")
 
     if since_year:
         df = df[df["issue_dt"].isna() | (df["issue_dt"].dt.year >= since_year)]
@@ -167,9 +180,10 @@ def main():
     config = load_config(args.config)
 
     permits_csv = Path(config.parsed_permits_path)
+    index_prefix = config.index_prefix
     location = config.county_id
 
-    print(f"Location: {location}")
+    print(f"Location: {location} (index_prefix={index_prefix})")
     print(f"Permits CSV: {permits_csv}")
 
     if not permits_csv.exists():
@@ -182,7 +196,7 @@ def main():
         sys.exit(1)
 
     print("Building strap → home_index lookup from Supabase...")
-    strap_to_home = build_strap_lookup(location)
+    strap_to_home = build_strap_lookup(index_prefix)
     print(f"  {len(strap_to_home):,} straps mapped")
 
     print("Loading parsed permits...")

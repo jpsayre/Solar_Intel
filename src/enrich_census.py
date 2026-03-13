@@ -51,7 +51,7 @@ _DEFAULT_PATHS = {
     "ACS_CSV": _DATA_DIR / "acs_block_group_data.csv",
     "OUTPUT_CSV": _DATA_DIR / "Regrid_Model_Rank_Census.csv",
     "STRAP_CENSUS_LOOKUP_CSV": _DATA_DIR / "strap_census_lookup.csv",
-    "PERMITS_CSV": Path(__file__).parent.parent / "data" / "working" / "parsed_permits_by_year.csv",
+    "PERMITS_CSV": Path(__file__).parent.parent / "data" / "working" / "data_science_input.csv",
     "REGRID_CSV": _DATA_DIR / "Regrid_Model_Rank.csv",
     "STRAP_GEOCODED_CSV": _DATA_DIR / "strap_block_group_geocoded.csv",
     "STATE_FIPS": "08",
@@ -67,7 +67,7 @@ def _get_paths(config=None):
             "ACS_CSV": config.acs_csv_path,
             "OUTPUT_CSV": config.regrid_model_rank_census_path,
             "STRAP_CENSUS_LOOKUP_CSV": config.strap_census_lookup_path,
-            "PERMITS_CSV": config.parsed_permits_by_year_path,
+            "PERMITS_CSV": config.data_science_input_path,
             "REGRID_CSV": config.regrid_filtered_path,
             "STRAP_GEOCODED_CSV": config.strap_block_group_geocoded_path,
             "STATE_FIPS": config.state_fips,
@@ -370,7 +370,7 @@ def merge_and_save(input_df: pd.DataFrame, geocoded: pd.DataFrame,
 def export_strap_lookup(top_n: int | None = None, paths: dict | None = None, config=None):
     """Export a strap-level census lookup CSV for the walk-forward model.
 
-    Joins unique straps from parsed_permits_by_year.csv to Regrid (for lat/lon),
+    Joins unique straps from data_science_input.csv to Regrid (for lat/lon),
     geocodes via FCC API, merges ACS data, and writes strap_census_lookup.csv.
     """
     p = paths or _DEFAULT_PATHS

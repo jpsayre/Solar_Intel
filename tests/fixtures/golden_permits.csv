@@ -25,3 +25,17 @@ new construction,Detached Single Family Dwelling,350000,construction,addition_ne
 electrical/mechanical,Electrical service upgrade 200 amp panel,4000,electrical,electrical_service_upgrade,Boulder_CO,Electrical upgrade from description
 ,Removal and reinstall of existing 3.43 kW Solar PV,2475,solar,solar_pv,Boulder_CO,"Low value reroof-related solar, has strong keyword"
 energy efficient system,Install solar PV with EV charger Level 2,30000,"solar,ev_charger","solar_pv,ev_charger",Boulder_CO,Multi-type: both solar PV and EV charger detected independently
+energy efficient system,"Install a 5.390 kW grid tied, roof flush mounted s",16828,solar,solar_pv,Boulder_CO,Fix1: Truncated desc with kW rating in EES category = solar
+energy efficient system,Installation of 13.5kWh battery to existing 7.65kW,40000,"solar,battery","solar_pv,battery",Boulder_CO,Fix1: kWh=battery + kW=solar in EES category
+electrical/mechanical,Replace existing 125A panel with a new 125A panel.,2105,electrical,electrical_service_upgrade,Boulder_CO,Fix2: Panel replacement detected
+other,Install new 200A surface mount meter socket,3330,electrical,electrical_service_upgrade,Boulder_CO,Fix2: 200A and meter socket detected
+heating system,H/W HTR REPLACEMENT,961,water_heater,water_heater,Boulder_CO,Fix3: H/W HTR abbreviation matches water heater
+siding,,14000,envelope,windows_doors,Boulder_CO,Fix4: SIDING category with empty description → envelope
+siding,Remove wood siding and install new vinyl siding,40307,envelope,windows_doors,Boulder_CO,Fix4: Siding in both category and description
+heating system,,4485,hvac,furnace,Boulder_CO,Fix5: HEATING SYSTEM with empty description defaults to furnace
+other,gasline possible hot tub under porch.,500,other,,Boulder_CO,Fix6: Gas line mentioning hot tub should NOT be pool
+other,Hot tub wiring and outdoor outlets,4500,other,,Boulder_CO,Fix6: Wiring mentioning hot tub should NOT be pool
+other,New Single Family Residence 3893sf with a 612sf ga,350000,construction,addition_new_build,Boulder_CO,Fix7: New residence detected
+porch,ADDING 406 SQ,23804,construction,addition_new_build,Boulder_CO,"Fix7: ""adding"" + number detected as addition"
+electrical/mechanical,Finish existing walk-out basement,1000,remodel,kitchen_bath_remodel,Boulder_CO,Fix8: Flexible basement finish word order
+energy efficient system,"4.5kW roof-mounted, NO battery backup, grid-tied s",16000,solar,solar_pv,Boulder_CO,"Fix1+battery: kW solar with ""NO battery"" should NOT get battery flag"

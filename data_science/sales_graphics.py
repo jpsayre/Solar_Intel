@@ -22,7 +22,7 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = PROJECT_ROOT / "data_science" / "output" / "sales_graphics"
 METRICS_PATH = PROJECT_ROOT / "data_science" / "output" / "walk_forward" / "walk_forward_metrics.csv"
-PERMITS_PATH = PROJECT_ROOT / "data" / "working" / "parsed_permits_by_year.csv"
+PERMITS_PATH = PROJECT_ROOT / "data" / "working" / "data_science_input.csv"
 
 # Sales-friendly color palette
 ACCENT = "#f59e0b"  # Amber - primary CTA
@@ -278,7 +278,7 @@ def main() -> None:
         chart_3_market_adoption(permits_df)
         chart_7_market_penetration(permits_df)
     else:
-        print("Skipping market charts (parsed_permits_by_year.csv not found)")
+        print("Skipping market charts (data_science_input.csv not found)")
 
     print()
     print(f"Done. Graphics saved to {OUTPUT_DIR}")
