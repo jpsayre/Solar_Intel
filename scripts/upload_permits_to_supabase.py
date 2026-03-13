@@ -157,6 +157,35 @@ def upload_to_supabase(records: list[dict], batch_size: int = 500) -> None:
 
     print(f"Done. {uploaded} permit records upserted.")
 
+    # Update has_solar on homes table based on uploaded permits
+    print("Updating has_solar on homes table...")
+    # Get all home_index values that have a solar permit
+    solar_indexes = set()
+    offset = 0
+    while True:
+        result = (
+            client.table("permits")
+            .select("home_index")
+            .eq("permit_type", "solar")
+            .range(offset, offset + 999)
+            .execute()
+        )
+        rows = result.data or []
+        for row in rows:
+            solar_indexes.add(row["home_index"])
+        if len(rows) < 1000:
+            break
+        offset += 1000
+
+    # Batch update: set has_solar = true for homes with solar permits
+    updated = 0
+    batch_list = list(solar_indexes)
+    for i in range(0, len(batch_list), 100):
+        batch = batch_list[i : i + 100]
+        client.table("homes").update({"has_solar": True}).in_("index", batch).execute()
+        updated += len(batch)
+    print(f"  Set has_solar=true on {updated:,} homes.")
+
 
 def main():
     available = _list_available_configs()
