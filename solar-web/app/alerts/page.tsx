@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -10,6 +10,17 @@ type PermitAlert = {
   address: string | null;
   city: string | null;
   permit_type: "solar" | "roof" | "battery" | "ev_charger";
+  description: string | null;
+  filed_date: string;
+  valuation: number | null;
+};
+
+type GroupedAlert = {
+  ids: number[];
+  home_index: string;
+  address: string | null;
+  city: string | null;
+  types: PermitAlert["permit_type"][];
   description: string | null;
   filed_date: string;
   valuation: number | null;
@@ -68,14 +79,38 @@ export default function AlertsPage() {
     return () => { alive = false; };
   }, []);
 
-  const filtered = alerts
-    .filter((a) => filter === "all" || a.permit_type === filter)
+  const grouped = useMemo(() => {
+    const groups = new Map<string, GroupedAlert>();
+    for (const a of alerts) {
+      const key = `${a.home_index}_${a.filed_date}_${a.description ?? ""}`;
+      const existing = groups.get(key);
+      if (existing) {
+        if (!existing.types.includes(a.permit_type)) existing.types.push(a.permit_type);
+        existing.ids.push(a.id);
+      } else {
+        groups.set(key, {
+          ids: [a.id],
+          home_index: a.home_index,
+          address: a.address,
+          city: a.city,
+          types: [a.permit_type],
+          description: a.description,
+          filed_date: a.filed_date,
+          valuation: a.valuation,
+        });
+      }
+    }
+    return Array.from(groups.values());
+  }, [alerts]);
+
+  const filtered = grouped
+    .filter((g) => filter === "all" || g.types.includes(filter))
     .sort((a, b) => daysAgo(a.filed_date) - daysAgo(b.filed_date));
 
-  const solarCount = alerts.filter((a) => a.permit_type === "solar").length;
-  const roofCount = alerts.filter((a) => a.permit_type === "roof").length;
-  const batteryCount = alerts.filter((a) => a.permit_type === "battery").length;
-  const evCount = alerts.filter((a) => a.permit_type === "ev_charger").length;
+  const solarCount = grouped.filter((g) => g.types.includes("solar")).length;
+  const roofCount = grouped.filter((g) => g.types.includes("roof")).length;
+  const batteryCount = grouped.filter((g) => g.types.includes("battery")).length;
+  const evCount = grouped.filter((g) => g.types.includes("ev_charger")).length;
 
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6">
@@ -92,7 +127,7 @@ export default function AlertsPage() {
         <div className="mb-6 flex flex-wrap items-center gap-2">
           {(
             [
-              { key: "all", label: `All (${alerts.length})` },
+              { key: "all", label: `All (${grouped.length})` },
               { key: "solar", label: `Solar (${solarCount})` },
               { key: "roof", label: `Roof (${roofCount})` },
               { key: "battery", label: `Battery (${batteryCount})` },
@@ -124,22 +159,25 @@ export default function AlertsPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {filtered.map((a) => {
-              const days = daysAgo(a.filed_date);
+            {filtered.map((g) => {
+              const days = daysAgo(g.filed_date);
               return (
                 <Link
-                  key={a.id}
-                  href={`/homes/${encodeURIComponent(a.home_index)}?from=alerts`}
+                  key={g.ids[0]}
+                  href={`/homes/${encodeURIComponent(g.home_index)}?from=alerts`}
                   className="group block rounded-xl border border-neutral-200 bg-white px-5 py-4 text-inherit no-underline transition-all hover:border-slate-300 hover:shadow-md hover:shadow-slate-100/60"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${PERMIT_TAG_COLORS[a.permit_type]}`}
-                        >
-                          {PERMIT_LABELS[a.permit_type]}
-                        </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {g.types.map((t) => (
+                          <span
+                            key={t}
+                            className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${PERMIT_TAG_COLORS[t]}`}
+                          >
+                            {PERMIT_LABELS[t]}
+                          </span>
+                        ))}
                         <span className="text-xs text-slate-400">
                           {days === 0
                             ? "Today"
@@ -149,21 +187,21 @@ export default function AlertsPage() {
                         </span>
                       </div>
                       <p className="mt-1.5 text-sm font-semibold text-slate-900 group-hover:text-amber-700">
-                        {a.address ?? a.home_index}
-                        {a.city ? `, ${a.city}` : ""}
+                        {g.address ?? g.home_index}
+                        {g.city ? `, ${g.city}` : ""}
                       </p>
-                      {a.description && (
+                      {g.description && (
                         <p className="mt-0.5 text-sm text-slate-600">
-                          {a.description}
+                          {g.description}
                         </p>
                       )}
                     </div>
                     <div className="shrink-0 text-right">
                       <div className="text-sm font-semibold text-slate-900">
-                        {formatValue(a.valuation)}
+                        {formatValue(g.valuation)}
                       </div>
                       <div className="mt-0.5 text-xs text-slate-400">
-                        {a.filed_date ? (() => { const [y, m, d] = a.filed_date.split("-"); return `${parseInt(m)}/${parseInt(d)}/${y}`; })() : "N/A"}
+                        {g.filed_date ? (() => { const [y, m, d] = g.filed_date.split("-"); return `${parseInt(m)}/${parseInt(d)}/${y}`; })() : "N/A"}
                       </div>
                     </div>
                   </div>
