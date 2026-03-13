@@ -3,12 +3,9 @@
 import { useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
-const CATEGORIES = [
-  { value: "permit_issue", label: "Permit issue" },
-  { value: "solar_status", label: "Solar status" },
-  { value: "image_issue", label: "Image issue" },
-  { value: "home_info", label: "Home info" },
-  { value: "other", label: "Other" },
+const SOLAR_OPTIONS = [
+  { value: "has_solar", label: "Property has solar panels" },
+  { value: "no_solar", label: "Property does not have solar panels" },
 ] as const;
 
 type Props = {
@@ -17,8 +14,9 @@ type Props = {
 };
 
 export default function ReportIssueModal({ homeIndex, onClose }: Props) {
-  const [category, setCategory] = useState<string>(CATEGORIES[0].value);
-  const [description, setDescription] = useState("");
+  const [category] = useState("solar_status");
+  const [solarChoice, setSolarChoice] = useState<string>(SOLAR_OPTIONS[0].value);
+
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +31,9 @@ export default function ReportIssueModal({ homeIndex, onClose }: Props) {
     const { error: insertErr } = await supabaseBrowser.from("home_issues").insert({
       home_index: homeIndex,
       category,
-      description: description.trim() || null,
+      description: solarChoice === "has_solar"
+        ? "Property has solar panels"
+        : "Property does not have solar panels",
       user_id: userId,
     });
 
@@ -70,33 +70,28 @@ export default function ReportIssueModal({ homeIndex, onClose }: Props) {
             <h3 className="text-lg font-semibold text-slate-900">Report an issue</h3>
             <p className="mt-0.5 text-xs text-slate-400">{homeIndex}</p>
 
-            <label className="mt-4 block">
-              <span className="text-sm font-medium text-slate-700">Category</span>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="mt-1 block w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="mt-3 block">
-              <span className="text-sm font-medium text-slate-700">
-                Description <span className="font-normal text-slate-400">(optional)</span>
-              </span>
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={3}
-                placeholder="What looks wrong?"
-                className="mt-1 block w-full rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-              />
-            </label>
+            <div className="mt-4 space-y-2">
+              {SOLAR_OPTIONS.map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`flex cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm transition-colors ${
+                    solarChoice === opt.value
+                      ? "border-amber-400 bg-amber-50 text-slate-900"
+                      : "border-neutral-200 text-slate-600 hover:border-neutral-300"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="solar_status"
+                    value={opt.value}
+                    checked={solarChoice === opt.value}
+                    onChange={(e) => setSolarChoice(e.target.value)}
+                    className="accent-amber-500"
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
 
             {error && (
               <p className="mt-2 text-sm text-red-600">{error}</p>
