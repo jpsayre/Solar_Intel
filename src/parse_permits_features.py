@@ -33,7 +33,7 @@ DESC_PATTERNS = {
     # Solar PV - exclude solar thermal / solar water heater
     "solar_pv": (
         r"\b(?:solar\s*(?:pv|panel|array|system|installation|mount)|pv\s*(?:solar|system|array)|"
-        r"photovoltaic|photo\-voltaic|solar\s*electric)\b"
+        r"photov\w*|photo\-voltaic|solar\s*electric|grid[\s\-]*tie[d]?)\b"
     ),
     # When solar thermal is suspected, solar_pv requires explicit "pv" or "photovoltaic"
     "solar_thermal_suspected": (
@@ -41,7 +41,7 @@ DESC_PATTERNS = {
         r"solar\s*thermal|solar\s*hot\s*water|solar\s*heating|"
         r"thermal\s*panel|thermal\s*collector|solar\s*thermal\s*panel"
     ),
-    "solar_pv_requires_pv": r"\b(?:pv|photovoltaic|photo\-voltaic)\b",
+    "solar_pv_requires_pv": r"\b(?:pv|photov\w*|photo\-voltaic)\b",
 
     # Battery / storage
     "battery": r"\b(?:powerwall|battery|batteries|energy\s*storage|ess|bms)\b|inverter[\s\-]*batt",
@@ -160,15 +160,16 @@ def compute_features(df: pd.DataFrame, estimated_value: pd.Series | None = None)
         DESC_PATTERNS["solar_pv_requires_pv"], regex=True, na=False
     )
     # kW (power rating) = solar; kWh (energy capacity) = battery.
-    # Many Boulder descriptions are truncated before "solar"/"pv" appears,
-    # but ENERGY EFFICIENT SYSTEM + kW rating is a strong solar signal.
-    has_kw_not_kwh = text.str.contains(r"\d+\.?\d*\s*kw(?!h)\b", regex=True, na=False)
+    # A permit with a kW power rating (not kWh) is almost certainly solar PV,
+    # unless it's a generator. Many descriptions are truncated before "solar"/"pv".
+    has_kw_not_kwh = text.str.contains(r"\d+\.?\d*\s*kw(?!h)", regex=True, na=False)
+    is_generator = text.str.contains(DESC_PATTERNS["generator"], regex=True, na=False)
     solar_pv_raw = (
         _cat_matches(cat, ["energy efficient system"]) & (
             text.str.contains("solar|pv|photovoltaic", regex=True, na=False)
             | has_kw_not_kwh
         )
-    ) | _desc_matches(text, DESC_PATTERNS["solar_pv"])
+    ) | _desc_matches(text, DESC_PATTERNS["solar_pv"]) | (has_kw_not_kwh & ~is_generator)
     features["solar_pv"] = solar_pv_raw & (
         ~solar_thermal_suspected | has_pv_or_photovoltaic
     )
