@@ -42,6 +42,8 @@ CONFIG = {
             "date_column": "issue_date",
             "category_column": "permit_type",
             "description_column": "work_description",
+            "permit_num_column": "permit_no",
+            "valuation_column": "job_value",
         },
         {
             "csv": "data/raw/scottsdale_permits.csv",
@@ -50,6 +52,8 @@ CONFIG = {
             "date_column": "issued",
             "category_column": "category",
             "description_column": "description",
+            "permit_num_column": "permit_num",
+            "valuation_column": "estimated_value",
         },
     ],
 
@@ -121,9 +125,9 @@ python run_pipeline.py maricopa_az
 | 4 | filter_solar | Filters API output by solar potential |
 | 5 | merge_regrid_api | Merges Regrid with Sunroof API output |
 | 6 | roof_score | Computes roof scores from Sunroof data |
-| 7 | parse_permits | Parses all permit sources into binary features |
+| 7 | parse_permits | Classifies permits into 19 binary features + permit_type |
 | 8 | census_enrichment | Adds Census ACS demographic data |
-| 9 | permits_by_year | Aggregates permits by strap-year with derived features |
+| 9 | data_science_input | Aggregates permits by strap-year with derived features |
 | 10 | walk_forward_model | Walk-forward ML modeling |
 | 11 | combine_ranks | Produces final ranked output |
 
@@ -139,9 +143,46 @@ python run_pipeline.py maricopa_az --start-from 7
 python run_pipeline.py maricopa_az --step 8
 ```
 
-## 6. Output
+## 6. Validate Permit Classification
+
+After running the pipeline (or at least stage 7), validate that permit classification is working for your county's data:
+
+```bash
+# Statistical report: category coverage, type distribution, duplicates, valuation stats
+python scripts/validate_permits.py --config maricopa_az
+
+# AI cross-check: GPT-4o-mini independently classifies a sample and flags disagreements
+python scripts/validate_permits_ai.py --config maricopa_az
+
+# Check just the "other" permits (fastest way to find missing patterns)
+python scripts/validate_permits_ai.py --config maricopa_az --other-only
+```
+
+### What to check
+
+1. **"other" rate** — if >50% of permits are "other", the classification patterns don't cover your county's terminology well
+2. **Category coverage** — look at unmatched categories with >50 permits. These may need new entries in `CATEGORY_MATCHES` in `src/parse_permits_features.py`
+3. **AI disagreements** — review high-confidence disagreements first. If the AI is right and rules are wrong, add the edge case to `tests/fixtures/golden_permits.csv` and update patterns
+4. **Cross-strap duplicates** — specific descriptions (>30 chars) appearing on >2 different straps may indicate a parsing bug in the source data
+
+### Iteration cycle
+
+1. Run `validate_permits.py` → review "Other Analysis" section
+2. Add new patterns to `src/parse_permits_features.py` (`CATEGORY_MATCHES` or `DESC_PATTERNS`)
+3. Re-run `parse_permits.py --config your_county` + `validate_permits.py --config your_county`
+4. Repeat until "other" rate < 30% and AI agreement > 85%
+5. Add interesting edge cases to `tests/fixtures/golden_permits.csv`
+6. Run `pytest tests/test_golden_permits.py` to make sure nothing broke
+
+### Validation output
+
+- `data/{county_id}/validation/baseline_distribution.json` — permit_type distribution baseline (future runs compare against this)
+- `data/{county_id}/validation/ai_review.csv` — full AI cross-check results with reasoning
+
+## 7. Output
 
 Results are saved to:
+
 - `data/{county_id}/final/` -- intermediate outputs (filtered regrid, parsed permits, etc.)
 - `data/{county_id}/working/` -- working files (API output, permit aggregation)
 - `data_science/output/{county_id}/walk_forward/` -- ML model output
@@ -151,6 +192,8 @@ Results are saved to:
 
 - `GOOGLE_SUNROOF_API_KEY` -- required for stage 3 (Sunroof API calls)
 - `CENSUS_API_KEY` -- required for stage 8 (Census ACS data)
+- `OPEN_AI_API_KEY` -- required for AI permit validation cross-check
+- `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` -- required for permit upload to Supabase
 - `DATABASE_SOLAR_INTEL_URL` -- optional Postgres connection for roof score storage
 
 ## Troubleshooting

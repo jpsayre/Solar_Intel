@@ -1,8 +1,11 @@
 """
-Feature logic for permit parsing. Uses both permit_category and description
-to classify permits. Designed for predicting solar panel sales.
+Feature logic for permit parsing. Uses permit_category, description, and
+estimated_value to classify permits. Designed for predicting solar panel sales.
+
+All classification logic lives here — no other script should duplicate it.
 """
 
+import numpy as np
 import pandas as pd
 
 # ============================================================
@@ -92,10 +95,15 @@ DESC_PATTERNS = {
     "addition_new_build": (
         r"\b(?:addition|new\s*construction|new\s*build|adu|accessory\s*dwelling)\b"
     ),
-    "kitchen_bath_remodel": r"\b(?:kitchen|bath(?:room)?|remodel|renovation)\b",
+    "kitchen_bath_remodel": r"\b(?:kitchen|bath(?:room)?|remodel|renovation|basement\s*finish)\b",
     "pool_hot_tub": r"\b(pool|hot\s*tub|spa)\b",
     "evaporative_cooler": r"\b(?:evaporative\s*cooler|swamp\s*cooler)\b",
 }
+
+# Valuation threshold: solar permits below this amount with only weak keyword
+# matches are likely not actual solar installations (e.g. "roof mounted" antenna)
+SOLAR_MIN_VALUATION = 3000
+SOLAR_STRONG_KEYWORDS = ["solar", "photovoltaic", "pv system", "pv array", "pv install"]
 
 
 def _cat_matches(cat: pd.Series, keywords: list) -> pd.Series:
@@ -115,9 +123,15 @@ def _desc_matches(text: pd.Series, pattern: str, exclude: str | None = None) -> 
     return match
 
 
-def compute_features(df: pd.DataFrame) -> pd.DataFrame:
+def compute_features(df: pd.DataFrame, estimated_value: pd.Series | None = None) -> pd.DataFrame:
     """
     Compute all feature flags from permit data.
+
+    Args:
+        df: DataFrame with columns: strap, permit_category, description
+        estimated_value: Optional Series of dollar amounts for valuation sanity checks.
+            If provided, solar permits below $3k without strong keywords get solar_pv=0.
+
     Returns a DataFrame with strap + feature columns (0/1).
     """
     df = df.copy()
@@ -152,9 +166,18 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     # --- EV charger
     features["ev_charger"] = _desc_matches(text, DESC_PATTERNS["ev_charger"])
 
-    # If EV charger or battery is detected, remove solar_pv flag
-    # (e.g. category="Solar" but description="level 2 charger for EV")
-    features["solar_pv"] = features["solar_pv"] & ~features["ev_charger"] & ~features["battery"]
+    # Note: solar_pv, battery, and ev_charger are independent — a single permit
+    # can have multiple features (e.g. solar PV + battery storage install).
+
+    # Valuation sanity check: solar permits < $3k without strong keywords are suspect
+    # (e.g. "roof mounted" for an antenna, not a solar panel)
+    if estimated_value is not None:
+        val = pd.to_numeric(estimated_value, errors="coerce")
+        has_strong_kw = pd.Series(False, index=df.index)
+        for kw in SOLAR_STRONG_KEYWORDS:
+            has_strong_kw = has_strong_kw | text.str.contains(kw, regex=False, na=False)
+        low_val_weak_kw = (val < SOLAR_MIN_VALUATION) & val.notna() & ~has_strong_kw
+        features["solar_pv"] = features["solar_pv"] & ~low_val_weak_kw
 
     # --- Roof
     features["roof_new_or_replace"] = (
@@ -222,6 +245,37 @@ def compute_features(df: pd.DataFrame) -> pd.DataFrame:
     result.insert(0, "strap", df["strap"].values)
 
     return result
+
+
+def classify_permit_type(row: dict) -> str:
+    """Map binary feature flags to permit_type string(s).
+
+    A single permit can match multiple types (e.g. "solar,battery" for a
+    combined solar PV + battery storage install). Returns comma-separated
+    string of all matching types. Returns "other" only if nothing matched.
+
+    Called AFTER compute_features() — reads its output, does not re-parse text.
+    """
+    types = []
+    if row.get("solar_pv"):             types.append("solar")
+    if row.get("battery"):              types.append("battery")
+    if row.get("ev_charger"):           types.append("ev_charger")
+    if row.get("heat_pump"):            types.append("heat_pump")
+    if row.get("generator"):            types.append("generator")
+    if row.get("roof_new_or_replace"):  types.append("roof")
+    if row.get("ac") or row.get("furnace") or row.get("evaporative_cooler"):
+        types.append("hvac")
+    if row.get("electrical_service_upgrade"):
+        types.append("electrical")
+    if any(row.get(c) for c in ("water_heater", "water_heater_electric",
+                                 "water_heater_gas", "water_heater_solar_thermal")):
+        types.append("water_heater")
+    if row.get("addition_new_build"):   types.append("construction")
+    if row.get("kitchen_bath_remodel"): types.append("remodel")
+    if row.get("windows_doors") or row.get("insulation_airseal"):
+        types.append("envelope")
+    if row.get("pool_hot_tub"):         types.append("pool")
+    return ",".join(types) if types else "other"
 
 
 def get_feature_names() -> list[str]:

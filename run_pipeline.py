@@ -106,8 +106,8 @@ def run_stage(stage_num, config, skip_api=False, limit=None):
         enrich_census.run(config)
 
     elif stage_num == 9:
-        import create_parsed_permits_by_year
-        create_parsed_permits_by_year.run(config)
+        import create_data_science_input
+        create_data_science_input.run(config)
 
     elif stage_num == 10:
         import walk_forward_modeling

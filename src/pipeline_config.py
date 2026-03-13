@@ -37,6 +37,8 @@ class PermitSource:
     date_column: str = "issue_dt"           # permit date column
     category_column: str = "permit_category"  # permit category/type column (optional)
     description_column: str = "description"  # permit description column
+    permit_num_column: str = "permit_num"    # permit number column
+    valuation_column: str = "estimated_value"  # dollar amount column
 
     def __post_init__(self):
         self.csv = str(_resolve_path(self.csv))
@@ -184,7 +186,12 @@ class CountyConfig:
 
     @property
     def parsed_permits_by_year_path(self) -> Path:
-        return self.working_dir / "parsed_permits_by_year.csv"
+        """Backward compat alias."""
+        return self.data_science_input_path
+
+    @property
+    def data_science_input_path(self) -> Path:
+        return self.working_dir / "data_science_input.csv"
 
     @property
     def roof_score_path(self) -> Path:

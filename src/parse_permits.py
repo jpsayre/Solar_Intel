@@ -1,14 +1,29 @@
+"""
+Parse raw permit CSVs into classified permit records.
+
+Reads raw permit files from any county/city (via config permit_sources),
+normalizes columns, classifies each permit using category + description + valuation,
+and outputs a single row-level file with 19 binary features and a permit_type label.
+
+Usage:
+    python src/parse_permits.py --config boulder_co
+
+Output: parsed_permits.csv (one row per permit)
+    strap, permit_num, issue_dt, permit_category, description, estimated_value,
+    _source, [19 binary features], permit_type
+"""
+
 import pandas as pd
 from pathlib import Path
 
-from parse_permits_features import compute_features, get_feature_names
+from parse_permits_features import compute_features, classify_permit_type, get_feature_names
 
 
 def _load_permit_source(source):
     """Load a single PermitSource and normalize column names.
 
-    Returns a DataFrame with standardized columns: strap, permit_category,
-    description, and the original date column renamed to issue_dt.
+    Returns a DataFrame with standardized columns: strap, permit_num, issue_dt,
+    permit_category, description, estimated_value, _source.
     """
     df = pd.read_csv(source.csv)
 
@@ -21,11 +36,16 @@ def _load_permit_source(source):
         rename_map[source.description_column] = "description"
     if source.date_column != "issue_dt":
         rename_map[source.date_column] = "issue_dt"
+    if source.permit_num_column != "permit_num":
+        rename_map[source.permit_num_column] = "permit_num"
+    if source.valuation_column != "estimated_value":
+        rename_map[source.valuation_column] = "estimated_value"
     if rename_map:
         df = df.rename(columns=rename_map)
 
-    # Keep only the columns we need (source may have extras)
-    keep = [c for c in ["strap", "permit_category", "description", "issue_dt"] if c in df.columns]
+    # Keep all columns we need for output
+    keep = [c for c in ["strap", "permit_num", "issue_dt", "permit_category",
+                         "description", "estimated_value"] if c in df.columns]
     df = df[keep].copy()
 
     # Clean strap: drop nulls, convert float->int->str for consistent matching
@@ -40,10 +60,10 @@ def _load_permit_source(source):
 
 
 def run(config=None):
-    """Parse permit records into binary feature columns.
+    """Parse permit records into classified rows with binary features and permit_type.
 
     Loads all permit sources from config, normalizes columns, concatenates,
-    then extracts binary features per strap.
+    then classifies each permit row.
 
     Args:
         config: CountyConfig object. If None, uses legacy hardcoded paths.
@@ -72,26 +92,39 @@ def run(config=None):
     if missing:
         raise ValueError(f"Missing required columns: {missing}")
 
-    flags_df = compute_features(df)
+    # Classify: compute 19 binary features (with valuation sanity checks)
+    valuation = df["estimated_value"] if "estimated_value" in df.columns else None
+    flags_df = compute_features(df, estimated_value=valuation)
 
-    # Preserve issue_dt for downstream year-based aggregation
-    feature_cols = get_feature_names()
-    if "issue_dt" in df.columns:
-        flags_df["issue_dt"] = df["issue_dt"].values
-        output_cols = ["strap", "issue_dt"] + feature_cols
-    else:
-        output_cols = ["strap"] + feature_cols
+    # Add permit_type from binary flags
+    feature_names = get_feature_names()
+    permit_types = flags_df[feature_names].apply(
+        lambda row: classify_permit_type(row.to_dict()), axis=1
+    )
 
-    production = flags_df[output_cols].sort_values("strap")
+    # Build output: original columns + binary features + permit_type
+    output = df.copy()
+    for feat in feature_names:
+        output[feat] = flags_df[feat].values
+    output["permit_type"] = permit_types.values
+
+    output = output.sort_values("strap")
 
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    production.to_csv(output_path, index=False)
+    output.to_csv(output_path, index=False)
 
-    n_straps = production["strap"].nunique()
+    n_straps = output["strap"].nunique()
     print(f"Saved parsed permits to: {output_path}")
-    print(f"Total permits: {len(production):,} across {n_straps:,} properties")
-    print(f"Columns: strap + issue_dt + {len(feature_cols)} binary features")
-    return production
+    print(f"Total permits: {len(output):,} across {n_straps:,} properties")
+    print(f"Columns: {list(output.columns)}")
+
+    # permit_type distribution
+    type_counts = output["permit_type"].value_counts()
+    print(f"\npermit_type distribution:")
+    for ptype, count in type_counts.items():
+        print(f"  {ptype}: {count:,}")
+
+    return output
 
 
 if __name__ == "__main__":

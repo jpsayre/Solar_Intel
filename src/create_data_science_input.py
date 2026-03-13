@@ -1,17 +1,19 @@
 """
-Create parsed_permits_by_year.csv from parsed_permits_test.csv.
-Aggregates permits by strap and year, taking max of each binary column per year.
-Fills missing years (2012-2026) per strap with 0s.
-Applies configurable persistence: each column can persist for N years (e.g. solar ~25yr, roof ~7yr).
-Filters to straps in data/final/regrid_filtered.csv (alt_parcelnumb1 = strap).
-Computes neighbors_w_solar by year at radii 3, 1, 0.5, 0.25, 0.1, 0.05 miles.
-Computes last_year_neighbors_w_solar (neighbors who had solar in prev year) at 0.05, 0.1, 0.25, 0.5, 1.0 mi.
-Computes closest_fifty_percentage: % of 50 nearest neighbors with solar (year-aware).
-Joins roof_score. Adds calculated_roof_age (time-aware, permit-aware: year - build_year, resets to 0 when roof permit pulled),
-time_since_sale, time_since_build, recent_build, recent_purchase,
-electricity_use_proxy (area × load factors: electric heat, AC, pool, EV, battery, etc.),
-likely_mortgage_rate (time-aware: starts 2012, drops when rate falls >0.75 pct, resets on sale year),
-solar_next_year.
+Create data_science_input.csv from parsed_permits.csv.
+
+Builds a strap × year panel for ML modeling:
+- Aggregates permits by strap and year (max of each binary column per year)
+- Fills missing years (2012-2026) per strap with 0s
+- Applies configurable persistence (e.g. solar ~25yr, roof ~7yr)
+- Computes spatial neighbor features (BallTree at multiple radii)
+- Joins regrid, census, roof_score, electricity, interest rate data
+- Adds derived features: calculated_roof_age, electricity_use_proxy, likely_mortgage_rate, etc.
+
+Usage:
+    python src/create_data_science_input.py --config boulder_co
+
+Input:  parsed_permits.csv (from parse_permits.py)
+Output: data_science_input.csv (one row per strap × year)
 """
 
 import re
@@ -25,8 +27,8 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 # Default paths (used when no config provided)
 _DEFAULTS = {
-    "INPUT_PATH": _PROJECT_ROOT / "data" / "working" / "parsed_permits_test.csv",
-    "OUTPUT_PATH": _PROJECT_ROOT / "data" / "working" / "parsed_permits_by_year.csv",
+    "INPUT_PATH": _PROJECT_ROOT / "data" / "final" / "parsed_permits.csv",
+    "OUTPUT_PATH": _PROJECT_ROOT / "data" / "working" / "data_science_input.csv",
     "REGRID_FILTERED_PATH": _PROJECT_ROOT / "data" / "final" / "regrid_filtered.csv",
     "ROOF_SCORE_PATH": _PROJECT_ROOT / "data" / "final" / "roof_score.csv",
     "STRAP_CENSUS_LOOKUP_PATH": _PROJECT_ROOT / "data" / "final" / "strap_census_lookup.csv",
@@ -39,9 +41,9 @@ _DEFAULTS = {
 
 def _get_paths(config=None):
     if config:
-        return {
+        paths = {
             "INPUT_PATH": config.parsed_permits_path,
-            "OUTPUT_PATH": config.parsed_permits_by_year_path,
+            "OUTPUT_PATH": config.data_science_input_path,
             "REGRID_FILTERED_PATH": config.regrid_filtered_path,
             "ROOF_SCORE_PATH": config.roof_score_path,
             "STRAP_CENSUS_LOOKUP_PATH": config.strap_census_lookup_path,
@@ -50,6 +52,13 @@ def _get_paths(config=None):
             "YEAR_MIN": config.year_min,
             "YEAR_MAX": config.year_max,
         }
+        # Interest rates are national (FRED), not county-specific — fall back to shared path
+        if not Path(paths["AVG_YEARLY_INTEREST_PATH"]).exists():
+            shared = Path(__file__).resolve().parents[1] / "data" / "final" / "avg_yearly_interest.csv"
+            if shared.exists():
+                paths["AVG_YEARLY_INTEREST_PATH"] = shared
+                print(f"Note: using shared interest rate file at {shared}")
+        return paths
     return _DEFAULTS
 
 # Allowlist: only these Regrid columns are joined into the strap-year panel.
@@ -67,7 +76,7 @@ REGRID_ALLOW_COLUMNS = [
     "acdscr",               # AC description (Boulder-specific, may be missing)
     "heatingdscr",          # heating description (Boulder-specific, may be missing)
     "mainfloorsf",          # main floor sqft (Boulder-specific, may be missing)
-    "calculated_build_year",
+    "year_built_effective_date",  # used with yearbuilt to derive calculated_build_year
 ]
 
 RECENT_YEARS = 3  # <5 years for recent_rebuild, recent_purchase
@@ -177,27 +186,8 @@ def _parse_sale_year(s: pd.Series) -> pd.Series:
     return s.map(one)
 
 
-BINARY_COLUMNS = [
-    "solar_pv",
-    "battery",
-    "ev_charger",
-    "roof_new_or_replace",
-    "electrical_service_upgrade",
-    "heat_pump",
-    "ac",
-    "furnace",
-    "water_heater",
-    "water_heater_electric",
-    "water_heater_gas",
-    "water_heater_solar_thermal",
-    "windows_doors",
-    "insulation_airseal",
-    "generator",
-    "addition_new_build",
-    "kitchen_bath_remodel",
-    "pool_hot_tub",
-    "evaporative_cooler",
-]
+from parse_permits_features import get_feature_names
+BINARY_COLUMNS = get_feature_names()
 
 
 def main(config=None):
@@ -431,6 +421,13 @@ def main(config=None):
     regrid_join = regrid[regrid_keep]
     result = result.merge(regrid_join, on="strap", how="left")
     print(f"Joined regrid_filtered ({len(regrid_keep)} allowlisted columns)")
+
+    # Derive calculated_build_year = max(yearbuilt, year_built_effective_date)
+    if "yearbuilt" in result.columns:
+        yb = pd.to_numeric(result["yearbuilt"], errors="coerce")
+        ybe = pd.to_numeric(result.get("year_built_effective_date", np.nan), errors="coerce")
+        result["calculated_build_year"] = pd.concat([yb, ybe], axis=1).max(axis=1)
+        print(f"Derived calculated_build_year from yearbuilt + year_built_effective_date")
 
     # Join census demographics (static per strap, from enrich_census.py --export-strap-lookup)
     if Path(p["STRAP_CENSUS_LOOKUP_PATH"]).exists():

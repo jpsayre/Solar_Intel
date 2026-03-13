@@ -1,0 +1,27 @@
+permit_category,description,estimated_value,expected_permit_type,expected_features,source_county,notes
+energy efficient system,Install solar PV panel array 8.5kW,25000,solar,solar_pv,Boulder_CO,Standard solar install
+energy efficient system,Install solar water heater thermal system,8000,water_heater,"water_heater,water_heater_solar_thermal",Boulder_CO,Solar thermal should NOT be solar_pv
+energy efficient system,,5000,other,,Boulder_CO,Category matches solar but no description to confirm
+electrical/mechanical,Install Level 2 EV charger in garage,1200,ev_charger,ev_charger,Boulder_CO,EV charger via electrical category
+electrical/mechanical,Tesla Powerwall battery storage installation,15000,battery,battery,Boulder_CO,Battery storage
+re-roof,Tear off and reroof,9500,roof,roof_new_or_replace,Boulder_CO,Standard reroof
+residential re-roof,TOTAL TEAR-OFF AND REROOF WITH ASPHALT SHINGLES,9600,roof,roof_new_or_replace,Boulder_CO,Category and description both match roof
+water heater,Replace gas water heater 50 gal,2500,water_heater,"water_heater,water_heater_gas",Boulder_CO,Gas water heater subtype
+water heater,Install heat pump water heater HPWH,3500,water_heater,"water_heater,water_heater_electric",Boulder_CO,HPWH should be water_heater not heat_pump
+air conditioner,Installing new Gibson air conditioner 13 SEER,3504,hvac,ac,Boulder_CO,AC from category
+heating system,Replace furnace,5000,hvac,furnace,Boulder_CO,Furnace from heating system category + description
+,Install mini split heat pump HVAC system,12000,heat_pump,heat_pump,Boulder_CO,Heat pump with no category
+energy efficient system,Install 10kW solar PV system with Powerwall battery,45000,"solar,battery","solar_pv,battery",Boulder_CO,Multi-type: both solar PV and battery detected independently
+energy efficient system,Solar PV 6.5kW roof mount,500,solar,solar_pv,Boulder_CO,"Low valuation but ""solar"" is a strong keyword so sanity check keeps it"
+energy efficient system,Solar panel installation 7.2kW,2500,solar,solar_pv,Boulder_CO,"Low value but has strong keyword ""solar panel"""
+other,Residential Fence,3000,other,,Boulder_CO,Correctly classified as other
+remodel,Kitchen remodel and new cabinets,25000,remodel,kitchen_bath_remodel,Boulder_CO,Remodel from category and description
+new construction,Detached Single Family Dwelling,350000,construction,addition_new_build,Boulder_CO,New construction
+,Install backup generator 22kW,8500,generator,generator,Boulder_CO,Generator from description only
+,Replace windows like for like with retrofit vinyl windows,5000,envelope,windows_doors,Boulder_CO,Windows from description
+,Attic insulation R-38 blown-in,2000,envelope,insulation_airseal,Boulder_CO,Insulation from description
+,Install pool and equipment,45000,pool,pool_hot_tub,Boulder_CO,Pool from description
+,Replace evaporative cooler,3000,hvac,evaporative_cooler,Boulder_CO,Evap cooler from description
+electrical/mechanical,Electrical service upgrade 200 amp panel,4000,electrical,electrical_service_upgrade,Boulder_CO,Electrical upgrade from description
+,Removal and reinstall of existing 3.43 kW Solar PV,2475,solar,solar_pv,Boulder_CO,"Low value reroof-related solar, has strong keyword"
+energy efficient system,Install solar PV with EV charger Level 2,30000,"solar,ev_charger","solar_pv,ev_charger",Boulder_CO,Multi-type: both solar PV and EV charger detected independently

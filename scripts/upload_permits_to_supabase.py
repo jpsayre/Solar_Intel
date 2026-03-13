@@ -2,18 +2,20 @@
 """
 Upload permit data to the Supabase `permits` table.
 
-Reads raw Permits.csv (with descriptions and valuations), maps strap → home_index
-via the Regrid joined file, classifies permit types from permit_category, and
-upserts into Supabase.
+Reads parsed_permits.csv (already classified by parse_permits.py), maps
+strap → home_index via Supabase homes table, and upserts into Supabase.
 
 Environment variables (set in .env or os env):
   SUPABASE_URL             - Supabase project URL
   SUPABASE_SERVICE_ROLE_KEY - Service role key (bypasses RLS for writes)
 
 Usage:
-  python scripts/upload_permits_to_supabase.py                # upload all matched permits
-  python scripts/upload_permits_to_supabase.py --since 2024   # only permits from 2024+
-  python scripts/upload_permits_to_supabase.py --dry-run      # preview without uploading
+  python scripts/upload_permits_to_supabase.py --config boulder_co
+  python scripts/upload_permits_to_supabase.py --config san_diego_ca --since 2024
+  python scripts/upload_permits_to_supabase.py --config boulder_co --dry-run
+
+Available configs: see configs/*.py (e.g. boulder_co, san_diego_ca)
+Or pass a path: --config path/to/my_config.py
 """
 
 from __future__ import annotations
@@ -33,98 +35,17 @@ try:
 except ImportError:
     pass
 
-# ---------------------------------------------------------------------------
-# Config per county: paths and index prefix
-# ---------------------------------------------------------------------------
-COUNTY_CONFIGS = {
-    "boulder_co": {
-        "permits_csv": PROJECT_ROOT / "data" / "raw" / "Boulder_CO_Permits_3_11_26.csv",
-        "county_name": "Boulder",
-    },
-}
 
-# permit_category → standardized permit_type
-# Categories not listed here default to "other"
-CATEGORY_TO_TYPE = {
-    "RESIDENTIAL RE-ROOF": "roof",
-    "COMMERCIAL RE-ROOF": "roof",
-    "AIR CONDITIONER": "hvac",
-    "HEATING SYSTEM": "hvac",
-    "EVAPORATIVE COOLER": "hvac",
-    "ENERGY EFFICIENT SYSTEM": "other",  # description keywords will catch actual solar
-    "ELECTRICAL/MECHANICAL": "electrical",
-    "WATER HEATER": "water_heater",
-    "REMODEL": "remodel",
-    "BATHROOM": "remodel",
-    "BASEMENT FINISH": "remodel",
-    "ADDITION": "construction",
-    "NEW CONSTRUCTION": "construction",
-    "GARAGE": "construction",
-    "DECK": "construction",
-    "PORCH": "construction",
-    "ENCLOSED PORCH": "construction",
-    "OUTBUILDING OR SHED": "construction",
-    "BARN": "construction",
-    "WINDOWS OR DOORS": "other",
-    "FENCE": "other",
-    "SIDING": "other",
-    "DEMOLITION": "other",
-    "SEWER REPAIR": "other",
-    "REPAIRS GENERAL": "other",
-    "REPAIRS FIRE": "other",
-    "REPAIRS STRUCTURAL": "other",
-    "POOL": "other",
-    "HOT TUB/SPA": "other",
-    "RETAINING WALL": "other",
-    "GAS FIREPLACE": "other",
-    "WOOD FIREPLACE": "other",
-    "FIRE SPRINKLER": "other",
-    "OTHER": "other",
-}
-
-# Keywords in description to refine classification beyond category
-DESCRIPTION_OVERRIDES = [
-    # EV charger — check BEFORE solar (category "ENERGY EFFICIENT SYSTEM" is often solar,
-    # but description may say "level 2 charger for EV")
-    ("ev charger", "ev_charger"),
-    ("ev charging", "ev_charger"),
-    ("electric vehicle", "ev_charger"),
-    ("chargepoint", "ev_charger"),
-    ("wallbox", "ev_charger"),
-    ("level 2 charg", "ev_charger"),
-    ("level 2 ev", "ev_charger"),
-    ("evse", "ev_charger"),
-    ("charger for ev", "ev_charger"),
-    # Battery — check BEFORE solar
-    ("battery", "battery"),
-    ("powerwall", "battery"),
-    ("energy storage", "battery"),
-    # Solar — description must contain solar-specific terms
-    ("solar", "solar"),
-    ("photovoltaic", "solar"),
-    (" pv ", "solar"),
-    ("pv system", "solar"),
-    ("pv array", "solar"),
-    ("pv install", "solar"),
-    ("grid-tied", "solar"),
-    ("grid tied", "solar"),
-    ("grid-tie", "solar"),
-    ("grid tie", "solar"),
-    # Other
-    ("heat pump", "heat_pump"),
-    ("mini-split", "heat_pump"),
-    ("mini split", "heat_pump"),
-    ("generator", "generator"),
-]
+def _list_available_configs() -> list[str]:
+    """List config names from configs/ directory."""
+    configs_dir = PROJECT_ROOT / "configs"
+    if not configs_dir.exists():
+        return []
+    return sorted(p.stem for p in configs_dir.glob("*.py") if not p.name.startswith("_"))
 
 
-def build_strap_lookup(county: str) -> dict[str, str]:
+def build_strap_lookup(location: str) -> dict[str, str]:
     """Build strap → home_index lookup from Supabase homes table."""
-    try:
-        from dotenv import load_dotenv
-        load_dotenv(PROJECT_ROOT / ".env")
-    except ImportError:
-        pass
     from supabase import create_client
 
     url = os.environ["SUPABASE_URL"]
@@ -135,7 +56,7 @@ def build_strap_lookup(county: str) -> dict[str, str]:
     page_size = 1000
     offset = 0
     while True:
-        result = client.table("homes").select("strap, index").eq("county", county.upper()).range(offset, offset + page_size - 1).execute()
+        result = client.table("homes").select("strap, index").eq("location", location).range(offset, offset + page_size - 1).execute()
         rows = result.data or []
         for row in rows:
             if row.get("strap"):
@@ -147,74 +68,57 @@ def build_strap_lookup(county: str) -> dict[str, str]:
     return lookup
 
 
-def classify_permit(category: str, description: str, valuation: float | None = None) -> str:
-    """Classify permit type from category, description, and valuation."""
-    desc_lower = description.lower() if isinstance(description, str) else ""
-
-    # Description keywords override category (more specific)
-    for keyword, ptype in DESCRIPTION_OVERRIDES:
-        if keyword in desc_lower:
-            # Valuation sanity check: solar installs are typically $3k+.
-            # Low-valuation permits matching generic keywords (e.g. "roof mounted"
-            # for an antenna) are likely not solar.
-            if ptype == "solar" and valuation is not None and valuation < 3000:
-                # Only trust strong solar keywords at low valuations
-                strong = ["solar", "photovoltaic", "pv system", "pv array", "pv install"]
-                if not any(kw in desc_lower for kw in strong):
-                    continue  # skip this keyword match, try next
-            return ptype
-
-    # Fall back to category mapping
-    cat = str(category).strip().upper()
-    return CATEGORY_TO_TYPE.get(cat, "other")
-
-
-def parse_permits(permits_csv: Path, strap_to_home: dict[str, str],
-                  county_name: str, since_year: int | None = None) -> list[dict]:
-    """Parse raw permit CSV into normalized records for Supabase."""
+def load_permits(permits_csv: Path, strap_to_home: dict[str, str],
+                 location: str, since_year: int | None = None) -> list[dict]:
+    """Load parsed permits and prepare records for Supabase upsert."""
     df = pd.read_csv(permits_csv, low_memory=False)
+
+    # Parse dates
     df["issue_dt"] = pd.to_datetime(df["issue_dt"], format="mixed", dayfirst=False, errors="coerce")
     bad_dates = df["issue_dt"].isna().sum()
     if bad_dates:
         print(f"  Warning: {bad_dates} rows with unparseable dates (filed_date will be null)")
 
     if since_year:
-        # Only filter rows that have a valid date; keep null-date rows
         df = df[df["issue_dt"].isna() | (df["issue_dt"].dt.year >= since_year)]
 
-    # Only keep permits that map to homes in our system
+    # Filter to straps that exist in Supabase homes table
+    df["strap"] = df["strap"].astype(str)
     df["home_index"] = df["strap"].map(strap_to_home)
+    matched = df["home_index"].notna().sum()
     df = df.dropna(subset=["home_index"])
+    print(f"  {matched:,} permits matched to {df['home_index'].nunique():,} homes")
 
     records = []
     for _, row in df.iterrows():
-        category = row.get("permit_category", "OTHER")
-        description = row.get("description", None)
-        val = row.get("estimated_value", None)
-        valuation_num = float(val) if pd.notna(val) else None
-        ptype = classify_permit(category, description, valuation_num)
+        valuation = row.get("estimated_value")
+        valuation_num = float(valuation) if pd.notna(valuation) else None
+        desc = str(row.get("description", "")).strip() if pd.notna(row.get("description")) else None
+        permit_num = str(row.get("permit_num", "")).strip() if pd.notna(row.get("permit_num")) else None
 
-        # Clean up description
-        desc_text = str(description).strip() if pd.notna(description) else None
+        # A permit can have multiple types (comma-separated, e.g. "solar,battery").
+        # Expand into one row per type for the Supabase upsert conflict key.
+        permit_types = str(row.get("permit_type", "other")).split(",")
+        filed_date = row["issue_dt"].strftime("%Y-%m-%d") if pd.notna(row["issue_dt"]) else None
+        for ptype in permit_types:
+            records.append({
+                "home_index": row["home_index"],
+                "permit_number": permit_num,
+                "permit_type": ptype.strip(),
+                "description": desc,
+                "filed_date": filed_date,
+                "valuation": valuation_num,
+                "location": location,
+            })
 
-        records.append({
-            "home_index": row["home_index"],
-            "permit_number": str(row["permit_num"]).strip() if pd.notna(row.get("permit_num")) else None,
-            "permit_type": ptype,
-            "description": desc_text,
-            "filed_date": row["issue_dt"].strftime("%Y-%m-%d") if pd.notna(row["issue_dt"]) else None,
-            "valuation": valuation_num,
-            "county": county_name,
-        })
-
-    # Deduplicate by conflict key (keep last occurrence — typically has more info)
+    # Deduplicate by conflict key (keep last occurrence)
     seen = {}
     for r in records:
         key = (r["home_index"], r["permit_number"], r["permit_type"])
         seen[key] = r
     deduped = list(seen.values())
     if len(deduped) < len(records):
-        print(f"  Deduplicated: {len(records)} → {len(deduped)} ({len(records) - len(deduped)} duplicates removed)")
+        print(f"  Deduplicated: {len(records):,} → {len(deduped):,} ({len(records) - len(deduped):,} duplicates removed)")
     return deduped
 
 
@@ -242,21 +146,35 @@ def upload_to_supabase(records: list[dict], batch_size: int = 500) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Upload permits to Supabase")
-    parser.add_argument("--county", default="boulder_co", choices=list(COUNTY_CONFIGS.keys()),
-                        help="County config to use (default: boulder_co)")
+    available = _list_available_configs()
+    epilog = f"Available configs: {', '.join(available)}" if available else ""
+
+    parser = argparse.ArgumentParser(
+        description="Upload permits to Supabase",
+        epilog=epilog,
+    )
+    parser.add_argument("--config", required=True,
+                        help=f"County config name ({', '.join(available)}) or path to config .py file")
     parser.add_argument("--since", type=int, default=None,
                         help="Only upload permits from this year onward")
     parser.add_argument("--dry-run", action="store_true",
                         help="Parse and show stats without uploading")
     args = parser.parse_args()
 
-    config = COUNTY_CONFIGS[args.county]
-    print(f"County: {config['county_name']}")
-    print(f"Permits CSV: {config['permits_csv']}")
+    # Load pipeline config to get paths
+    sys.path.insert(0, str(PROJECT_ROOT / "src"))
+    from pipeline_config import load_config
+    config = load_config(args.config)
 
-    if not config["permits_csv"].exists():
-        print(f"ERROR: Permits file not found: {config['permits_csv']}")
+    permits_csv = Path(config.parsed_permits_path)
+    location = config.county_id
+
+    print(f"Location: {location}")
+    print(f"Permits CSV: {permits_csv}")
+
+    if not permits_csv.exists():
+        print(f"ERROR: Permits file not found: {permits_csv}")
+        print(f"Run first: python src/parse_permits.py --config {args.config}")
         sys.exit(1)
 
     if not os.environ.get("SUPABASE_URL") or not os.environ.get("SUPABASE_SERVICE_ROLE_KEY"):
@@ -264,29 +182,24 @@ def main():
         sys.exit(1)
 
     print("Building strap → home_index lookup from Supabase...")
-    strap_to_home = build_strap_lookup(config["county_name"])
-    print(f"  {len(strap_to_home)} straps mapped")
+    strap_to_home = build_strap_lookup(location)
+    print(f"  {len(strap_to_home):,} straps mapped")
 
-    print("Parsing permits...")
-    records = parse_permits(config["permits_csv"], strap_to_home,
-                           config["county_name"], args.since)
+    print("Loading parsed permits...")
+    records = load_permits(permits_csv, strap_to_home, location, args.since)
 
     # Stats
     from collections import Counter
     type_counts = Counter(r["permit_type"] for r in records)
-    print(f"\n  Total records: {len(records)}")
+    print(f"\n  Total records: {len(records):,}")
     for ptype, count in sorted(type_counts.items(), key=lambda x: -x[1]):
-        print(f"    {ptype}: {count}")
+        print(f"    {ptype}: {count:,}")
 
     if args.dry_run:
         print("\n--dry-run: skipping upload")
         for r in records[:5]:
             print(f"  Sample: {r}")
         return
-
-    if not os.environ.get("SUPABASE_URL") or not os.environ.get("SUPABASE_SERVICE_ROLE_KEY"):
-        print("\nERROR: Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY environment variables")
-        sys.exit(1)
 
     print("\nUploading to Supabase...")
     upload_to_supabase(records)
