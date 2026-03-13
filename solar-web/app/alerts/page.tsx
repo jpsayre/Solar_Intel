@@ -163,7 +163,7 @@ export default function AlertsPage() {
                         {formatValue(a.valuation)}
                       </div>
                       <div className="mt-0.5 text-xs text-slate-400">
-                        {a.filed_date}
+                        {a.filed_date ? (() => { const [y, m, d] = a.filed_date.split("-"); return `${parseInt(m)}/${parseInt(d)}/${y}`; })() : "N/A"}
                       </div>
                     </div>
                   </div>

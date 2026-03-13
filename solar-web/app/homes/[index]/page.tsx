@@ -741,8 +741,7 @@ export default function HomeDetailPage() {
                         <td colSpan={5} className="py-4 text-center text-sm text-slate-400">No permits on file</td>
                       </tr>
                     ) : groupedPermits.map((g) => {
-                      const [y, m, d] = g.filed_date.split("-");
-                      const dateFormatted = `${parseInt(m)}/${parseInt(d)}/${y}`;
+                      const dateFormatted = g.filed_date ? (() => { const [y, m, d] = g.filed_date.split("-"); return `${parseInt(m)}/${parseInt(d)}/${y}`; })() : "N/A";
                       return (
                       <tr key={g.ids[0]} className="border-b border-neutral-50">
                         <td className="whitespace-nowrap py-2 pr-4 text-slate-600">{dateFormatted}</td>

@@ -44,7 +44,7 @@ DESC_PATTERNS = {
     "solar_pv_requires_pv": r"\b(?:pv|photovoltaic|photo\-voltaic)\b",
 
     # Battery / storage
-    "battery": r"\b(?:powerwall|battery|energy\s*storage|ess|bms)\b",
+    "battery": r"\b(?:powerwall|battery|batteries|energy\s*storage|ess|bms)\b|inverter[\s\-]*batt",
 
     # EV charging
     "ev_charger": (
@@ -173,9 +173,9 @@ def compute_features(df: pd.DataFrame, estimated_value: pd.Series | None = None)
         ~solar_thermal_suspected | has_pv_or_photovoltaic
     )
 
-    # --- Battery (exclude "no battery" / "NO battery backup" mentions)
+    # --- Battery (exclude "no battery" mentions and "board and batten" siding)
     features["battery"] = _desc_matches(
-        text, DESC_PATTERNS["battery"], exclude=r"no\s*battery"
+        text, DESC_PATTERNS["battery"], exclude=r"no\s*batter|board\s*and\s*batten|batten\b"
     )
 
     # --- EV charger

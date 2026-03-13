@@ -22,7 +22,7 @@ CONFIG = {
     # Permit sources (one entry per city/source)
     "permit_sources": [
         {
-            "csv": "data/raw/Permits.csv",
+            "csv": "data/raw/Boulder_CO_Permits_3_11_26.csv",
             "label": "Boulder County",
             "strap_column": "strap",
             "date_column": "issue_dt",
