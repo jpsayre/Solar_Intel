@@ -197,7 +197,7 @@ export default function HomeMap({
                 },
               }}
             >
-              <Tooltip direction="top" offset={[0, -8]} opacity={0.95}>
+              <Tooltip direction="auto" offset={[0, -8]} opacity={0.95}>
                 <div>
                   <div>{p.address}</div>
                   <div style={{ fontSize: 11, opacity: 0.85 }}>
