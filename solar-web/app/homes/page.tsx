@@ -26,7 +26,6 @@ function buildHomesSearchParams(params: {
   lat?: number | null;
   lng?: number | null;
   zoom?: number | null;
-  sortBy?: string;
   minModel?: string;
   minSolar?: string;
   minBattery?: string;
@@ -43,7 +42,7 @@ function buildHomesSearchParams(params: {
   if (params.lat != null && Number.isFinite(params.lat)) sp.set("lat", params.lat.toFixed(5));
   if (params.lng != null && Number.isFinite(params.lng)) sp.set("lng", params.lng.toFixed(5));
   if (params.zoom != null && Number.isFinite(params.zoom)) sp.set("zoom", String(Math.round(params.zoom)));
-  if (params.sortBy && params.sortBy !== "model_score") sp.set("sort", params.sortBy);
+
   if (params.minModel?.trim()) sp.set("minModel", params.minModel.trim());
   if (params.minSolar?.trim()) sp.set("minSolar", params.minSolar.trim());
   if (params.minBattery?.trim()) sp.set("minBattery", params.minBattery.trim());
@@ -69,11 +68,6 @@ type HomeRow = {
   has_solar?: boolean;
   [key: string]: unknown;
 };
-
-type SortOption = "model_score";
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: "model_score", label: "Ranking score" },
-];
 
 const INTEREST_OPTIONS = ["", "Cold", "Cool", "Warm", "Hot"] as const;
 const INTEREST_RANK: Record<string, number> = { "Cold": 1, "Cool": 2, "Warm": 3, "Hot": 4 };
@@ -131,7 +125,6 @@ function HomesPageContent() {
   const [imgUrls, setImgUrls] = useState<Record<number, string>>({});
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
 
-  const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption) || "model_score");
   const [minModelScore, setMinModelScore] = useState(() => searchParams.get("minModel") ?? "");
   const [minSolarInterest, setMinSolarInterest] = useState(() => searchParams.get("minSolar") ?? "");
   const [minBatteryInterest, setMinBatteryInterest] = useState(() => searchParams.get("minBattery") ?? "");
@@ -257,7 +250,6 @@ function HomesPageContent() {
       lat: mapCenter?.[0] ?? null,
       lng: mapCenter?.[1] ?? null,
       zoom: mapZoom,
-      sortBy,
       minModel: minModelScore,
       minSolar: minSolarInterest,
       minBattery: minBatteryInterest,
@@ -271,7 +263,7 @@ function HomesPageContent() {
     if (nextStr !== currentStr) {
       router.replace(nextStr ? `${HOMES_PATH}?${nextStr}` : HOMES_PATH, { scroll: false });
     }
-  }, [county, city, subdivision, addressSearchApplied, mapCenter, mapZoom, sortBy, minModelScore, minSolarInterest, minBatteryInterest, tagFilter, excludeTagFilter, excludeDoNotContact, showSolarHomes, router]);
+  }, [county, city, subdivision, addressSearchApplied, mapCenter, mapZoom, minModelScore, minSolarInterest, minBatteryInterest, tagFilter, excludeTagFilter, excludeDoNotContact, showSolarHomes, router]);
 
   useEffect(() => {
     let alive = true;
@@ -327,7 +319,7 @@ function HomesPageContent() {
     if (!userData.user) { router.push("/login"); setBoundsLoading(false); return; }
 
     const params: Record<string, unknown> = {
-      p_sort_by: sortBy,
+      p_sort_by: "model_score",
       p_show_solar: showSolarHomes,
       p_limit: PAGE_SIZE,
       p_offset: pageOffset,
@@ -364,7 +356,7 @@ function HomesPageContent() {
     setTotalCount(count);
     setOffset(pageOffset + PAGE_SIZE);
     setHasMore(results.length === PAGE_SIZE);
-  }, [router, county, city, subdivision, addressSearchApplied, sortBy,
+  }, [router, county, city, subdivision, addressSearchApplied,
       showSolarHomes, minModelScore]);
 
   const loadNextPage = useCallback(async () => {
@@ -375,7 +367,7 @@ function HomesPageContent() {
   // Load filter-only count (no bounds) whenever filters change
   const loadFilterCount = useCallback(async () => {
     const params: Record<string, unknown> = {
-      p_sort_by: sortBy,
+      p_sort_by: "model_score",
       p_show_solar: showSolarHomes,
       p_limit: 1,
       p_offset: 0,
@@ -390,7 +382,7 @@ function HomesPageContent() {
     const { data } = await supabaseBrowser.rpc("get_homes_page", params);
     const results = (data ?? []) as { total_count: number }[];
     setFilterCount(results.length > 0 ? results[0].total_count : 0);
-  }, [county, city, subdivision, addressSearchApplied, sortBy,
+  }, [county, city, subdivision, addressSearchApplied,
       showSolarHomes, minModelScore]);
 
   useEffect(() => {
@@ -572,7 +564,7 @@ function HomesPageContent() {
           modelScore: ms,
         };
       });
-  }, [rpcMapPoints, rows, sortBy, minModelScore]);
+  }, [rpcMapPoints, rows, minModelScore]);
 
   if (err) {
     return (
@@ -675,20 +667,6 @@ function HomesPageContent() {
                   {(filterOptions?.cities ?? []).map((c) => (
                     <option key={c} value={c}>
                       {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-500">Sort by</span>
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortOption)}
-                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                >
-                  {SORT_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
                     </option>
                   ))}
                 </select>
