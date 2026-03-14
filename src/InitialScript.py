@@ -77,7 +77,11 @@ def run(config, limit=None):
     print(f"After filters: {len(df)}")
 
     before = len(df)
-    df = df.drop_duplicates(subset=["address"], keep="first")
+    # Keep the most complete row when deduplicating by address
+    completeness_cols = ["area_building", "num_bedrooms", "num_bath", "numrooms"]
+    df["_completeness"] = df[completeness_cols].notna().sum(axis=1)
+    df = df.sort_values("_completeness", ascending=False).drop_duplicates(subset=["address"], keep="first")
+    df = df.drop(columns=["_completeness"])
     print(f"After address dedup: {len(df)} (removed {before - len(df)} duplicates)")
 
     # Ensure we have original_index
