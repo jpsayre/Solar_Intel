@@ -201,7 +201,7 @@ export default function HomeMap({
                 <div>
                   <div>{p.address}</div>
                   <div style={{ fontSize: 11, opacity: 0.85 }}>
-                    Ranking: {p.modelScore != null ? Number(p.modelScore.toFixed(1)) : "—"}
+                    {p.hasSolar ? "Has solar" : `Ranking: ${p.modelScore != null ? Number(p.modelScore.toFixed(1)) : "—"}`}
                   </div>
                 </div>
               </Tooltip>

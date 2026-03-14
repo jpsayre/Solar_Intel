@@ -76,7 +76,7 @@ export function buildListingCardData(row: HomeRow): {
         : `${String(row.city).toUpperCase()}, ${String(row.state).toUpperCase()}`
       : `ID: ${row.original_index}`;
 
-  const modelScore = row.model_score != null ? String(row.model_score) : "—";
+  const modelScore = row.has_solar ? "N/A" : row.model_score != null ? String(row.model_score) : "—";
 
   const detailRows: CardRow[] = [
     { label: "Ranking score", value: modelScore },
