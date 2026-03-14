@@ -35,7 +35,10 @@ STAGES = [
     (8, "census_enrichment",   "Census ACS demographic enrichment"),
     (9, "permits_by_year",     "Aggregate permits by strap-year with all features"),
     (10, "walk_forward_model", "Walk-forward ML modeling"),
-    (11, "combine_ranks",      "Combine model scores with Regrid for final output"),
+    # (11, "combine_ranks",      "Combine model scores with Regrid for final output"),
+    #   ^ Replaced by upload_scores — combine_ranks produced a local CSV
+    #     (Regrid_Model_Rank.csv) that nothing downstream consumes.
+    (11, "upload_scores",      "Upload roof + model scores to Supabase"),
 ]
 
 
@@ -113,9 +116,30 @@ def run_stage(stage_num, config, skip_api=False, limit=None):
         import walk_forward_modeling
         walk_forward_modeling.run(config)
 
+    # elif stage_num == 11:
+    #     import combine_regrid_model_rank
+    #     combine_regrid_model_rank.run(config)
+
     elif stage_num == 11:
-        import combine_regrid_model_rank
-        combine_regrid_model_rank.run(config)
+        sys.path.insert(0, str(PROJECT_ROOT / "scripts"))
+        import upload_scores_to_supabase as upload
+        bridge = upload.build_home_index_bridge(config)
+        frames = []
+        if config.roof_score_path.exists():
+            frames.append(upload.build_roof_scores(config, bridge))
+        else:
+            log(f"Skipping roof scores ({config.roof_score_path} not found)")
+        if config.straps_no_solar_path.exists():
+            frames.append(upload.build_rank_scores(config, bridge))
+        else:
+            log(f"Skipping model scores ({config.straps_no_solar_path} not found)")
+        if not frames:
+            raise RuntimeError("No score files found — run stages 6 and 10 first")
+        df = frames[0] if len(frames) == 1 else frames[0].merge(frames[1], on="home_index", how="outer")
+        if config.straps_no_solar_path.exists():
+            df["model_version"] = "walk_forward_ensemble_2026"
+        log(f"{len(df):,} rows to upload")
+        upload.upload_to_supabase(df)
 
 
 def main():
@@ -182,7 +206,7 @@ def main():
 
     total = time.time() - start_time
     log(f"Pipeline complete! Total time: {total:.1f}s")
-    log(f"Final output: {config.regrid_model_rank_path}")
+    log(f"Pipeline complete for {config.county_id}")
 
 
 if __name__ == "__main__":

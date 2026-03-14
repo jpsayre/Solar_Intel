@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -58,6 +59,7 @@ def build_roof_scores(config, bridge: pd.DataFrame) -> pd.DataFrame:
     merged["roof_score"] = merged["roof_score"].round().astype("Int64")
     result = merged[["home_index", "roof_score"]].drop_duplicates(subset="home_index", keep="first")
     result = result[result["roof_score"].notna()].copy()
+    result["roof_updated_at"] = datetime.now(timezone.utc).isoformat()
     print(f"  {len(result):,} homes with roof scores")
     return result
 
@@ -83,6 +85,7 @@ def build_rank_scores(config, bridge: pd.DataFrame) -> pd.DataFrame:
     )
     merged["model_score"] = merged["model_score"].astype("Int64")
     result = merged[["home_index", "model_score"]].drop_duplicates(subset="home_index", keep="first")
+    result["ranking_updated_at"] = datetime.now(timezone.utc).isoformat()
     print(f"  {len(result):,} homes with model scores")
     return result
 

@@ -1008,10 +1008,10 @@ def run_walk_forward() -> None:
         # feature_year = install_year - 1 (year of features; test uses rows with year == feature_year)
         feature_year = install_year - 1
         if TRAIN_YEARS_WINDOW is not None:
-            train_years = list(range(install_year - TRAIN_YEARS_WINDOW, install_year))
+            train_years = list(range(install_year - TRAIN_YEARS_WINDOW, feature_year))
             train_years = [y for y in train_years if y >= YEAR_START]
         else:
-            train_years = list(range(YEAR_START, install_year))
+            train_years = list(range(YEAR_START, feature_year))
         n_installed = int(((df["year"] == feature_year) & (df["solar_next_year"] == 1)).sum())
         log(f"\n{'='*60}")
         log(f"Install year {install_year}: {n_installed:,} homes installed solar | train on feature years {train_years} ({'rolling' if TRAIN_YEARS_WINDOW else 'cumulative'})")

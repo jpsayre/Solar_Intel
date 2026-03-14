@@ -447,9 +447,9 @@ def run_fast(config=None, temporal_only=False):
         year_num += 1
         feature_year = install_year - 1
         if TRAIN_YEARS_WINDOW is not None:
-            train_years = [y for y in range(install_year - TRAIN_YEARS_WINDOW, install_year) if y >= YEAR_START]
+            train_years = [y for y in range(install_year - TRAIN_YEARS_WINDOW, feature_year) if y >= YEAR_START]
         else:
-            train_years = list(range(YEAR_START, install_year))
+            train_years = list(range(YEAR_START, feature_year))
 
         train_df = df[df["year"].isin(train_years)]
         test_df = df[df["year"] == feature_year]
