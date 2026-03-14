@@ -76,6 +76,10 @@ def run(config, limit=None):
     df = apply_regrid_filters(df, config.regrid_filters)
     print(f"After filters: {len(df)}")
 
+    before = len(df)
+    df = df.drop_duplicates(subset=["address"], keep="first")
+    print(f"After address dedup: {len(df)} (removed {before - len(df)} duplicates)")
+
     # Ensure we have original_index
     if "original_index" not in df.columns:
         df = df.reset_index(names="original_index")
