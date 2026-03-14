@@ -27,8 +27,6 @@ function buildHomesSearchParams(params: {
   lng?: number | null;
   zoom?: number | null;
   minModel?: string;
-  minSolar?: string;
-  minBattery?: string;
   tag?: string;
   excludeTag?: string;
   excludeDnc?: boolean;
@@ -44,8 +42,6 @@ function buildHomesSearchParams(params: {
   if (params.zoom != null && Number.isFinite(params.zoom)) sp.set("zoom", String(Math.round(params.zoom)));
 
   if (params.minModel?.trim()) sp.set("minModel", params.minModel.trim());
-  if (params.minSolar?.trim()) sp.set("minSolar", params.minSolar.trim());
-  if (params.minBattery?.trim()) sp.set("minBattery", params.minBattery.trim());
   if (params.tag?.trim()) sp.set("tag", params.tag.trim());
   if (params.excludeTag?.trim()) sp.set("excludeTag", params.excludeTag.trim());
   if (params.excludeDnc === false) sp.set("dnc", "0");
@@ -68,9 +64,6 @@ type HomeRow = {
   has_solar?: boolean;
   [key: string]: unknown;
 };
-
-const INTEREST_OPTIONS = ["", "Cold", "Cool", "Warm", "Hot"] as const;
-const INTEREST_RANK: Record<string, number> = { "Cold": 1, "Cool": 2, "Warm": 3, "Hot": 4 };
 
 type FilterOptions = {
   counties: string[];
@@ -126,9 +119,6 @@ function HomesPageContent() {
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
 
   const [minModelScore, setMinModelScore] = useState(() => searchParams.get("minModel") ?? "");
-  const [minSolarInterest, setMinSolarInterest] = useState(() => searchParams.get("minSolar") ?? "");
-  const [minBatteryInterest, setMinBatteryInterest] = useState(() => searchParams.get("minBattery") ?? "");
-
   const [followedHomeIndices, setFollowedHomeIndices] = useState<Set<string>>(new Set());
   const [userId, setUserId] = useState<string | null>(null);
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -251,8 +241,6 @@ function HomesPageContent() {
       lng: mapCenter?.[1] ?? null,
       zoom: mapZoom,
       minModel: minModelScore,
-      minSolar: minSolarInterest,
-      minBattery: minBatteryInterest,
       tag: tagFilter,
       excludeTag: excludeTagFilter,
       excludeDnc: excludeDoNotContact,
@@ -263,7 +251,7 @@ function HomesPageContent() {
     if (nextStr !== currentStr) {
       router.replace(nextStr ? `${HOMES_PATH}?${nextStr}` : HOMES_PATH, { scroll: false });
     }
-  }, [county, city, subdivision, addressSearchApplied, mapCenter, mapZoom, minModelScore, minSolarInterest, minBatteryInterest, tagFilter, excludeTagFilter, excludeDoNotContact, showSolarHomes, router]);
+  }, [county, city, subdivision, addressSearchApplied, mapCenter, mapZoom, minModelScore, tagFilter, excludeTagFilter, excludeDoNotContact, showSolarHomes, router]);
 
   useEffect(() => {
     let alive = true;
@@ -501,24 +489,8 @@ function HomesPageContent() {
       });
     }
 
-    // Interest filters (from org_home real columns)
-    if (minSolarInterest && INTEREST_RANK[minSolarInterest]) {
-      const minRank = INTEREST_RANK[minSolarInterest];
-      list = list.filter((r) => {
-        const val = orgHomeByIndex[r.index]?.interest_in_solar ?? "";
-        return (INTEREST_RANK[val] ?? 0) >= minRank;
-      });
-    }
-    if (minBatteryInterest && INTEREST_RANK[minBatteryInterest]) {
-      const minRank = INTEREST_RANK[minBatteryInterest];
-      list = list.filter((r) => {
-        const val = orgHomeByIndex[r.index]?.interest_in_battery ?? "";
-        return (INTEREST_RANK[val] ?? 0) >= minRank;
-      });
-    }
-
     return list;
-  }, [rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex, minSolarInterest, minBatteryInterest]);
+  }, [rows, tagFilter, excludeTagFilter, excludeDoNotContact, orgHomeByIndex]);
 
   const mapPoints = useMemo(() => {
     const minModel = parseInt(minModelScore, 10);
@@ -601,8 +573,6 @@ function HomesPageContent() {
     setExcludeTagFilter("");
     setExcludeDoNotContact(true);
     setMinModelScore("");
-    setMinSolarInterest("");
-    setMinBatteryInterest("");
     setShowSolarHomes(false);
   };
 
@@ -616,8 +586,6 @@ function HomesPageContent() {
     excludeTagFilter.trim() ||
     !excludeDoNotContact ||
     minModelScore.trim() ||
-    minSolarInterest ||
-    minBatteryInterest ||
     showSolarHomes;
 
   return (
@@ -705,32 +673,6 @@ function HomesPageContent() {
                   className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
               </div>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-500">Min solar interest</span>
-                <select
-                  value={minSolarInterest}
-                  onChange={(e) => setMinSolarInterest(e.target.value)}
-                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                >
-                  <option value="">Any</option>
-                  {INTEREST_OPTIONS.filter(Boolean).map((o) => (
-                    <option key={o} value={o}>{o}+</option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-xs font-medium text-slate-500">Min battery interest</span>
-                <select
-                  value={minBatteryInterest}
-                  onChange={(e) => setMinBatteryInterest(e.target.value)}
-                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                >
-                  <option value="">Any</option>
-                  {INTEREST_OPTIONS.filter(Boolean).map((o) => (
-                    <option key={o} value={o}>{o}+</option>
-                  ))}
-                </select>
-              </label>
               <div className="flex flex-col gap-1 sm:w-36">
                 <span className="text-xs font-medium text-slate-500">Filter by tag</span>
                 <input
