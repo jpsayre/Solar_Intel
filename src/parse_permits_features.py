@@ -43,6 +43,19 @@ DESC_PATTERNS = {
     ),
     "solar_pv_requires_pv": r"\b(?:pv|photov\w*|photo\-voltaic)\b",
 
+    # Solar equipment brands (inverters + panel manufacturers) — unambiguous solar signals
+    "solar_equipment": (
+        r"\b(?:solaredge|enphase|sunpower|meyer\s*burger|rec\s*alpha|q\s*cells|"
+        r"jinko|trina|longi|canadian\s*solar|hanwha|silfab|mission\s*solar|"
+        r"sma\s*(?:sunny|inverter)|fronius|generac\s*pwrcell)\b"
+    ),
+    # Generic solar hardware: panels with wattage ratings (e.g. "22 Panels 380W")
+    # Note: standalone "inverter" is ambiguous (could be battery inverter)
+    "solar_hardware": (
+        r"\bpanels?\s+\d{2,3}\s*w\b"              # "panels 380w"
+        r"|\b\d+\s+(?:\w+\s+){0,3}panels?\s+\d{2,3}\s*w"  # "22 Brand Panels 380W"
+    ),
+
     # Battery / storage
     "battery": r"\b(?:powerwall|battery|batteries|energy\s*storage|ess|bms)\b|inverter[\s\-]*batt",
 
@@ -109,7 +122,10 @@ DESC_PATTERNS = {
 # Valuation threshold: solar permits below this amount with only weak keyword
 # matches are likely not actual solar installations (e.g. "roof mounted" antenna)
 SOLAR_MIN_VALUATION = 3000
-SOLAR_STRONG_KEYWORDS = ["solar", "photovoltaic", "pv system", "pv array", "pv install"]
+SOLAR_STRONG_KEYWORDS = [
+    "solar", "photovoltaic", "pv system", "pv array", "pv install",
+    "solaredge", "enphase", "sunpower", "meyer burger",
+]
 
 
 def _cat_matches(cat: pd.Series, keywords: list) -> pd.Series:
@@ -164,12 +180,14 @@ def compute_features(df: pd.DataFrame, estimated_value: pd.Series | None = None)
     # unless it's a generator. Many descriptions are truncated before "solar"/"pv".
     has_kw_not_kwh = text.str.contains(r"\d+\.?\d*\s*kw(?!h)", regex=True, na=False)
     is_generator = text.str.contains(DESC_PATTERNS["generator"], regex=True, na=False)
+    has_solar_equipment = text.str.contains(DESC_PATTERNS["solar_equipment"], regex=True, na=False)
+    has_solar_hardware = text.str.contains(DESC_PATTERNS["solar_hardware"], regex=True, na=False)
     solar_pv_raw = (
         _cat_matches(cat, ["energy efficient system"]) & (
             text.str.contains("solar|pv|photovoltaic", regex=True, na=False)
             | has_kw_not_kwh
         )
-    ) | _desc_matches(text, DESC_PATTERNS["solar_pv"]) | (has_kw_not_kwh & ~is_generator)
+    ) | _desc_matches(text, DESC_PATTERNS["solar_pv"]) | (has_kw_not_kwh & ~is_generator) | has_solar_equipment | has_solar_hardware
 
     # "Energy Efficient System" with no description and $5k-$25k valuation = likely solar PV
     if estimated_value is not None:
