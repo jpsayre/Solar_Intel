@@ -14,7 +14,6 @@ export type MapPoint = {
   index: string;
   address: string;
   score: number | null;
-  roofScore: number | null;
   modelScore: number | null;
   hasSolar?: boolean;
 };
@@ -202,7 +201,7 @@ export default function HomeMap({
                 <div>
                   <div>{p.address}</div>
                   <div style={{ fontSize: 11, opacity: 0.85 }}>
-                    Ranking: {p.modelScore != null ? Number(p.modelScore.toFixed(1)) : "—"} · Roof: {p.roofScore != null ? Number(p.roofScore.toFixed(1)) : "—"}
+                    Ranking: {p.modelScore != null ? Number(p.modelScore.toFixed(1)) : "—"}
                   </div>
                 </div>
               </Tooltip>

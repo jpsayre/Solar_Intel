@@ -28,7 +28,6 @@ function buildHomesSearchParams(params: {
   zoom?: number | null;
   sortBy?: string;
   minModel?: string;
-  minRoof?: string;
   minSolar?: string;
   minBattery?: string;
   tag?: string;
@@ -44,9 +43,8 @@ function buildHomesSearchParams(params: {
   if (params.lat != null && Number.isFinite(params.lat)) sp.set("lat", params.lat.toFixed(5));
   if (params.lng != null && Number.isFinite(params.lng)) sp.set("lng", params.lng.toFixed(5));
   if (params.zoom != null && Number.isFinite(params.zoom)) sp.set("zoom", String(Math.round(params.zoom)));
-  if (params.sortBy && params.sortBy !== "hybrid") sp.set("sort", params.sortBy);
+  if (params.sortBy && params.sortBy !== "model_score") sp.set("sort", params.sortBy);
   if (params.minModel?.trim()) sp.set("minModel", params.minModel.trim());
-  if (params.minRoof?.trim()) sp.set("minRoof", params.minRoof.trim());
   if (params.minSolar?.trim()) sp.set("minSolar", params.minSolar.trim());
   if (params.minBattery?.trim()) sp.set("minBattery", params.minBattery.trim());
   if (params.tag?.trim()) sp.set("tag", params.tag.trim());
@@ -68,16 +66,13 @@ type HomeRow = {
   index: string;
   original_index: number;
   model_score?: number | null;
-  roof_score?: number | null;
   has_solar?: boolean;
   [key: string]: unknown;
 };
 
-type SortOption = "model_score" | "roof_score" | "hybrid";
+type SortOption = "model_score";
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "model_score", label: "Ranking score" },
-  { value: "roof_score", label: "Roof score" },
-  { value: "hybrid", label: "Hybrid" },
 ];
 
 const INTEREST_OPTIONS = ["", "Cold", "Cool", "Warm", "Hot"] as const;
@@ -136,9 +131,8 @@ function HomesPageContent() {
   const [imgUrls, setImgUrls] = useState<Record<number, string>>({});
   const [imgErrors, setImgErrors] = useState<Record<number, string>>({});
 
-  const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption) || "hybrid");
+  const [sortBy, setSortBy] = useState<SortOption>(() => (searchParams.get("sort") as SortOption) || "model_score");
   const [minModelScore, setMinModelScore] = useState(() => searchParams.get("minModel") ?? "");
-  const [minRoofScore, setMinRoofScore] = useState(() => searchParams.get("minRoof") ?? "");
   const [minSolarInterest, setMinSolarInterest] = useState(() => searchParams.get("minSolar") ?? "");
   const [minBatteryInterest, setMinBatteryInterest] = useState(() => searchParams.get("minBattery") ?? "");
 
@@ -154,7 +148,7 @@ function HomesPageContent() {
   const [filterCount, setFilterCount] = useState<number | null>(null);
 
   // Lightweight map points from RPC (scores pre-joined, no gray flash)
-  type RpcMapPoint = { index: string; latitude: number; longitude: number; model_score: number | null; roof_score: number | null; hybrid_score: number | null; address: string | null; city: string | null; has_solar: boolean | null };
+  type RpcMapPoint = { index: string; latitude: number; longitude: number; model_score: number | null; address: string | null; city: string | null; has_solar: boolean | null };
   const [rpcMapPoints, setRpcMapPoints] = useState<RpcMapPoint[] | null>(null);
   const rpcRequestRef = useRef(0); // track latest RPC request to ignore stale responses
 
@@ -265,7 +259,6 @@ function HomesPageContent() {
       zoom: mapZoom,
       sortBy,
       minModel: minModelScore,
-      minRoof: minRoofScore,
       minSolar: minSolarInterest,
       minBattery: minBatteryInterest,
       tag: tagFilter,
@@ -278,7 +271,7 @@ function HomesPageContent() {
     if (nextStr !== currentStr) {
       router.replace(nextStr ? `${HOMES_PATH}?${nextStr}` : HOMES_PATH, { scroll: false });
     }
-  }, [county, city, subdivision, addressSearchApplied, mapCenter, mapZoom, sortBy, minModelScore, minRoofScore, minSolarInterest, minBatteryInterest, tagFilter, excludeTagFilter, excludeDoNotContact, showSolarHomes, router]);
+  }, [county, city, subdivision, addressSearchApplied, mapCenter, mapZoom, sortBy, minModelScore, minSolarInterest, minBatteryInterest, tagFilter, excludeTagFilter, excludeDoNotContact, showSolarHomes, router]);
 
   useEffect(() => {
     let alive = true;
@@ -346,9 +339,7 @@ function HomesPageContent() {
     if (addressSearchApplied.trim()) params.p_address_search = addressSearchApplied.trim();
 
     const minModel = parseFloat(minModelScore);
-    const minRoof = parseFloat(minRoofScore);
     if (Number.isFinite(minModel)) params.p_min_model = minModel;
-    if (Number.isFinite(minRoof)) params.p_min_roof = minRoof;
 
     if (bounds) {
       params.p_south = bounds.south;
@@ -374,7 +365,7 @@ function HomesPageContent() {
     setOffset(pageOffset + PAGE_SIZE);
     setHasMore(results.length === PAGE_SIZE);
   }, [router, county, city, subdivision, addressSearchApplied, sortBy,
-      showSolarHomes, minModelScore, minRoofScore]);
+      showSolarHomes, minModelScore]);
 
   const loadNextPage = useCallback(async () => {
     if (!rows || rows.length === 0) return;
@@ -394,15 +385,13 @@ function HomesPageContent() {
     if (subdivision) params.p_subdivision = subdivision;
     if (addressSearchApplied.trim()) params.p_address_search = addressSearchApplied.trim();
     const minModel = parseFloat(minModelScore);
-    const minRoof = parseFloat(minRoofScore);
     if (Number.isFinite(minModel)) params.p_min_model = minModel;
-    if (Number.isFinite(minRoof)) params.p_min_roof = minRoof;
 
     const { data } = await supabaseBrowser.rpc("get_homes_page", params);
     const results = (data ?? []) as { total_count: number }[];
     setFilterCount(results.length > 0 ? results[0].total_count : 0);
   }, [county, city, subdivision, addressSearchApplied, sortBy,
-      showSolarHomes, minModelScore, minRoofScore]);
+      showSolarHomes, minModelScore]);
 
   useEffect(() => {
     loadFilterCount();
@@ -541,7 +530,6 @@ function HomesPageContent() {
 
   const mapPoints = useMemo(() => {
     const minModel = parseInt(minModelScore, 10);
-    const minRoof = parseInt(minRoofScore, 10);
 
     // Prefer lightweight RPC data for map dots (scores pre-joined, no gray flash)
     if (rpcMapPoints && rpcMapPoints.length > 0) {
@@ -549,25 +537,17 @@ function HomesPageContent() {
         .filter((r) => {
           if (!Number.isFinite(r.latitude) || !Number.isFinite(r.longitude)) return false;
           if (Number.isFinite(minModel) && (r.model_score == null || r.model_score < minModel)) return false;
-          if (Number.isFinite(minRoof) && (r.roof_score == null || r.roof_score < minRoof)) return false;
           return true;
         })
-        .map((r) => {
-          let colorScore: number | null = null;
-          if (sortBy === "model_score") colorScore = r.model_score;
-          else if (sortBy === "roof_score") colorScore = r.roof_score;
-          else colorScore = r.hybrid_score;
-          return {
-            lat: r.latitude,
-            lng: r.longitude,
-            index: r.index,
-            address: [r.address, r.city].filter(Boolean).join(", ") || r.index,
-            score: colorScore,
-            roofScore: r.roof_score,
-            modelScore: r.model_score,
-            hasSolar: r.has_solar ?? false,
-          };
-        });
+        .map((r) => ({
+          lat: r.latitude,
+          lng: r.longitude,
+          index: r.index,
+          address: [r.address, r.city].filter(Boolean).join(", ") || r.index,
+          score: r.model_score,
+          modelScore: r.model_score,
+          hasSolar: r.has_solar ?? false,
+        }));
     }
     // Fallback: derive from full rows (scores already included from RPC)
     const list = rows ?? [];
@@ -583,23 +563,16 @@ function HomesPageContent() {
       .map((r) => {
         const { addressLine1, addressLine2 } = buildListingCardData(r);
         const ms = (r.model_score as number | null) ?? null;
-        const rs = (r.roof_score as number | null) ?? null;
-        let colorScore: number | null = null;
-        if (sortBy === "model_score") colorScore = ms;
-        else if (sortBy === "roof_score") colorScore = rs;
-        else if (sortBy === "hybrid" && ms != null && rs != null) colorScore = Math.round((ms * 0.6 + rs * 0.4) * 10) / 10;
-        else if (sortBy === "hybrid") colorScore = ms ?? rs;
         return {
           lat: Number(r.latitude),
           lng: Number(r.longitude),
           index: r.index,
           address: `${addressLine1}, ${addressLine2}`,
-          score: colorScore,
-          roofScore: rs,
+          score: ms,
           modelScore: ms,
         };
       });
-  }, [rpcMapPoints, rows, sortBy, minModelScore, minRoofScore]);
+  }, [rpcMapPoints, rows, sortBy, minModelScore]);
 
   if (err) {
     return (
@@ -636,7 +609,6 @@ function HomesPageContent() {
     setExcludeTagFilter("");
     setExcludeDoNotContact(true);
     setMinModelScore("");
-    setMinRoofScore("");
     setMinSolarInterest("");
     setMinBatteryInterest("");
     setShowSolarHomes(false);
@@ -652,7 +624,6 @@ function HomesPageContent() {
     excludeTagFilter.trim() ||
     !excludeDoNotContact ||
     minModelScore.trim() ||
-    minRoofScore.trim() ||
     minSolarInterest ||
     minBatteryInterest ||
     showSolarHomes;
@@ -752,18 +723,6 @@ function HomesPageContent() {
                   max="100"
                   value={minModelScore}
                   onChange={(e) => setMinModelScore(e.target.value)}
-                  placeholder="0"
-                  className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
-                />
-              </div>
-              <div className="flex flex-col gap-1 sm:w-28">
-                <span className="text-xs font-medium text-slate-500">Min roof score</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={minRoofScore}
-                  onChange={(e) => setMinRoofScore(e.target.value)}
                   placeholder="0"
                   className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                 />
