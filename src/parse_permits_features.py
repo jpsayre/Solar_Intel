@@ -170,6 +170,18 @@ def compute_features(df: pd.DataFrame, estimated_value: pd.Series | None = None)
             | has_kw_not_kwh
         )
     ) | _desc_matches(text, DESC_PATTERNS["solar_pv"]) | (has_kw_not_kwh & ~is_generator)
+
+    # "Energy Efficient System" with no description and $5k-$25k valuation = likely solar PV
+    if estimated_value is not None:
+        val_num = pd.to_numeric(estimated_value, errors="coerce")
+        empty_desc = df["description"].str.strip().eq("")
+        ee_no_desc_solar = (
+            _cat_matches(cat, ["energy efficient system"])
+            & empty_desc
+            & val_num.between(7000, 25000)
+        )
+        solar_pv_raw = solar_pv_raw | ee_no_desc_solar
+
     features["solar_pv"] = solar_pv_raw & (
         ~solar_thermal_suspected | has_pv_or_photovoltaic
     )
