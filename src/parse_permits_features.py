@@ -33,7 +33,8 @@ DESC_PATTERNS = {
     # Solar PV - exclude solar thermal / solar water heater
     "solar_pv": (
         r"\b(?:solar\s*(?:pv|panel|array|system|installation|mount)|pv\s*(?:solar|system|array)|"
-        r"photov\w*|photo\-voltaic|solar\s*electric|grid[\s\-]*tie[d]?)\b"
+        r"photov\w*|photo\-voltaic|solar\s*electric|grid[\s\-]*tie[d]?|"
+        r"modules?\s*[\-\s]*roof\s*mount)\b"
     ),
     # When solar thermal is suspected, solar_pv requires explicit "pv" or "photovoltaic"
     "solar_thermal_suspected": (
@@ -54,6 +55,7 @@ DESC_PATTERNS = {
     "solar_hardware": (
         r"\bpanels?\s+\d{2,3}\s*w\b"              # "panels 380w"
         r"|\b\d+\s+(?:\w+\s+){0,3}panels?\s+\d{2,3}\s*w"  # "22 Brand Panels 380W"
+        r"|\b\d+\s+modules?\b"                     # "28 modules" — solar module count
     ),
 
     # Battery / storage
@@ -61,8 +63,8 @@ DESC_PATTERNS = {
 
     # EV charging
     "ev_charger": (
-        r"\b(?:ev\s*charger|electric\s*vehicle\s*charger|tesla\s*(?:wall\s*)?connector|"
-        r"chargepoint|juicebox|wallbox|level\s*2\s*charg|evse)\b"
+        r"\b(?:ev\s*charg\w*|electric\s*vehicle\s*charger|tesla\s*(?:wall\s*)?connector|"
+        r"chargepoint|juicebox|wallbox|level\s*2\s*charg|evse|car\s*charg\w*)\b"
     ),
 
     # Roofing
@@ -189,14 +191,14 @@ def compute_features(df: pd.DataFrame, estimated_value: pd.Series | None = None)
         )
     ) | _desc_matches(text, DESC_PATTERNS["solar_pv"]) | (has_kw_not_kwh & ~is_generator) | has_solar_equipment | has_solar_hardware
 
-    # "Energy Efficient System" with no description and $5k-$25k valuation = likely solar PV
+    # "Energy Efficient System" with no description and $7k-$35k valuation = likely solar PV
     if estimated_value is not None:
         val_num = pd.to_numeric(estimated_value, errors="coerce")
         empty_desc = df["description"].str.strip().eq("")
         ee_no_desc_solar = (
             _cat_matches(cat, ["energy efficient system"])
             & empty_desc
-            & val_num.between(7000, 25000)
+            & val_num.between(7000, 35000)
         )
         solar_pv_raw = solar_pv_raw | ee_no_desc_solar
 
