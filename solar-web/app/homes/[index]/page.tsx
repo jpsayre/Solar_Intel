@@ -170,7 +170,7 @@ export default function HomeDetailPage() {
   const [orgHomeUpdatedAt, setOrgHomeUpdatedAt] = useState<string | null>(null);
   const [isFollowed, setIsFollowed] = useState(false);
   const [reportIssueOpen, setReportIssueOpen] = useState(false);
-  const [scores, setScores] = useState<{ model_score: number | null; roof_score: number | null } | null>(null);
+  const [scores, setScores] = useState<{ model_score: number | null } | null>(null);
   const [enrichCredits, setEnrichCredits] = useState(47);
   const [permitsOpen, setPermitsOpen] = useState(false);
   const [permits, setPermits] = useState<PermitRow[]>([]);
@@ -231,11 +231,11 @@ export default function HomeDetailPage() {
 
       const { data: scoreData } = await supabaseBrowser
         .from("home_scores")
-        .select("model_score, roof_score")
+        .select("model_score")
         .eq("home_index", idx)
         .maybeSingle();
       if (alive && scoreData) {
-        setScores({ model_score: scoreData.model_score, roof_score: scoreData.roof_score });
+        setScores({ model_score: scoreData.model_score });
       }
 
       const { data: permitData } = await supabaseBrowser
@@ -649,7 +649,7 @@ export default function HomeDetailPage() {
   }
 
   const rowWithScores = scores
-    ? { ...row, model_score: scores.model_score, roof_score: scores.roof_score }
+    ? { ...row, model_score: scores.model_score }
     : row;
   const { addressLine1, addressLine2, detailRows } = buildListingCardData(rowWithScores);
 

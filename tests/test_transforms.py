@@ -208,10 +208,11 @@ class TestSolarScoring:
         matches = self.find_matching_segments(row, 140, 220)
         assert len(matches) == 1
 
-    def test_too_small_area_rejected(self):
+    def test_small_area_still_matched(self):
+        """find_matching_segments matches by azimuth only; area filtering happens in scoring."""
         row = {"azimuth1": 180, "areaSqMeters1": 20, "quantileStats1": '{"Avg": 1500}'}
         matches = self.find_matching_segments(row, 140, 220)
-        assert len(matches) == 0
+        assert len(matches) == 1
 
     def test_wrong_azimuth_rejected(self):
         row = {"azimuth1": 10, "areaSqMeters1": 50, "quantileStats1": '{"Avg": 1500}'}
@@ -241,10 +242,11 @@ class TestRoofScore:
 
     @pytest.fixture(autouse=True)
     def _import(self):
-        from roof_score import compute_roof_score, get_all_orientations, parse_quantile_avg
+        from roof_score import compute_roof_score, find_qualifying_segments, parse_quantile_avg, FLOOR_SCORE
         self.compute_roof_score = compute_roof_score
-        self.get_all_orientations = get_all_orientations
+        self.find_qualifying_segments = find_qualifying_segments
         self.parse_quantile_avg = parse_quantile_avg
+        self.FLOOR_SCORE = FLOOR_SCORE
 
     def test_parse_quantile_avg_json_string(self):
         val = json.dumps({"Avg": 1450.5, "Max": 1600, "Min": 1200})
@@ -261,17 +263,15 @@ class TestRoofScore:
         row = {
             "azimuth1": 180, "areaSqMeters1": 50,
             "quantileStats1": json.dumps({"Avg": 1500}),
-            "segment_count": 3,
         }
-        _, segments = self.get_all_orientations(row)
-        score = self.compute_roof_score(row, segments)
+        segments = self.find_qualifying_segments(row)
+        score = self.compute_roof_score(segments)
         assert score is not None
-        assert score > 0
+        assert score > self.FLOOR_SCORE
 
     def test_roof_score_no_segments(self):
-        row = {"segment_count": 0}
-        score = self.compute_roof_score(row, [])
-        assert score is None
+        score = self.compute_roof_score([])
+        assert score == self.FLOOR_SCORE
 
 
 class TestPermitFeatures:
