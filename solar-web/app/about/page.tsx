@@ -1,4 +1,8 @@
+/* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+
+const DECILE_CHART_URL =
+  "https://carhemuemfqggndskmvu.supabase.co/storage/v1/object/public/site_images/marketing_capture_by_decile.png";
 
 const FEATURES = [
   {
@@ -36,7 +40,7 @@ const FEATURES = [
 const DIFFERENTIATORS = [
   {
     heading: "Data science, not just data",
-    body: "Most lead providers hand you a list filtered by home value and roof age. We build predictive models that learn which combinations of property attributes, neighborhood dynamics, permit history, and economic factors actually predict solar adoption. Our top 5% of homes capture 20% of sales.",
+    body: "Most lead providers hand you a list filtered by home value and roof age. We build predictive models that learn which combinations of property attributes, neighborhood dynamics, permit history, and economic factors actually predict solar adoption. Our top 10% of homes in Boulder County capture 28% of sales.",
   },
   // {
   //   heading: "Validated on real outcomes",
@@ -118,6 +122,13 @@ export default function AboutPage() {
                 </p>
               </div>
             ))}
+          </div>
+          <div className="mt-8 overflow-hidden rounded-xl border border-neutral-200 bg-white">
+            <img
+              src={DECILE_CHART_URL}
+              alt="Home Ranking Deciles — our model captures 28% of solar installations in the top 10% of ranked homes"
+              className="w-full"
+            />
           </div>
         </section>
 
