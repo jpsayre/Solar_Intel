@@ -775,7 +775,7 @@ export default function HomeDetailPage() {
             <span className="rounded-full bg-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-800">UNDER DEVELOPMENT</span>
           </div>
           <p className="mb-2 text-sm text-slate-500">
-            Look up emails for this property. Credits remaining: <span className="font-semibold text-slate-700">{enrichCredits}</span>
+            Look up emails for this property. Credits remaining: <span className="font-semibold text-slate-700">N/A</span>
           </p>
           <p className="mb-4 text-xs text-slate-400">
             Demo only — data shown is not real.
@@ -792,7 +792,7 @@ export default function HomeDetailPage() {
               disabled={enrichCredits <= 0}
               onClick={() => {
                 const owner = row.owner_1 ? String(row.owner_1).trim() : "J. Smith";
-                const parts = owner.toLowerCase().split(/\s+/);
+                const parts = owner.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(Boolean);
                 const first = parts[0] || "john";
                 const last = parts[parts.length - 1] || "smith";
                 const fakeDomain = "example.com";
