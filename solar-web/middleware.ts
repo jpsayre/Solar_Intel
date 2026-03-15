@@ -45,7 +45,7 @@ export async function middleware(request: NextRequest) {
     return redirectResponse;
   }
 
-  if (user && (request.nextUrl.pathname === "/login" || request.nextUrl.pathname === "/signup")) {
+  if (user && request.nextUrl.pathname === "/login") {
     const redirectResponse = NextResponse.redirect(new URL("/homes", request.url));
     for (const cookie of response.cookies.getAll()) {
       redirectResponse.cookies.set(cookie);

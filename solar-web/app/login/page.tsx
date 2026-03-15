@@ -1,7 +1,6 @@
 "use client";
 
 import { Suspense, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -32,7 +31,6 @@ function LoginForm() {
       <div className="w-full max-w-[400px]">
         <div className="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm">
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Sign in</h1>
-          <p className="mt-1 text-sm text-slate-500">Solar property listings</p>
 
           <form onSubmit={onSubmit} className="mt-8 flex flex-col gap-4">
             <label className="flex flex-col gap-1.5">
@@ -73,11 +71,6 @@ function LoginForm() {
           </form>
         </div>
 
-        <p className="mt-6 text-center text-sm text-slate-500">
-          <Link href="/" className="text-slate-600 underline hover:text-slate-900">
-            ← Back home
-          </Link>
-        </p>
       </div>
     </main>
   );

@@ -42,3 +42,4 @@ next-env.d.ts
 
 # hidden pages
 /app/pricing/
+/app/signup/

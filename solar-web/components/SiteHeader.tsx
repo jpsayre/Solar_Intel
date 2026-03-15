@@ -124,16 +124,9 @@ export default function SiteHeader() {
                 <Link
                   href="/login"
                   onClick={() => setMenuOpen(false)}
-                  className={`block px-4 py-3 text-sm font-medium ${pathname === "/login" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
+                  className={`block px-4 py-3 text-sm font-medium ${pathname === "/login" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"} rounded-b-xl`}
                 >
                   Sign in
-                </Link>
-                <Link
-                  href="/signup"
-                  onClick={() => setMenuOpen(false)}
-                  className={`block px-4 py-3 text-sm font-medium ${pathname === "/signup" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"} rounded-b-xl`}
-                >
-                  Sign up
                 </Link>
               </>
             )}
