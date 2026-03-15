@@ -1423,60 +1423,88 @@ def run_walk_forward() -> None:
             ax2.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.1%}"))
             ax2.legend(loc="upper right", fontsize=8)
 
-    # --- Plot A: Lift at 2%, 5%, 10% by install year (RF+GB Ensemble) ---
-    ens_df = results_df[results_df["model"] == "RF+GB Ensemble"].sort_values("install_year")
-    if len(ens_df) > 0:
-        fig, ax = plt.subplots(figsize=(10, 5))
-        for pct, col, color in [(10, "lift_10pct", "#2563eb"), (5, "lift_5pct", "#d97706"), (2, "lift_2pct", "#dc2626")]:
-            if col in ens_df.columns:
-                ax.plot(ens_df["install_year"], ens_df[col], "-o", label=f"Top {pct}%", color=color, markersize=6)
-        ax.axhline(1, color="gray", linestyle="--", alpha=0.7, label="Random (1x)")
-        _add_baseline_axis(ax, results_df)
-        ax.set_xlabel("Install Year")
-        ax.set_ylabel("Lift (vs baseline)")
-        ax.set_title("Lift by Install Year - RF+GB Ensemble (2%, 5%, 10%)")
-        ax.legend(loc="upper left")
-        ax.grid(True, alpha=0.3)
+    # Exclude incomplete final year from all plots
+    plot_results = results_df[results_df["install_year"] < YEAR_END]
+
+    MODEL_COLORS = {
+        "Random Forest": "#16a34a",
+        "Gradient Boosting": "#2563eb",
+        "RF+GB Ensemble": "#dc2626",
+    }
+    MODEL_STYLES = {
+        "Random Forest": "--",
+        "Gradient Boosting": "-.",
+        "RF+GB Ensemble": "-",
+    }
+    MODEL_ORDER = ["Random Forest", "Gradient Boosting", "RF+GB Ensemble"]
+
+    # --- Plot A: Lift by install year — all models, 1x3 subplots ---
+    if len(plot_results) > 0:
+        pct_configs = [(10, "lift_10pct"), (5, "lift_5pct"), (2, "lift_2pct")]
+        fig, axes_a = plt.subplots(1, 3, figsize=(18, 5))
+        for ax, (pct, col) in zip(axes_a, pct_configs):
+            for model_name in MODEL_ORDER:
+                m = plot_results[plot_results["model"] == model_name].sort_values("install_year")
+                if col in m.columns and len(m) > 0:
+                    ax.plot(m["install_year"], m[col], MODEL_STYLES[model_name] + "o",
+                            label=model_name, color=MODEL_COLORS[model_name], markersize=5)
+            ax.axhline(1, color="gray", linestyle="--", alpha=0.7, label="Random (1x)")
+            ax.set_xlabel("Install Year")
+            ax.set_ylabel("Lift")
+            ax.set_title(f"Top {pct}% Lift")
+            ax.legend(fontsize=8)
+            ax.grid(True, alpha=0.3)
+        fig.suptitle("Lift by Install Year — All Models", fontsize=14, y=1.02)
         plt.tight_layout()
-        plt.savefig(OUTPUT_DIR / f"walk_forward_lift_by_year_{ts}.png", dpi=150)
+        plt.savefig(OUTPUT_DIR / f"walk_forward_lift_by_year_{ts}.png", dpi=150, bbox_inches="tight")
         plt.close()
         log(f"Saved: {OUTPUT_DIR / f'walk_forward_lift_by_year_{ts}.png'}")
 
-    # --- Plot B: Capture at 2%, 5%, 10% by install year (RF+GB Ensemble) ---
-    if len(ens_df) > 0:
-        fig, ax = plt.subplots(figsize=(10, 5))
-        for pct, col, color in [(10, "capture_10pct", "#2563eb"), (5, "capture_5pct", "#d97706"), (2, "capture_2pct", "#dc2626")]:
-            if col in ens_df.columns:
-                ax.plot(ens_df["install_year"], ens_df[col], "-o", label=f"Top {pct}%", color=color, markersize=6)
-        # Random capture baselines
-        ax.axhline(0.10, color="#2563eb", linestyle=":", alpha=0.4)
-        ax.axhline(0.05, color="#d97706", linestyle=":", alpha=0.4)
-        ax.axhline(0.02, color="#dc2626", linestyle=":", alpha=0.4)
-        ax.set_xlabel("Install Year")
-        ax.set_ylabel("Capture (% of all positives)")
-        ax.set_title("Capture by Install Year - RF+GB Ensemble (2%, 5%, 10%)")
-        ax.legend(loc="upper left")
-        ax.grid(True, alpha=0.3)
-        ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+    # --- Plot B: Capture by install year — all models, 1x3 subplots ---
+    if len(plot_results) > 0:
+        pct_configs = [(10, "capture_10pct"), (5, "capture_5pct"), (2, "capture_2pct")]
+        fig, axes_b = plt.subplots(1, 3, figsize=(18, 5))
+        for ax, (pct, col) in zip(axes_b, pct_configs):
+            for model_name in MODEL_ORDER:
+                m = plot_results[plot_results["model"] == model_name].sort_values("install_year")
+                if col in m.columns and len(m) > 0:
+                    ax.plot(m["install_year"], m[col], MODEL_STYLES[model_name] + "o",
+                            label=model_name, color=MODEL_COLORS[model_name], markersize=5)
+            ax.axhline(pct / 100, color="gray", linestyle=":", alpha=0.5, label=f"Random ({pct}%)")
+            ax.set_xlabel("Install Year")
+            ax.set_ylabel("Capture")
+            ax.set_title(f"Top {pct}% Capture")
+            ax.legend(fontsize=8)
+            ax.grid(True, alpha=0.3)
+            ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
+        fig.suptitle("Capture by Install Year — All Models", fontsize=14, y=1.02)
         plt.tight_layout()
-        plt.savefig(OUTPUT_DIR / f"walk_forward_capture_by_year_{ts}.png", dpi=150)
+        plt.savefig(OUTPUT_DIR / f"walk_forward_capture_by_year_{ts}.png", dpi=150, bbox_inches="tight")
         plt.close()
         log(f"Saved: {OUTPUT_DIR / f'walk_forward_capture_by_year_{ts}.png'}")
 
-    # --- Plot C: Capture % by decile (RF+GB Ensemble, avg across years) ---
+    # --- Plot C: Capture by decile — all models, grouped bars ---
     if all_decile_results:
         decile_df = pd.DataFrame(all_decile_results)
-        ens_decile = decile_df[decile_df["model"] == "RF+GB Ensemble"]
-        if len(ens_decile) > 0:
-            avg_cap = ens_decile.groupby("decile")["capture_pct"].mean().reset_index()
-            fig, ax = plt.subplots(figsize=(10, 5))
-            ax.bar(avg_cap["decile"], avg_cap["capture_pct"], width=0.8, color="steelblue")
+        decile_df = decile_df[decile_df["install_year"] < YEAR_END]
+        if len(decile_df) > 0:
+            fig, ax = plt.subplots(figsize=(12, 5))
+            bar_width = 0.25
+            deciles = list(range(1, 11))
+            for i, model_name in enumerate(MODEL_ORDER):
+                model_decile = decile_df[decile_df["model"] == model_name]
+                if len(model_decile) == 0:
+                    continue
+                avg_cap = model_decile.groupby("decile")["capture_pct"].mean().reindex(deciles, fill_value=0)
+                offsets = [d + (i - 1) * bar_width for d in deciles]
+                ax.bar(offsets, avg_cap.values, width=bar_width,
+                       label=model_name, color=MODEL_COLORS[model_name], alpha=0.85)
             ax.axhline(0.10, color="gray", linestyle="--", alpha=0.7, label="Random (10%)")
-            ax.set_xlabel("Decile (1=top 10% by predicted score)")
+            ax.set_xlabel("Decile (1 = top 10% by predicted score)")
             ax.set_ylabel("Capture (% of all positives)")
-            ax.set_title("Capture by Decile - RF+GB Ensemble (avg across years)")
-            ax.set_xticks(range(1, 11))
-            ax.legend()
+            ax.set_title("Capture by Decile — All Models (avg across years)")
+            ax.set_xticks(deciles)
+            ax.legend(fontsize=9)
             ax.grid(True, alpha=0.3, axis="y")
             ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"{x:.0%}"))
             plt.tight_layout()
@@ -1484,7 +1512,7 @@ def run_walk_forward() -> None:
             plt.close()
             log(f"Saved: {OUTPUT_DIR / f'walk_forward_capture_by_decile_{ts}.png'}")
 
-    # Plot metrics over years by model (2x5 grid for lift/capture)
+    # --- Plot D: Metrics over years by model (2x5 grid) ---
     fig, axes = plt.subplots(2, 5, figsize=(20, 10))
     axes = axes.flatten()
     plot_configs = [
@@ -1499,14 +1527,13 @@ def run_walk_forward() -> None:
         ("capture_5pct", "Capture Rate Top 5%"),
         ("capture_2pct", "Capture Rate Top 2%"),
     ]
-    kept_model_set = {"Gradient Boosting", "Random Forest", "RF+GB Ensemble"}
     for ax, (col, title) in zip(axes, plot_configs):
-        if col in results_df.columns:
-            for model_name in results_df["model"].unique():
-                if model_name not in kept_model_set:
-                    continue
-                m = results_df[results_df["model"] == model_name].sort_values("install_year")
-                ax.plot(m["install_year"], m[col], "-o", label=model_name, markersize=4)
+        if col in plot_results.columns:
+            for model_name in MODEL_ORDER:
+                m = plot_results[plot_results["model"] == model_name].sort_values("install_year")
+                if len(m) > 0:
+                    ax.plot(m["install_year"], m[col], MODEL_STYLES[model_name] + "o",
+                            label=model_name, color=MODEL_COLORS[model_name], markersize=4)
         ax.set_xlabel("Install Year")
         ax.set_ylabel(title)
         ax.set_title(title + " by Year")
