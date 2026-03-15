@@ -77,6 +77,7 @@ def run_stage(stage_num, config, skip_api=False, limit=None):
             import pandas as pd
             df = pd.read_csv(config.regrid_csv)
             df = InitialScript.apply_regrid_filters(df, config.regrid_filters)
+            df = InitialScript.dedup_by_address(df)
             if "original_index" not in df.columns:
                 df = df.reset_index(names="original_index")
             if limit:

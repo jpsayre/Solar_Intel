@@ -59,6 +59,19 @@ def apply_regrid_filters(df, filters):
     return df
 
 
+def dedup_by_address(df):
+    """Keep the most complete row when multiple rows share an address."""
+    before = len(df)
+    completeness_cols = ["area_building", "num_bedrooms", "num_bath", "numrooms"]
+    df["_completeness"] = df[completeness_cols].notna().sum(axis=1)
+    df = df.sort_values("_completeness", ascending=False).drop_duplicates(subset=["address"], keep="first")
+    df = df.drop(columns=["_completeness"])
+    removed = before - len(df)
+    if removed > 0:
+        print(f"After address dedup: {len(df)} (removed {removed} duplicates)")
+    return df
+
+
 def run(config, limit=None):
     """Filter Regrid data and call Sunroof API.
 
@@ -76,13 +89,7 @@ def run(config, limit=None):
     df = apply_regrid_filters(df, config.regrid_filters)
     print(f"After filters: {len(df)}")
 
-    before = len(df)
-    # Keep the most complete row when deduplicating by address
-    completeness_cols = ["area_building", "num_bedrooms", "num_bath", "numrooms"]
-    df["_completeness"] = df[completeness_cols].notna().sum(axis=1)
-    df = df.sort_values("_completeness", ascending=False).drop_duplicates(subset=["address"], keep="first")
-    df = df.drop(columns=["_completeness"])
-    print(f"After address dedup: {len(df)} (removed {before - len(df)} duplicates)")
+    df = dedup_by_address(df)
 
     # Ensure we have original_index
     if "original_index" not in df.columns:
