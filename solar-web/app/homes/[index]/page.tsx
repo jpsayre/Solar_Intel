@@ -202,17 +202,16 @@ export default function HomeDetailPage() {
       setImgUrl("");
       setRow(null);
 
-      // Public-access mode: skip session gate. Restore when login is re-enabled.
-      // const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
-      // if (userErr) {
-      //   if (alive) setErr(userErr.message);
-      //   return;
-      // }
-      // if (!userData.user) {
-      //   router.push("/login");
-      //   return;
-      // }
-      // setUserId(userData.user.id);
+      const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
+      if (userErr) {
+        if (alive) setErr(userErr.message);
+        return;
+      }
+      if (!userData.user) {
+        router.push("/login");
+        return;
+      }
+      setUserId(userData.user.id);
 
       const idx = params.index;
 
