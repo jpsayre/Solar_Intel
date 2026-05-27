@@ -257,8 +257,9 @@ function HomesPageContent() {
     let alive = true;
 
     async function loadFilterOptions() {
-      const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
-      if (userErr || !userData.user) return;
+      // Public-access mode: skip session gate. Restore when login is re-enabled.
+      // const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
+      // if (userErr || !userData.user) return;
 
       const { data, error } = await supabaseBrowser
         .from("homes")
@@ -302,9 +303,11 @@ function HomesPageContent() {
     }
     setBoundsLoading(true);
 
-    const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
-    if (userErr) { setErr(userErr.message); setBoundsLoading(false); return; }
-    if (!userData.user) { router.push("/login"); setBoundsLoading(false); return; }
+    // Public-access mode: skip the session check so anon visitors can load homes.
+    // Restore when login is re-enabled.
+    // const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
+    // if (userErr) { setErr(userErr.message); setBoundsLoading(false); return; }
+    // if (!userData.user) { router.push("/login"); setBoundsLoading(false); return; }
 
     const params: Record<string, unknown> = {
       p_sort_by: "model_score",
