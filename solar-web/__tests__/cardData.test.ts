@@ -42,29 +42,22 @@ describe("buildListingCardData", () => {
     expect(addressLine2).toBe("ID: 1014");
   });
 
-  // Owner-name rows are hidden while the site is in public-access mode. Restore
-  // these tests when login is re-enabled.
-  // it("shows both owners joined with &", () => {
-  //   const { detailRows } = buildListingCardData(baseRow);
-  //   const owner = detailRows.find((r) => r.label === "Owner name");
-  //   expect(owner?.value).toBe("SMITH JOHN & SMITH JANE");
-  // });
-  //
-  // it("shows single owner when owner_2 is null", () => {
-  //   const { detailRows } = buildListingCardData({ ...baseRow, owner_2: null });
-  //   const owner = detailRows.find((r) => r.label === "Owner name");
-  //   expect(owner?.value).toBe("SMITH JOHN");
-  // });
-  //
-  // it("shows fallback when both owners null", () => {
-  //   const { detailRows } = buildListingCardData({ ...baseRow, owner_1: null, owner_2: null });
-  //   const owner = detailRows.find((r) => r.label === "Owner name");
-  //   expect(owner?.value).toBe("Available in full report");
-  // });
-
-  it("omits owner name from detail rows in public mode", () => {
+  it("shows both owners joined with &", () => {
     const { detailRows } = buildListingCardData(baseRow);
-    expect(detailRows.find((r) => r.label === "Owner name")).toBeUndefined();
+    const owner = detailRows.find((r) => r.label === "Owner name");
+    expect(owner?.value).toBe("SMITH JOHN & SMITH JANE");
+  });
+
+  it("shows single owner when owner_2 is null", () => {
+    const { detailRows } = buildListingCardData({ ...baseRow, owner_2: null });
+    const owner = detailRows.find((r) => r.label === "Owner name");
+    expect(owner?.value).toBe("SMITH JOHN");
+  });
+
+  it("shows fallback when both owners null", () => {
+    const { detailRows } = buildListingCardData({ ...baseRow, owner_1: null, owner_2: null });
+    const owner = detailRows.find((r) => r.label === "Owner name");
+    expect(owner?.value).toBe("Available in full report");
   });
 
   it("formats sale price with $ and commas", () => {
@@ -91,18 +84,19 @@ describe("buildListingCardData", () => {
     expect(score?.value).toBe("—");
   });
 
-  // Roof score and Owner name rows are not currently rendered. Restore as
-  // appropriate when those fields are wired back in.
-  // it("shows roof_score", () => {
-  //   const { detailRows } = buildListingCardData(baseRow);
-  //   const score = detailRows.find((r) => r.label === "Roof score");
-  //   expect(score?.value).toBe("72.1");
-  // });
-
-  it("returns the expected detail rows in order", () => {
+  it("shows roof_score", () => {
     const { detailRows } = buildListingCardData(baseRow);
+    const score = detailRows.find((r) => r.label === "Roof score");
+    expect(score?.value).toBe("72.1");
+  });
+
+  it("returns exactly 7 detail rows in correct order", () => {
+    const { detailRows } = buildListingCardData(baseRow);
+    expect(detailRows).toHaveLength(7);
     expect(detailRows.map((r) => r.label)).toEqual([
       "Ranking score",
+      "Roof score",
+      "Owner name",
       "Sale price",
       "Sale date",
       "Build year",
@@ -134,16 +128,10 @@ describe("buildFollowingCardRows", () => {
     owner_2: null,
   };
 
-  // Owner-name row is hidden in public-access mode. Restore when login is re-enabled.
-  // it("shows owner name", () => {
-  //   const rows = buildFollowingCardRows(homeRow, null, null);
-  //   const owner = rows.find((r) => r.label === "Owner name");
-  //   expect(owner?.value).toBe("SMITH JOHN");
-  // });
-
-  it("omits owner name in public mode", () => {
+  it("shows owner name", () => {
     const rows = buildFollowingCardRows(homeRow, null, null);
-    expect(rows.find((r) => r.label === "Owner name")).toBeUndefined();
+    const owner = rows.find((r) => r.label === "Owner name");
+    expect(owner?.value).toBe("SMITH JOHN");
   });
 
   it("shows contact info when contacts provided", () => {

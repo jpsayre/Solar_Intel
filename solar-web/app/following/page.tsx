@@ -266,7 +266,7 @@ export default function FollowingPage() {
               <div className="flex flex-col gap-3">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <label className="flex flex-col gap-1 sm:col-span-1">
-                    <span className="text-xs font-medium text-slate-500">Search (address, comment, tags)</span>
+                    <span className="text-xs font-medium text-slate-500">Search (address, owner, comment, tags)</span>
                     <input
                       type="text"
                       value={searchText}
