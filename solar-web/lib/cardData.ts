@@ -56,12 +56,13 @@ export function buildListingCardData(row: HomeRow): {
   addressLine2: string;
   detailRows: CardRow[];
 } {
-  const ownerName =
-    row.owner_1 != null && String(row.owner_1).trim() !== ""
-      ? row.owner_2 != null && String(row.owner_2).trim() !== ""
-        ? `${row.owner_1} & ${row.owner_2}`
-        : String(row.owner_1)
-      : "Available in full report";
+  // Owner name hidden in public mode. Restore when login is re-enabled.
+  // const ownerName =
+  //   row.owner_1 != null && String(row.owner_1).trim() !== ""
+  //     ? row.owner_2 != null && String(row.owner_2).trim() !== ""
+  //       ? `${row.owner_1} & ${row.owner_2}`
+  //       : String(row.owner_1)
+  //     : "Available in full report";
 
   const zipRaw = row.zip_code != null ? String(Math.floor(Number(row.zip_code))) : "";
   const zip = zipRaw !== "" && !Number.isNaN(Number(zipRaw)) ? zipRaw : "—";
@@ -80,8 +81,8 @@ export function buildListingCardData(row: HomeRow): {
 
   const detailRows: CardRow[] = [
     { label: "Ranking score", value: modelScore },
-    { label: "Owner name", value: ownerName },
-{ label: "Sale price", value: formatSalePrice(row.saleprice) },
+    // { label: "Owner name", value: ownerName },
+    { label: "Sale price", value: formatSalePrice(row.saleprice) },
     { label: "Sale date", value: formatDateMMDDYYYY(row.saledate) },
     { label: "Build year", value: getValue(row, "calculated_build_year") },
     { label: "Square footage", value: formatNumberWithCommas(row.building_sqft) },
@@ -103,7 +104,7 @@ type FollowingActionItem = {
 
 /** Build detail rows for the Following page. */
 export function buildFollowingCardRows(
-  homeRow: HomeRow,
+  _homeRow: HomeRow,
   orgData: {
     contacts?: FollowingContact[];
     actionItems?: FollowingActionItem[];
@@ -111,12 +112,13 @@ export function buildFollowingCardRows(
   } | null | undefined,
   latestNote: { body: string } | null | undefined,
 ): CardRow[] {
-  const ownerName =
-    homeRow.owner_1 != null && String(homeRow.owner_1).trim() !== ""
-      ? homeRow.owner_2 != null && String(homeRow.owner_2).trim() !== ""
-        ? `${homeRow.owner_1} & ${homeRow.owner_2}`
-        : String(homeRow.owner_1)
-      : "—";
+  // Owner name hidden in public mode. Restore when login is re-enabled.
+  // const ownerName =
+  //   homeRow.owner_1 != null && String(homeRow.owner_1).trim() !== ""
+  //     ? homeRow.owner_2 != null && String(homeRow.owner_2).trim() !== ""
+  //       ? `${homeRow.owner_1} & ${homeRow.owner_2}`
+  //       : String(homeRow.owner_1)
+  //     : "—";
 
   let contactValue = "No contact information for home";
   if (orgData?.contacts && orgData.contacts.length > 0) {
@@ -150,7 +152,7 @@ export function buildFollowingCardRows(
     : "—";
 
   const rows: CardRow[] = [
-    { label: "Owner name", value: ownerName },
+    // { label: "Owner name", value: ownerName },
     { label: "Contact info", value: contactValue, selectable: true },
     { label: "Open action items", value: actionItemsValue, listStyle: actionItemsValue !== "No open action items" },
     { label: "Most recent comment", value: latestCommentValue },

@@ -791,7 +791,9 @@ export default function HomeDetailPage() {
               type="button"
               disabled={enrichCredits <= 0}
               onClick={() => {
-                const owner = row.owner_1 ? String(row.owner_1).trim() : "J. Smith";
+                // Owner pulled from row.owner_1 when login is enabled. Public mode uses a placeholder.
+                // const owner = row.owner_1 ? String(row.owner_1).trim() : "J. Smith";
+                const owner = "J. Smith";
                 const parts = owner.toLowerCase().replace(/[^a-z\s]/g, "").split(/\s+/).filter(Boolean);
                 const first = parts[0] || "john";
                 const last = parts[parts.length - 1] || "smith";

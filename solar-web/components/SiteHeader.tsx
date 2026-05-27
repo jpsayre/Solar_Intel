@@ -2,13 +2,14 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabase/client";
+import { usePathname } from "next/navigation";
+// import { useRouter } from "next/navigation";
+// import { supabaseBrowser } from "@/lib/supabase/client";
 
 export default function SiteHeader() {
   const pathname = usePathname();
-  const router = useRouter();
-  const [user, setUser] = useState<{ id: string } | null>(null);
+  // const router = useRouter();
+  // const [user, setUser] = useState<{ id: string } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const menuRef = useRef<HTMLElement | null>(null);
@@ -16,11 +17,12 @@ export default function SiteHeader() {
 
   useEffect(() => {
     setMounted(true);
-    supabaseBrowser.auth.getUser().then(({ data }) => setUser(data.user ?? null));
-    const { data: { subscription } } = supabaseBrowser.auth.onAuthStateChange(() => {
-      supabaseBrowser.auth.getUser().then(({ data }) => setUser(data.user ?? null));
-    });
-    return () => subscription.unsubscribe();
+    // Public-access mode: skip auth state subscription.
+    // supabaseBrowser.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    // const { data: { subscription } } = supabaseBrowser.auth.onAuthStateChange(() => {
+    //   supabaseBrowser.auth.getUser().then(({ data }) => setUser(data.user ?? null));
+    // });
+    // return () => subscription.unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -34,12 +36,12 @@ export default function SiteHeader() {
     return () => document.removeEventListener("click", handleClickOutside, true);
   }, [menuOpen]);
 
-  async function handleLogout() {
-    setMenuOpen(false);
-    await supabaseBrowser.auth.signOut();
-    router.push("/login");
-    router.refresh();
-  }
+  // async function handleLogout() {
+  //   setMenuOpen(false);
+  //   await supabaseBrowser.auth.signOut();
+  //   router.push("/login");
+  //   router.refresh();
+  // }
 
   if (!mounted) return null;
 
@@ -80,56 +82,34 @@ export default function SiteHeader() {
             aria-label="Site navigation"
           >
             <Link
+              href="/homes"
+              onClick={() => setMenuOpen(false)}
+              className={`block px-4 py-3 text-sm font-medium ${pathname === "/" || pathname.startsWith("/homes") ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"} rounded-t-xl`}
+            >
+              Explorer
+            </Link>
+            <Link
               href="/about"
               onClick={() => setMenuOpen(false)}
-              className={`block px-4 py-3 text-sm font-medium ${pathname === "/about" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"} rounded-t-xl`}
+              className={`block px-4 py-3 text-sm font-medium ${pathname === "/about" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"} rounded-b-xl`}
             >
               About
             </Link>
-            {user ? (
-              <>
-                <Link
-                  href="/homes"
-                  onClick={() => setMenuOpen(false)}
-                  className={`block px-4 py-3 text-sm font-medium ${pathname === "/" || pathname.startsWith("/homes") ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
-                >
-                  Explorer
-                </Link>
-                <Link
-                  href="/following"
-                  onClick={() => setMenuOpen(false)}
-                  className={`block px-4 py-3 text-sm font-medium ${pathname === "/following" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
-                >
-                  Following
-                </Link>
-                <Link
-                  href="/alerts"
-                  onClick={() => setMenuOpen(false)}
-                  className={`block px-4 py-3 text-sm font-medium ${pathname === "/alerts" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"}`}
-                >
-                  Permit Alerts
-                </Link>
-                <div className="border-t border-slate-100 mt-1 pt-1">
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="block w-full px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 rounded-b-xl"
-                  >
-                    Log out
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/login"
-                  onClick={() => setMenuOpen(false)}
-                  className={`block px-4 py-3 text-sm font-medium ${pathname === "/login" ? "bg-amber-50 text-amber-800" : "text-slate-700 hover:bg-slate-50"} rounded-b-xl`}
-                >
-                  Sign in
-                </Link>
-              </>
-            )}
+            {/*
+              Auth-gated menu items (Following, Permit Alerts, Sign in, Log out)
+              are disabled while the site is public. Restore the block below
+              when login is re-enabled.
+
+              {user ? (
+                <>
+                  <Link href="/following" ...>Following</Link>
+                  <Link href="/alerts" ...>Permit Alerts</Link>
+                  <button onClick={handleLogout}>Log out</button>
+                </>
+              ) : (
+                <Link href="/login">Sign in</Link>
+              )}
+            */}
           </nav>
         </>
       )}

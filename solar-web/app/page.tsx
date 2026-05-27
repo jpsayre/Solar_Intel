@@ -1,29 +1,38 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabaseBrowser } from "@/lib/supabase/client";
+// import { useState } from "react";
+// import { supabaseBrowser } from "@/lib/supabase/client";
 
 export default function Home() {
   const router = useRouter();
-  const [user, setUser] = useState<{ id: string } | null>(null);
-  const [loading, setLoading] = useState(true);
 
+  // Public-access mode: always send to /homes. Auth-aware redirect kept below
+  // for when login is re-enabled.
   useEffect(() => {
-    supabaseBrowser.auth.getUser().then(({ data }) => {
-      setUser(data.user ?? null);
-      setLoading(false);
-    });
-  }, []);
+    router.replace("/homes");
+  }, [router]);
 
-  useEffect(() => {
-    if (loading) return;
-    if (user) {
-      router.replace("/homes");
-    } else {
-      router.replace("/login");
-    }
-  }, [loading, user, router]);
+  // --- Original auth-aware redirect (disabled) ---
+  // const [user, setUser] = useState<{ id: string } | null>(null);
+  // const [loading, setLoading] = useState(true);
+  //
+  // useEffect(() => {
+  //   supabaseBrowser.auth.getUser().then(({ data }) => {
+  //     setUser(data.user ?? null);
+  //     setLoading(false);
+  //   });
+  // }, []);
+  //
+  // useEffect(() => {
+  //   if (loading) return;
+  //   if (user) {
+  //     router.replace("/homes");
+  //   } else {
+  //     router.replace("/login");
+  //   }
+  // }, [loading, user, router]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4">
