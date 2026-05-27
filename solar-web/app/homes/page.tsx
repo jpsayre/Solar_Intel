@@ -261,9 +261,8 @@ function HomesPageContent() {
       // const { data: userData, error: userErr } = await supabaseBrowser.auth.getUser();
       // if (userErr || !userData.user) return;
 
-      // homes_public is the owner-name-free view; safe for anon access.
       const { data, error } = await supabaseBrowser
-        .from("homes_public")
+        .from("homes")
         .select("county, city, subdivision_formatted")
         .limit(FILTER_OPTIONS_LIMIT);
 

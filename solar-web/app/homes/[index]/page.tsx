@@ -216,9 +216,8 @@ export default function HomeDetailPage() {
 
       const idx = params.index;
 
-      // homes_public is the owner-name-free view; safe for anon access.
       const { data, error } = await supabaseBrowser
-        .from("homes_public")
+        .from("homes")
         .select("*")
         .eq("index", idx)
         .single();
